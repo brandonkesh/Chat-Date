@@ -3,6 +3,14 @@ import { Heart, MessageCircle, LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -12,6 +20,12 @@ export function Navbar() {
   if (location === "/" || location === "/onboarding") return null;
 
   const isActive = (path: string) => location === path ? "text-primary" : "text-muted-foreground hover:text-foreground";
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const avatarUrl = profile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.displayName || 'user'}`;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-border md:top-0 md:bottom-auto md:border-t-0 md:border-b safe-area-bottom">
@@ -35,27 +49,53 @@ export function Navbar() {
             <span className="text-[10px] md:hidden font-medium">Chat</span>
           </Link>
 
+          {/* Desktop Profile */}
           <div className="hidden md:flex items-center gap-4 border-l pl-8 border-border">
-            {profile && (
-               <div className="flex items-center gap-2">
-                 <img 
-                   src={profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`} 
-                   alt="Profile" 
-                   className="w-8 h-8 rounded-full bg-secondary object-cover border border-border"
-                 />
-                 <span className="font-medium text-sm">{profile.displayName}</span>
-               </div>
-            )}
-            <Button variant="ghost" size="icon" onClick={() => logout()} title="Logout">
-              <LogOut className="w-5 h-5 text-muted-foreground hover:text-destructive transition-colors" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 hover:opacity-80 transition-opacity" data-testid="button-profile-menu">
+                  <Avatar className="w-8 h-8 border border-border">
+                    <AvatarImage src={avatarUrl} alt={profile?.displayName || 'Profile'} />
+                    <AvatarFallback>{profile ? getInitials(profile.displayName) : <User className="w-4 h-4" />}</AvatarFallback>
+                  </Avatar>
+                  {profile && <span className="font-medium text-sm">{profile.displayName}</span>}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  {profile?.displayName}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          {/* Mobile Profile Link (just logout for now on mobile since no profile edit page in reqs yet) */}
-          <button onClick={() => logout()} className="md:hidden flex flex-col items-center gap-1 text-muted-foreground hover:text-destructive transition-colors">
-            <User className="w-6 h-6" />
-            <span className="text-[10px] font-medium">Logout</span>
-          </button>
+          {/* Mobile Profile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="md:hidden flex flex-col items-center gap-1 text-muted-foreground" data-testid="button-profile-menu-mobile">
+                <Avatar className="w-6 h-6 border border-border">
+                  <AvatarImage src={avatarUrl} alt={profile?.displayName || 'Profile'} />
+                  <AvatarFallback><User className="w-3 h-3" /></AvatarFallback>
+                </Avatar>
+                <span className="text-[10px] font-medium">Profile</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-2 py-1.5 text-sm font-medium">
+                {profile?.displayName}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout-mobile">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </nav>
