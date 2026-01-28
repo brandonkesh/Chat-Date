@@ -22,12 +22,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 function EditProfileForm({ profile }: { profile: Profile }) {
   const [, setLocation] = useLocation();
   const { mutateAsync: updateProfile, isPending } = useUpdateProfile();
+  const [newInterest, setNewInterest] = useState("");
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
@@ -38,8 +41,30 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       gender: profile.gender,
       interestedIn: profile.interestedIn,
       photoUrl: profile.photoUrl || "",
+      interests: profile.interests || [],
     },
   });
+
+  const interests = form.watch("interests") || [];
+
+  const addInterest = () => {
+    const trimmed = newInterest.trim();
+    if (trimmed && !interests.includes(trimmed)) {
+      form.setValue("interests", [...interests, trimmed]);
+      setNewInterest("");
+    }
+  };
+
+  const removeInterest = (interest: string) => {
+    form.setValue("interests", interests.filter(i => i !== interest));
+  };
+
+  const handleInterestKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addInterest();
+    }
+  };
 
   const onSubmit = async (data: InsertProfile) => {
     try {
@@ -187,6 +212,51 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                     </FormItem>
                   )}
                 />
+
+                <FormItem>
+                  <FormLabel>Hobbies & Interests</FormLabel>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newInterest}
+                      onChange={(e) => setNewInterest(e.target.value)}
+                      onKeyDown={handleInterestKeyDown}
+                      placeholder="Add an interest..."
+                      className="h-12 rounded-xl flex-1"
+                      data-testid="input-interest"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={addInterest}
+                      className="h-12 w-12 rounded-xl"
+                      data-testid="button-add-interest"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {interests.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3" data-testid="interests-list">
+                      {interests.map((interest) => (
+                        <Badge 
+                          key={interest} 
+                          variant="secondary" 
+                          className="px-3 py-1 text-sm"
+                        >
+                          {interest}
+                          <button
+                            type="button"
+                            onClick={() => removeInterest(interest)}
+                            className="ml-2 hover:text-destructive"
+                            data-testid={`button-remove-interest-${interest}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </FormItem>
 
                 <div className="flex gap-3">
                   <Button 

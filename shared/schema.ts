@@ -16,6 +16,7 @@ export const profiles = pgTable("profiles", {
   gender: text("gender").notNull(), // 'male', 'female', 'other'
   interestedIn: text("interested_in").notNull(), // 'male', 'female', 'everyone'
   photoUrl: text("photo_url"),
+  interests: text("interests").array(), // Array of hobbies/interests
   trialEndsAt: timestamp("trial_ends_at").notNull(), // When the free month ends
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),

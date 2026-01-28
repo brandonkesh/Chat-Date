@@ -1,7 +1,8 @@
 import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
-import { X, Heart, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -90,6 +91,21 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
         <p className="text-muted-foreground line-clamp-2 leading-relaxed">
           {profile.bio || "No bio yet..."}
         </p>
+
+        {profile.interests && profile.interests.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2" data-testid="profile-interests">
+            {profile.interests.slice(0, 4).map((interest) => (
+              <Badge key={interest} variant="secondary" className="text-xs">
+                {interest}
+              </Badge>
+            ))}
+            {profile.interests.length > 4 && (
+              <Badge variant="outline" className="text-xs">
+                +{profile.interests.length - 4}
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Floating Action Buttons (Visual only, controls are gestures or buttons below) */}

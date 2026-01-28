@@ -22,11 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Heart } from "lucide-react";
+import { Heart, X, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { mutateAsync: createProfile, isPending } = useUpdateProfile();
+  const [newInterest, setNewInterest] = useState("");
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
@@ -37,8 +40,30 @@ export default function Onboarding() {
       gender: "male",
       interestedIn: "female",
       photoUrl: "",
+      interests: [],
     },
   });
+
+  const interests = form.watch("interests") || [];
+
+  const addInterest = () => {
+    const trimmed = newInterest.trim();
+    if (trimmed && !interests.includes(trimmed)) {
+      form.setValue("interests", [...interests, trimmed]);
+      setNewInterest("");
+    }
+  };
+
+  const removeInterest = (interest: string) => {
+    form.setValue("interests", interests.filter(i => i !== interest));
+  };
+
+  const handleInterestKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addInterest();
+    }
+  };
 
   const onSubmit = async (data: InsertProfile) => {
     try {
@@ -161,6 +186,51 @@ export default function Onboarding() {
                   </FormItem>
                 )}
               />
+
+              <FormItem>
+                <FormLabel>Hobbies & Interests</FormLabel>
+                <div className="flex gap-2">
+                  <Input
+                    value={newInterest}
+                    onChange={(e) => setNewInterest(e.target.value)}
+                    onKeyDown={handleInterestKeyDown}
+                    placeholder="Add an interest..."
+                    className="h-12 rounded-xl flex-1"
+                    data-testid="input-interest"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={addInterest}
+                    className="h-12 w-12 rounded-xl"
+                    data-testid="button-add-interest"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {interests.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3" data-testid="interests-list">
+                    {interests.map((interest) => (
+                      <Badge 
+                        key={interest} 
+                        variant="secondary" 
+                        className="px-3 py-1 text-sm"
+                      >
+                        {interest}
+                        <button
+                          type="button"
+                          onClick={() => removeInterest(interest)}
+                          className="ml-2 hover:text-destructive"
+                          data-testid={`button-remove-interest-${interest}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </FormItem>
 
               <Button 
                 type="submit" 
