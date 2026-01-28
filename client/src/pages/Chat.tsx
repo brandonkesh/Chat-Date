@@ -45,7 +45,7 @@ export default function Chat() {
 
   if (loadingMatch || !profile) {
     return (
-      <div className="min-h-screen pt-20 pb-20 flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
@@ -57,7 +57,7 @@ export default function Chat() {
   const isTrialExpired = profile.trialEndsAt ? isPast(new Date(profile.trialEndsAt)) : false;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-128px)] mt-16 mb-16 bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
+    <div className="flex flex-col h-screen bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
       {/* Header */}
       <header className="flex-none p-4 border-b border-border bg-white/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
         <Link href="/matches">

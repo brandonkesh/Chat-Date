@@ -1,14 +1,17 @@
-import { useFeed, useSwipe } from "@/hooks/use-dating";
+import { useFeed, useSwipe, useMyProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2 } from "lucide-react";
+import { X, Heart, Loader2, Pencil } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Profile } from "@shared/schema";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Link } from "wouter";
 
 export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
+  const { data: myProfile } = useMyProfile();
   const { mutate: swipe } = useSwipe();
   const { toast } = useToast();
   
@@ -47,7 +50,7 @@ export default function Feed() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pt-20 pb-20 flex flex-col items-center justify-center">
+      <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
         <p className="text-muted-foreground animate-pulse">Finding matches...</p>
       </div>
@@ -56,7 +59,7 @@ export default function Feed() {
 
   if (isError) {
     return (
-      <div className="min-h-screen pt-20 pb-20 flex items-center justify-center p-6 text-center">
+      <div className="h-[calc(100vh-64px)] flex items-center justify-center p-6 text-center">
         <div>
           <h3 className="text-xl font-bold mb-2">Something went wrong</h3>
           <p className="text-muted-foreground">Unable to load profiles. Please try again later.</p>
@@ -66,7 +69,28 @@ export default function Feed() {
   }
 
   return (
-    <div className="min-h-screen pt-20 pb-20 w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
+    <div className="h-[calc(100vh-64px)] w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
+      
+      {/* Profile Picture with Edit Icon - Fixed at top right */}
+      <Link href="/profile/edit" data-testid="link-edit-profile">
+        <div className="fixed top-3 right-4 z-50">
+          <div className="relative group cursor-pointer">
+            <Avatar className="w-11 h-11 border-2 border-primary/20 shadow-md">
+              <AvatarImage 
+                src={myProfile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${myProfile?.displayName || 'user'}`} 
+                alt={myProfile?.displayName || "Your profile"} 
+              />
+              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                {myProfile?.displayName?.charAt(0)?.toUpperCase() || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+              <Pencil className="w-2.5 h-2.5 text-primary-foreground" />
+            </div>
+          </div>
+        </div>
+      </Link>
+
       <div className="w-full h-[500px] sm:h-[600px] relative">
         <AnimatePresence>
           {stack.length > 0 ? (
