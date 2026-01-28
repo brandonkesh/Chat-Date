@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Crown, Heart, MessageCircle, Sparkles, Zap, Loader2, ExternalLink } from "lucide-react";
+import { Check, Crown, Heart, MessageCircle, Sparkles, Zap, Loader2, ExternalLink, Star, Gem } from "lucide-react";
 import { useMyProfile } from "@/hooks/use-dating";
 import { differenceInDays } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -9,12 +9,67 @@ import { apiRequest } from "@/lib/queryClient";
 import { useSearch } from "wouter";
 import { useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { MembershipTier } from "@shared/schema";
 
-const features = [
-  { icon: MessageCircle, title: "Unlimited Messages", description: "Chat with all your matches without limits" },
-  { icon: Heart, title: "See Who Likes You", description: "Know who's interested before you swipe" },
-  { icon: Zap, title: "Priority Matching", description: "Get seen by more potential matches" },
-  { icon: Sparkles, title: "Advanced Filters", description: "Find exactly who you're looking for" },
+interface TierInfo {
+  id: MembershipTier;
+  name: string;
+  icon: typeof Crown;
+  price: number;
+  color: string;
+  bgGradient: string;
+  features: string[];
+  popular?: boolean;
+}
+
+const tiers: TierInfo[] = [
+  {
+    id: "basic",
+    name: "Basic",
+    icon: Heart,
+    price: 4.99,
+    color: "text-blue-500",
+    bgGradient: "from-blue-400 to-blue-600",
+    features: [
+      "10 daily super likes",
+      "See who viewed you",
+      "Basic filters",
+      "Ad-free experience",
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    icon: Crown,
+    price: 9.99,
+    color: "text-amber-500",
+    bgGradient: "from-amber-400 to-orange-500",
+    popular: true,
+    features: [
+      "Unlimited super likes",
+      "See who likes you",
+      "Priority matching",
+      "Advanced filters",
+      "Read receipts",
+      "Ad-free experience",
+    ],
+  },
+  {
+    id: "elite",
+    name: "Elite",
+    icon: Gem,
+    price: 19.99,
+    color: "text-purple-500",
+    bgGradient: "from-purple-400 to-pink-500",
+    features: [
+      "All Pro features",
+      "Profile boost weekly",
+      "Incognito mode",
+      "VIP badge on profile",
+      "Priority support",
+      "Exclusive events access",
+    ],
+  },
 ];
 
 interface Product {
@@ -22,6 +77,7 @@ interface Product {
   name: string;
   description: string;
   active: boolean;
+  metadata: Record<string, string>;
   prices: {
     id: string;
     unit_amount: number;
@@ -106,26 +162,24 @@ export default function Premium() {
 
   const isTrialActive = trialDaysLeft > 0;
   const isPremium = profile?.isPremium;
+  const currentTier = (profile?.membershipTier || 'free') as MembershipTier;
 
-  const premiumProduct = products?.data?.find(p => 
-    p.name.toLowerCase().includes('premium') || 
-    p.name.toLowerCase().includes('crush')
-  );
-  const monthlyPrice = premiumProduct?.prices?.find(p => 
-    p.recurring?.interval === 'month' && p.active
-  );
+  const findPriceForTier = (tier: MembershipTier) => {
+    const product = products?.data?.find(p => 
+      p.metadata?.tier === tier || 
+      p.name.toLowerCase().includes(tier)
+    );
+    return product?.prices?.find(p => p.recurring?.interval === 'month' && p.active);
+  };
 
-  const displayPrice = monthlyPrice 
-    ? `$${(monthlyPrice.unit_amount / 100).toFixed(2)}`
-    : '$9.99';
-
-  const handleSubscribe = () => {
-    if (monthlyPrice) {
-      checkoutMutation.mutate(monthlyPrice.id);
+  const handleSubscribe = (tier: TierInfo) => {
+    const price = findPriceForTier(tier.id);
+    if (price) {
+      checkoutMutation.mutate(price.id);
     } else {
       toast({
         title: "Setup Required",
-        description: "Premium subscription is being configured. Please check back soon.",
+        description: `${tier.name} subscription is being configured. Please check back soon.`,
       });
     }
   };
@@ -134,23 +188,29 @@ export default function Premium() {
     portalMutation.mutate();
   };
 
+  const getCurrentTierInfo = () => {
+    return tiers.find(t => t.id === currentTier);
+  };
+
   return (
     <div className="min-h-screen bg-secondary/30 pb-24 md:pt-20">
-      <div className="max-w-lg mx-auto p-4">
+      <div className="max-w-4xl mx-auto p-4">
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
             <Crown className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-display font-bold mb-2" data-testid="premium-title">Crush Premium</h1>
-          <p className="text-muted-foreground">Unlock the full dating experience</p>
+          <p className="text-muted-foreground">Choose the plan that's right for you</p>
         </div>
 
-        {isPremium && (
+        {isPremium && currentTier !== 'free' && (
           <Card className="mb-6 border-green-500/20 bg-green-500/5">
             <CardContent className="p-4 text-center">
-              <Badge className="mb-2 bg-green-500">Premium Active</Badge>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Badge className="bg-green-500">{getCurrentTierInfo()?.name || 'Premium'} Active</Badge>
+              </div>
               <p className="text-sm text-muted-foreground">
-                You have full access to all premium features
+                You have full access to all {getCurrentTierInfo()?.name || 'premium'} features
               </p>
               <Button 
                 variant="outline" 
@@ -182,78 +242,101 @@ export default function Premium() {
           </Card>
         )}
 
-        <Card className="border-none shadow-xl mb-6">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-2xl">Premium Features</CardTitle>
-            <CardDescription>Everything you need to find your perfect match</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {features.map((feature, index) => (
-              <div key={index} className="flex items-start gap-4 p-3 rounded-lg bg-secondary/50">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
-                </div>
-              </div>
-            ))}
+        {productsLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {tiers.map((tier) => {
+              const Icon = tier.icon;
+              const isCurrentTier = currentTier === tier.id;
+              const stripePrice = findPriceForTier(tier.id);
+              const displayPrice = stripePrice 
+                ? (stripePrice.unit_amount / 100).toFixed(2)
+                : tier.price.toFixed(2);
+
+              return (
+                <Card 
+                  key={tier.id} 
+                  className={`relative border-none shadow-xl transition-transform hover:scale-[1.02] ${
+                    tier.popular ? 'ring-2 ring-primary' : ''
+                  } ${isCurrentTier ? 'ring-2 ring-green-500' : ''}`}
+                  data-testid={`tier-card-${tier.id}`}
+                >
+                  {tier.popular && !isCurrentTier && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="bg-primary shadow-lg">Most Popular</Badge>
+                    </div>
+                  )}
+                  {isCurrentTier && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="bg-green-500 shadow-lg">Current Plan</Badge>
+                    </div>
+                  )}
+                  
+                  <CardHeader className="text-center pb-2 pt-6">
+                    <div className={`w-14 h-14 mx-auto mb-3 rounded-full bg-gradient-to-br ${tier.bgGradient} flex items-center justify-center`}>
+                      <Icon className="w-7 h-7 text-white" />
+                    </div>
+                    <CardTitle className="text-xl">{tier.name}</CardTitle>
+                    <div className="flex items-baseline justify-center gap-1 mt-2">
+                      <span className="text-3xl font-bold">${displayPrice}</span>
+                      <span className="text-muted-foreground text-sm">/month</span>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pb-6">
+                    <ul className="space-y-2.5 mb-6">
+                      {tier.features.map((feature, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <div className={`w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                            <Check className="w-2.5 h-2.5 text-green-500" />
+                          </div>
+                          <span className="text-sm">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button 
+                      className={`w-full rounded-full font-semibold ${
+                        tier.popular && !isCurrentTier
+                          ? 'shadow-lg shadow-primary/20' 
+                          : ''
+                      }`}
+                      variant={isCurrentTier ? "outline" : tier.popular ? "default" : "secondary"}
+                      onClick={() => handleSubscribe(tier)}
+                      disabled={checkoutMutation.isPending || isCurrentTier}
+                      data-testid={`button-subscribe-${tier.id}`}
+                    >
+                      {checkoutMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : isCurrentTier ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Current Plan
+                        </>
+                      ) : (
+                        <>
+                          <Icon className="w-4 h-4 mr-2" />
+                          {isPremium ? 'Switch to ' : 'Get '}{tier.name}
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        <Card className="border-none shadow-lg">
+          <CardContent className="p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              All plans include a 7-day money-back guarantee. Cancel anytime through your account settings.
+            </p>
           </CardContent>
         </Card>
-
-        {!isPremium && (
-          <Card className="border-none shadow-xl">
-            <CardContent className="p-6">
-              <div className="text-center mb-6">
-                {productsLoading ? (
-                  <div className="flex items-center justify-center h-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-baseline justify-center gap-1 mb-2">
-                      <span className="text-4xl font-bold">{displayPrice}</span>
-                      <span className="text-muted-foreground">/month</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Cancel anytime</p>
-                  </>
-                )}
-              </div>
-
-              <ul className="space-y-3 mb-6">
-                {["Unlimited messaging", "See who likes you", "Priority matching", "Ad-free experience"].map((item, index) => (
-                  <li key={index} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                      <Check className="w-3 h-3 text-green-500" />
-                    </div>
-                    <span className="text-sm">{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button 
-                className="w-full h-12 rounded-full font-semibold shadow-lg shadow-primary/20"
-                onClick={handleSubscribe}
-                disabled={checkoutMutation.isPending || productsLoading}
-                data-testid="button-subscribe"
-              >
-                {checkoutMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Crown className="w-4 h-4 mr-2" />
-                )}
-                {isTrialActive ? "Upgrade Now" : "Start Premium"}
-              </Button>
-
-              {!isTrialActive && (
-                <p className="text-xs text-center text-muted-foreground mt-4">
-                  Your free trial has ended. Subscribe to continue messaging.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );

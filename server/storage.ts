@@ -12,6 +12,7 @@ import {
   type InsertMessage,
   type Message,
   type InsertUser,
+  type MembershipTier,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -24,7 +25,7 @@ export interface IStorage {
   updateProfile(userId: string, profile: Partial<InsertProfile>): Promise<Profile>;
   getPotentialMatches(userId: string): Promise<Profile[]>;
   updateStripeCustomer(userId: string, customerId: string): Promise<void>;
-  updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean): Promise<void>;
+  updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void>;
   getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined>;
   
   // Swipes & Matches
@@ -78,10 +79,24 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId));
   }
 
-  async updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean): Promise<void> {
+  async updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void> {
+    const updates: Record<string, any> = { 
+      stripeSubscriptionId: subscriptionId, 
+      isPremium 
+    };
+    if (membershipTier) {
+      updates.membershipTier = membershipTier;
+    }
+    if (priceId) {
+      updates.stripePriceId = priceId;
+    }
+    if (!isPremium) {
+      updates.membershipTier = 'free';
+      updates.stripePriceId = null;
+    }
     await db
       .update(profiles)
-      .set({ stripeSubscriptionId: subscriptionId, isPremium })
+      .set(updates)
       .where(eq(profiles.userId, userId));
   }
 

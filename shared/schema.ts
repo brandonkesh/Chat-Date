@@ -6,6 +6,9 @@ import { relations } from "drizzle-orm";
 
 export * from "./models/auth";
 
+// Membership tiers: free, basic, pro, elite
+export type MembershipTier = 'free' | 'basic' | 'pro' | 'elite';
+
 // === PROFILES ===
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
@@ -20,7 +23,9 @@ export const profiles = pgTable("profiles", {
   trialEndsAt: timestamp("trial_ends_at").notNull(), // When the free month ends
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"), // Track which price they subscribed to
   isPremium: boolean("is_premium").default(false),
+  membershipTier: text("membership_tier").default("free"), // 'free', 'basic', 'pro', 'elite'
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

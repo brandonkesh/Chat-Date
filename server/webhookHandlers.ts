@@ -1,6 +1,36 @@
 import { getStripeSync } from './stripeClient';
 import { storage } from './storage';
 import { log } from './index';
+import { stripeStorage } from './stripeStorage';
+import type { MembershipTier } from '@shared/schema';
+
+async function determineTierFromSubscription(subscription: any): Promise<MembershipTier> {
+  try {
+    const priceId = subscription.items?.data?.[0]?.price?.id;
+    if (!priceId) return 'basic';
+
+    const products = await stripeStorage.listProductsWithPrices();
+    
+    for (const row of products as any[]) {
+      if (row.price_id === priceId) {
+        const metadata = row.product_metadata || {};
+        if (metadata.tier) {
+          return metadata.tier as MembershipTier;
+        }
+        
+        const productName = (row.product_name || '').toLowerCase();
+        if (productName.includes('elite')) return 'elite';
+        if (productName.includes('pro')) return 'pro';
+        if (productName.includes('basic')) return 'basic';
+      }
+    }
+    
+    return 'pro';
+  } catch (error) {
+    log(`Error determining tier: ${error}`, 'stripe');
+    return 'pro';
+  }
+}
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
@@ -35,12 +65,17 @@ export class WebhookHandlers {
         const profile = await storage.getProfileByStripeCustomerId(customerId);
         if (profile) {
           const isPremium = status === 'active' || status === 'trialing';
+          const priceId = subscription.items?.data?.[0]?.price?.id;
+          const tier = isPremium ? await determineTierFromSubscription(subscription) : 'free';
+          
           await storage.updateStripeSubscription(
             profile.userId,
             subscription.id,
-            isPremium
+            isPremium,
+            tier,
+            priceId
           );
-          log(`Updated subscription for user ${profile.userId}: ${status}`, 'stripe');
+          log(`Updated subscription for user ${profile.userId}: ${status}, tier: ${tier}`, 'stripe');
         }
         break;
       }
