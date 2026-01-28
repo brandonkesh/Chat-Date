@@ -22,8 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, User } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 
 function EditProfileForm({ profile }: { profile: Profile }) {
   const [, setLocation] = useLocation();
@@ -50,7 +50,9 @@ function EditProfileForm({ profile }: { profile: Profile }) {
     }
   };
 
-  const avatarUrl = profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`;
+  const handlePhotoUploaded = (objectPath: string) => {
+    form.setValue("photoUrl", objectPath);
+  };
 
   return (
     <div className="min-h-screen bg-secondary/30 pb-24 md:pt-20">
@@ -67,13 +69,12 @@ function EditProfileForm({ profile }: { profile: Profile }) {
 
         <Card className="border-none shadow-xl">
           <CardHeader className="text-center pb-4">
-            <div className="mx-auto mb-4">
-              <Avatar className="w-24 h-24 border-4 border-background shadow-lg">
-                <AvatarImage src={avatarUrl} alt={profile.displayName} />
-                <AvatarFallback><User className="w-8 h-8" /></AvatarFallback>
-              </Avatar>
-            </div>
-            <CardTitle className="text-2xl font-display">Edit Profile</CardTitle>
+            <PhotoUpload
+              currentPhotoUrl={form.watch("photoUrl")}
+              displayName={form.watch("displayName")}
+              onPhotoUploaded={handlePhotoUploaded}
+            />
+            <CardTitle className="text-2xl font-display mt-4">Edit Profile</CardTitle>
             <CardDescription>Update your dating profile</CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,25 +91,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                           placeholder="Your name" 
                           className="h-12 rounded-xl" 
                           data-testid="input-display-name"
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="photoUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Photo URL</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="https://example.com/photo.jpg" 
-                          className="h-12 rounded-xl"
-                          data-testid="input-photo-url"
                           {...field} 
                         />
                       </FormControl>

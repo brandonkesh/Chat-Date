@@ -55,6 +55,13 @@ Preferred communication style: Simple, everyday language.
 ### Authentication
 - Replit Auth (OpenID Connect) requiring `ISSUER_URL`, `REPL_ID`, and `SESSION_SECRET` environment variables
 
+### Object Storage
+- **Provider**: Replit Object Storage (Google Cloud Storage backed)
+- **Implementation**: Located in `server/replit_integrations/object_storage/`
+- **Photo Uploads**: Users can upload profile photos via presigned URLs
+- **Routes**: `/api/uploads/request-url` (authenticated) and `/objects/uploads/:id` (serving)
+- **Limits**: 5MB max file size, image types only (JPEG, PNG, GIF, WebP)
+
 ### Third-Party Services
 - **Dicebear API**: Fallback avatar generation for users without profile photos
 - **Google Fonts**: DM Sans (body) and Outfit (display) font families

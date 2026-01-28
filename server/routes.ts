@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
 import { matches } from "@shared/schema";
 import { eq, or, and } from "drizzle-orm";
@@ -15,6 +16,9 @@ export async function registerRoutes(
   // Setup Auth
   await setupAuth(app);
   registerAuthRoutes(app);
+  
+  // Setup Object Storage for file uploads
+  registerObjectStorageRoutes(app);
 
   // === PROFILES ===
   
