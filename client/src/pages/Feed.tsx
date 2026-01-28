@@ -71,11 +71,11 @@ export default function Feed() {
   return (
     <div className="h-[calc(100vh-64px)] w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
       
-      {/* Profile Picture with Edit Icon */}
+      {/* Profile Picture with Edit Icon - Fixed at top right */}
       <Link href="/profile/edit" data-testid="link-edit-profile">
-        <div className="absolute top-4 right-4 z-10">
+        <div className="fixed top-3 right-4 z-50">
           <div className="relative group cursor-pointer">
-            <Avatar className="w-12 h-12 border-2 border-primary/20 shadow-md">
+            <Avatar className="w-11 h-11 border-2 border-primary/20 shadow-md">
               <AvatarImage 
                 src={myProfile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${myProfile?.displayName || 'user'}`} 
                 alt={myProfile?.displayName || "Your profile"} 
@@ -84,8 +84,8 @@ export default function Feed() {
                 {myProfile?.displayName?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-              <Pencil className="w-3 h-3 text-primary-foreground" />
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+              <Pencil className="w-2.5 h-2.5 text-primary-foreground" />
             </div>
           </div>
         </div>
