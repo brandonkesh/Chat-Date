@@ -15,6 +15,7 @@ import Feed from "@/pages/Feed";
 import Matches from "@/pages/Matches";
 import Chat from "@/pages/Chat";
 import Inbox from "@/pages/Inbox";
+import Premium from "@/pages/Premium";
 import EditProfile from "@/pages/EditProfile";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
@@ -79,6 +80,10 @@ function Router() {
 
         <Route path="/inbox">
           <ProtectedRoute component={Inbox} />
+        </Route>
+
+        <Route path="/premium">
+          <ProtectedRoute component={Premium} />
         </Route>
 
         <Route path="/profile/edit">

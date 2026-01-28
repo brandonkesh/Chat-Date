@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, LogOut, User, Pencil } from "lucide-react";
+import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -52,6 +52,11 @@ export function Navbar() {
           <Link href="/inbox" className={`flex flex-col items-center gap-1 transition-colors ${location.startsWith('/inbox') || location.startsWith('/chat') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} data-testid="nav-inbox">
             <Mail className={`w-6 h-6 ${location.startsWith('/inbox') || location.startsWith('/chat') ? 'fill-current' : ''}`} />
             <span className="text-[10px] md:hidden font-medium">Inbox</span>
+          </Link>
+
+          <Link href="/premium" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/premium')}`} data-testid="nav-premium">
+            <CreditCard className={`w-6 h-6 ${location === '/premium' ? 'fill-current' : ''}`} />
+            <span className="text-[10px] md:hidden font-medium">Premium</span>
           </Link>
 
           {/* Desktop Profile */}
