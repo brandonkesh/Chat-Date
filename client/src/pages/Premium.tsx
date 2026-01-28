@@ -115,11 +115,8 @@ export default function Premium() {
 
   const checkoutMutation = useMutation({
     mutationFn: async (priceId: string) => {
-      const response = await apiRequest('/api/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ priceId }),
-      });
-      return response as { url: string };
+      const response = await apiRequest('POST', '/api/checkout', { priceId });
+      return await response.json() as { url: string };
     },
     onSuccess: (data) => {
       if (data.url) {
@@ -137,10 +134,8 @@ export default function Premium() {
 
   const portalMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/customer-portal', {
-        method: 'POST',
-      });
-      return response as { url: string };
+      const response = await apiRequest('POST', '/api/customer-portal');
+      return await response.json() as { url: string };
     },
     onSuccess: (data) => {
       if (data.url) {

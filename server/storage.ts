@@ -11,7 +11,7 @@ import {
   type InsertSwipe,
   type InsertMessage,
   type Message,
-  type InsertUser,
+  type UpsertUser,
   type MembershipTier,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
@@ -37,7 +37,7 @@ export interface IStorage {
   
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
-  createMessage(message: InsertMessage): Promise<Message>;
+  createMessage(message: InsertMessage & { senderId: string }): Promise<Message>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -122,18 +122,21 @@ export class DatabaseStorage implements IStorage {
     const swipedIds = swiped.map(s => s.swipedId);
     swipedIds.push(userId); // Exclude self
 
-    // Build query
-    let query = db.select().from(profiles).where(notInArray(profiles.userId, swipedIds));
-
-    // Filter by gender preference if not 'everyone'
+    // Build query with gender filter
     if (myProfile.interestedIn !== 'everyone') {
-      query.where(eq(profiles.gender, myProfile.interestedIn));
+      return await db
+        .select()
+        .from(profiles)
+        .where(and(
+          notInArray(profiles.userId, swipedIds),
+          eq(profiles.gender, myProfile.interestedIn)
+        ));
     }
     
-    // Also filter so that they are interested in my gender (simplified matching)
-    // In a real app, this would be more complex
-    
-    return await query;
+    return await db
+      .select()
+      .from(profiles)
+      .where(notInArray(profiles.userId, swipedIds));
   }
 
   async createSwipe(swipe: InsertSwipe): Promise<void> {
@@ -202,7 +205,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
-  async createMessage(message: InsertMessage): Promise<Message> {
+  async createMessage(message: InsertMessage & { senderId: string }): Promise<Message> {
     const [msg] = await db.insert(messages).values(message).returning();
     return msg;
   }

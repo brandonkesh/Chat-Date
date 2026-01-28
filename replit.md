@@ -71,10 +71,13 @@ Preferred communication style: Simple, everyday language.
 - **Implementation**: Located in `server/stripeClient.ts`, `server/stripeService.ts`, `server/stripeStorage.ts`
 - **Webhook Handling**: `server/webhookHandlers.ts` processes subscription events
 - **Database Schema**: Stripe data synced to `stripe.*` schema (products, prices, subscriptions, customers)
-- **Premium Features**: Users can subscribe to "Crush Premium" ($9.99/month) for unlimited messaging
-- **Profile Fields**: `stripeCustomerId`, `stripeSubscriptionId`, `isPremium` track subscription status
+- **Membership Tiers**: Three paid tiers with different feature sets:
+  - **Basic** ($4.99/month): 10 daily super likes, see who viewed you, basic filters, ad-free
+  - **Pro** ($9.99/month): Unlimited super likes, see who likes you, priority matching, advanced filters, read receipts
+  - **Elite** ($19.99/month): All Pro features + profile boost, incognito mode, VIP badge, priority support, exclusive events
+- **Profile Fields**: `stripeCustomerId`, `stripeSubscriptionId`, `stripePriceId`, `isPremium`, `membershipTier` track subscription status
 - **Checkout Flow**: `/api/checkout` creates Stripe Checkout session, `/api/customer-portal` for subscription management
-- **Product Seeding**: Run `npx tsx server/seedStripeProducts.ts` to create Premium product in Stripe
+- **Tier Detection**: Webhook handler determines tier from product metadata or name matching
 
 ### Key NPM Packages
 - `@tanstack/react-query` - Server state management
@@ -88,14 +91,20 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### January 28, 2026
-- **Stripe Premium Subscription**: Added full Stripe payment integration for "Crush Premium" subscription ($9.99/month)
-  - Created Stripe product and price via seed script
+- **Multiple Membership Tiers**: Expanded from single premium to three-tier subscription system
+  - Basic ($4.99), Pro ($9.99), Elite ($19.99) monthly plans
+  - Each tier has unique features and benefits
+  - Premium page displays all tiers with feature comparisons
+  - Webhook handler determines tier from Stripe product metadata
+- **Profile Schema Updates**: Added `membershipTier`, `stripePriceId` fields for tier tracking
+- **Hobbies & Interests**: Users can add personal interests to their profiles
+  - Tag-style input on onboarding and edit profile pages
+  - Interests displayed as badges on profile cards
+- **Stripe Premium Subscription**: Added full Stripe payment integration
   - Checkout flow redirects to Stripe-hosted payment page
-  - Webhook handlers update user premium status on subscription events
+  - Webhook handlers update user premium status and tier on subscription events
   - Premium users bypass free trial restrictions for messaging
   - Customer portal for subscription management
-- **Profile Schema Updates**: Added `stripeCustomerId`, `stripeSubscriptionId`, `isPremium` fields
-- **Premium Page Enhancement**: Dynamic pricing from Stripe, success/cancel toast notifications, manage subscription button for premium users
 
 ### January 27, 2026
 - **Photo Upload**: Added profile photo upload with Replit Object Storage
