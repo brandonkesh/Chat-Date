@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, LogOut, User, Pencil } from "lucide-react";
+import { Heart, MessageCircle, Mail, LogOut, User, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -39,14 +39,19 @@ export function Navbar() {
 
         {/* Mobile & Desktop Nav Items */}
         <div className="flex flex-1 md:flex-none justify-around md:justify-end items-center md:gap-8">
-          <Link href="/feed" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/feed')}`}>
+          <Link href="/feed" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/feed')}`} data-testid="nav-discover">
             <Heart className={`w-6 h-6 ${location === '/feed' ? 'fill-current' : ''}`} />
             <span className="text-[10px] md:hidden font-medium">Discover</span>
           </Link>
 
-          <Link href="/matches" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/matches')}`}>
-            <MessageCircle className={`w-6 h-6 ${location.startsWith('/matches') || location.startsWith('/chat') ? 'fill-current' : ''}`} />
-            <span className="text-[10px] md:hidden font-medium">Chat</span>
+          <Link href="/matches" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/matches')}`} data-testid="nav-matches">
+            <MessageCircle className={`w-6 h-6 ${location === '/matches' ? 'fill-current' : ''}`} />
+            <span className="text-[10px] md:hidden font-medium">Matches</span>
+          </Link>
+
+          <Link href="/inbox" className={`flex flex-col items-center gap-1 transition-colors ${location.startsWith('/inbox') || location.startsWith('/chat') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} data-testid="nav-inbox">
+            <Mail className={`w-6 h-6 ${location.startsWith('/inbox') || location.startsWith('/chat') ? 'fill-current' : ''}`} />
+            <span className="text-[10px] md:hidden font-medium">Inbox</span>
           </Link>
 
           {/* Desktop Profile */}

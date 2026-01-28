@@ -14,6 +14,7 @@ import Onboarding from "@/pages/Onboarding";
 import Feed from "@/pages/Feed";
 import Matches from "@/pages/Matches";
 import Chat from "@/pages/Chat";
+import Inbox from "@/pages/Inbox";
 import EditProfile from "@/pages/EditProfile";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
@@ -74,6 +75,10 @@ function Router() {
         
         <Route path="/chat/:id">
           <ProtectedRoute component={Chat} />
+        </Route>
+
+        <Route path="/inbox">
+          <ProtectedRoute component={Inbox} />
         </Route>
 
         <Route path="/profile/edit">
