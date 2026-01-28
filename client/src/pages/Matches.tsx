@@ -8,7 +8,7 @@ export default function Matches() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-64px)] flex items-center justify-center">
+      <div className="min-h-screen pb-20 md:pb-0 md:pt-20 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
@@ -16,7 +16,7 @@ export default function Matches() {
 
   if (!matches || matches.length === 0) {
     return (
-      <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen pb-20 md:pb-0 md:pt-20 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
           <MessageCircle className="w-8 h-8 text-primary" />
         </div>
@@ -30,7 +30,7 @@ export default function Matches() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24">
+    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24 md:pt-20">
       <h1 className="text-3xl font-display font-bold mb-6">Matches ({matches.length})</h1>
       
       <div className="grid gap-4">

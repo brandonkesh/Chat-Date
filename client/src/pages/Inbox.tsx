@@ -10,7 +10,7 @@ export default function Inbox() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen pb-20 md:pb-0 md:pt-20 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -20,7 +20,7 @@ export default function Inbox() {
   const hasConversations = matchesWithMessages.length > 0;
 
   return (
-    <div className="min-h-screen bg-secondary/30 pb-24 md:pt-20">
+    <div className="min-h-screen bg-secondary/30 pb-24 md:pb-0 md:pt-20">
       <div className="max-w-lg mx-auto p-4">
         <h1 className="text-2xl font-display font-bold mb-6" data-testid="inbox-title">Inbox</h1>
 
