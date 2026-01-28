@@ -23,6 +23,9 @@ export interface IStorage {
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, profile: Partial<InsertProfile>): Promise<Profile>;
   getPotentialMatches(userId: string): Promise<Profile[]>;
+  updateStripeCustomer(userId: string, customerId: string): Promise<void>;
+  updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean): Promise<void>;
+  getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined>;
   
   // Swipes & Matches
   createSwipe(swipe: InsertSwipe): Promise<void>;
@@ -66,6 +69,28 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
+  }
+
+  async updateStripeCustomer(userId: string, customerId: string): Promise<void> {
+    await db
+      .update(profiles)
+      .set({ stripeCustomerId: customerId })
+      .where(eq(profiles.userId, userId));
+  }
+
+  async updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean): Promise<void> {
+    await db
+      .update(profiles)
+      .set({ stripeSubscriptionId: subscriptionId, isPremium })
+      .where(eq(profiles.userId, userId));
+  }
+
+  async getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.stripeCustomerId, customerId));
+    return profile;
   }
 
   async getPotentialMatches(userId: string): Promise<Profile[]> {

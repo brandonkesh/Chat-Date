@@ -17,12 +17,18 @@ export const profiles = pgTable("profiles", {
   interestedIn: text("interested_in").notNull(), // 'male', 'female', 'everyone'
   photoUrl: text("photo_url"),
   trialEndsAt: timestamp("trial_ends_at").notNull(), // When the free month ends
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  isPremium: boolean("is_premium").default(false),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
   id: true, 
   userId: true,
-  trialEndsAt: true 
+  trialEndsAt: true,
+  stripeCustomerId: true,
+  stripeSubscriptionId: true,
+  isPremium: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;
