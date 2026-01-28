@@ -135,7 +135,7 @@ export default function Premium() {
   };
 
   return (
-    <div className="min-h-screen bg-secondary/30 pb-24 md:pb-0 md:pt-20">
+    <div className="min-h-screen bg-secondary/30 pt-20 pb-24">
       <div className="max-w-lg mx-auto p-4">
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">

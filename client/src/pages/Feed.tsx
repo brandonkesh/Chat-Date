@@ -47,7 +47,7 @@ export default function Feed() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pb-20 md:pb-0 md:pt-20 flex flex-col items-center justify-center">
+      <div className="min-h-screen pt-20 pb-20 flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
         <p className="text-muted-foreground animate-pulse">Finding matches...</p>
       </div>
@@ -56,7 +56,7 @@ export default function Feed() {
 
   if (isError) {
     return (
-      <div className="min-h-screen pb-20 md:pb-0 md:pt-20 flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen pt-20 pb-20 flex items-center justify-center p-6 text-center">
         <div>
           <h3 className="text-xl font-bold mb-2">Something went wrong</h3>
           <p className="text-muted-foreground">Unable to load profiles. Please try again later.</p>
@@ -66,7 +66,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="min-h-screen pb-20 md:pb-0 md:pt-20 w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
+    <div className="min-h-screen pt-20 pb-20 w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
       <div className="w-full h-[500px] sm:h-[600px] relative">
         <AnimatePresence>
           {stack.length > 0 ? (

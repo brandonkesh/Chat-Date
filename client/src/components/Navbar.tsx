@@ -28,8 +28,8 @@ export function Navbar() {
 
   return (
     <>
-      {/* Desktop Top Navigation */}
-      <nav className="hidden md:block fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-border">
+      {/* Top Navigation - Always visible */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-border">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/feed" className="flex items-center gap-2 font-display font-bold text-2xl text-primary hover:opacity-80 transition-opacity">
             <Heart className="fill-current w-6 h-6" />
@@ -90,8 +90,8 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-border safe-area-bottom">
+      {/* Bottom Navigation - Always visible */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-border safe-area-bottom">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-around">
           <Link href="/feed" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/feed')}`} data-testid="nav-discover">
             <Heart className={`w-6 h-6 ${location === '/feed' ? 'fill-current' : ''}`} />
