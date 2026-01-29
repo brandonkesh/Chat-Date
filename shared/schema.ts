@@ -37,6 +37,10 @@ export const profiles = pgTable("profiles", {
   minAgePreference: integer("min_age_preference").default(18),
   maxAgePreference: integer("max_age_preference").default(50),
   maxDistance: integer("max_distance").default(50), // in miles
+  // Location
+  locationName: text("location_name"), // City, State or address display name
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

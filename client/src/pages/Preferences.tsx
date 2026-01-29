@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -17,14 +17,92 @@ export default function Preferences() {
   const [ageRange, setAgeRange] = useState<[number, number]>([18, 50]);
   const [maxDistance, setMaxDistance] = useState(50);
   const [interestedIn, setInterestedIn] = useState("everyone");
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [latitude, setLatitude] = useState<string | null>(null);
+  const [longitude, setLongitude] = useState<string | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   useEffect(() => {
     if (profile) {
       setAgeRange([profile.minAgePreference || 18, profile.maxAgePreference || 50]);
       setMaxDistance(profile.maxDistance || 50);
       setInterestedIn(profile.interestedIn);
+      setLocationName(profile.locationName || null);
+      setLatitude(profile.latitude || null);
+      setLongitude(profile.longitude || null);
     }
   }, [profile]);
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location not supported",
+        description: "Your browser doesn't support geolocation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude.toString();
+        const lng = position.coords.longitude.toString();
+        setLatitude(lat);
+        setLongitude(lng);
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`
+          );
+          const data = await response.json();
+          
+          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality;
+          const state = data.address?.state;
+          const country = data.address?.country;
+          
+          let displayName = "";
+          if (city && state) {
+            displayName = `${city}, ${state}`;
+          } else if (city && country) {
+            displayName = `${city}, ${country}`;
+          } else if (state && country) {
+            displayName = `${state}, ${country}`;
+          } else {
+            displayName = data.display_name?.split(",").slice(0, 2).join(",") || "Location set";
+          }
+          
+          setLocationName(displayName);
+          toast({
+            title: "Location updated",
+            description: `Your location is set to ${displayName}`,
+          });
+        } catch {
+          setLocationName("Location set");
+          toast({
+            title: "Location captured",
+            description: "Your coordinates have been saved.",
+          });
+        }
+        
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        let message = "Unable to get your location.";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "Please allow location access in your browser settings.";
+        }
+        toast({
+          title: "Location error",
+          description: message,
+          variant: "destructive",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const handleSave = () => {
     if (!profile) return;
@@ -40,6 +118,9 @@ export default function Preferences() {
       maxAgePreference: ageRange[1],
       maxDistance: maxDistance,
       interestedIn: interestedIn,
+      locationName: locationName,
+      latitude: latitude,
+      longitude: longitude,
     }, {
       onSuccess: () => {
         toast({
@@ -71,6 +152,51 @@ export default function Preferences() {
           <p className="text-sm text-muted-foreground">Customize your dating experience</p>
         </div>
       </div>
+
+      <Card data-testid="card-location">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-blue-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Current Location</CardTitle>
+              <CardDescription>Set your location for nearby matches</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              {locationName ? (
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                  <span className="text-sm font-medium truncate" data-testid="text-location-name">
+                    {locationName}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground" data-testid="text-no-location">
+                  No location set
+                </span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={getCurrentLocation}
+              disabled={isGettingLocation}
+              data-testid="button-get-location"
+            >
+              {isGettingLocation ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Navigation className="w-4 h-4 mr-2" />
+              )}
+              {locationName ? "Update" : "Get Location"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-basics">
         <CardHeader>
