@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles } from "lucide-react";
+import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -87,6 +87,13 @@ export function Navbar() {
                     Edit Profile
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/preferences">
+                  <DropdownMenuItem data-testid="button-preferences">
+                    <SlidersHorizontal className="w-4 h-4 mr-2" />
+                    Preferences
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout">
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
@@ -117,6 +124,13 @@ export function Navbar() {
                   Edit Profile
                 </DropdownMenuItem>
               </Link>
+              <Link href="/preferences">
+                <DropdownMenuItem data-testid="button-preferences-mobile">
+                  <SlidersHorizontal className="w-4 h-4 mr-2" />
+                  Preferences
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout-mobile">
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
