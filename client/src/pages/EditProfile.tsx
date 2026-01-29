@@ -195,6 +195,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                         <SelectContent>
                           <SelectItem value="male">Men</SelectItem>
                           <SelectItem value="female">Women</SelectItem>
+                          <SelectItem value="nonbinary">Non-binary</SelectItem>
                           <SelectItem value="everyone">Everyone</SelectItem>
                         </SelectContent>
                       </Select>
