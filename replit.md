@@ -91,6 +91,12 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### January 29, 2026
+- **Recommendations & Crush Picks**: Added personalized profile discovery features
+  - "For You" tab in navigation with Sparkles icon
+  - **Crush Picks**: Featured profiles prioritizing verified and premium users
+  - **Recommended for You**: Profiles with shared interests based on user's profile
+  - Profile cards with like/pass actions, badges for verified/premium status
+  - API endpoints: `/api/profiles/recommended`, `/api/profiles/crush-picks`
 - **Profile Verification**: Added photo verification system for profile authenticity
   - Users take a selfie matching a random pose to verify their identity
   - Verification page with camera capture and pose guidance
