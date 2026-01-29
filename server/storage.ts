@@ -25,6 +25,8 @@ export interface IStorage {
   createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
   updateProfile(userId: string, profile: Partial<InsertProfile>): Promise<Profile>;
   getPotentialMatches(userId: string): Promise<Profile[]>;
+  getRecommendedProfiles(userId: string): Promise<Profile[]>;
+  getCrushPicks(userId: string): Promise<Profile[]>;
   updateStripeCustomer(userId: string, customerId: string): Promise<void>;
   updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void>;
   getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined>;
@@ -142,6 +144,104 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(profiles)
       .where(notInArray(profiles.userId, swipedIds));
+  }
+
+  async getRecommendedProfiles(userId: string): Promise<Profile[]> {
+    // Get current user's profile to know preferences and interests
+    const myProfile = await this.getProfile(userId);
+    if (!myProfile) return [];
+
+    // Get IDs already swiped
+    const swiped = await db
+      .select({ swipedId: swipes.swipedId })
+      .from(swipes)
+      .where(eq(swipes.swiperId, userId));
+    
+    const swipedIds = swiped.map(s => s.swipedId);
+    swipedIds.push(userId); // Exclude self
+
+    // Get potential profiles matching gender preference
+    let potentialProfiles: Profile[];
+    if (myProfile.interestedIn !== 'everyone') {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(and(
+          notInArray(profiles.userId, swipedIds),
+          eq(profiles.gender, myProfile.interestedIn)
+        ));
+    } else {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(notInArray(profiles.userId, swipedIds));
+    }
+
+    // Score and sort by matching interests
+    const myInterests = myProfile.interests || [];
+    const scored = potentialProfiles.map(profile => {
+      const theirInterests = profile.interests || [];
+      const commonInterests = myInterests.filter(i => theirInterests.includes(i));
+      return { profile, score: commonInterests.length };
+    });
+
+    // Sort by score descending, take top 10 with at least 1 shared interest
+    return scored
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(s => s.profile);
+  }
+
+  async getCrushPicks(userId: string): Promise<Profile[]> {
+    // Get current user's profile to know preferences
+    const myProfile = await this.getProfile(userId);
+    if (!myProfile) return [];
+
+    // Get IDs already swiped
+    const swiped = await db
+      .select({ swipedId: swipes.swipedId })
+      .from(swipes)
+      .where(eq(swipes.swiperId, userId));
+    
+    const swipedIds = swiped.map(s => s.swipedId);
+    swipedIds.push(userId); // Exclude self
+
+    // Get potential profiles matching gender preference
+    let potentialProfiles: Profile[];
+    if (myProfile.interestedIn !== 'everyone') {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(and(
+          notInArray(profiles.userId, swipedIds),
+          eq(profiles.gender, myProfile.interestedIn)
+        ));
+    } else {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(notInArray(profiles.userId, swipedIds));
+    }
+
+    // Crush picks: prioritize verified users and premium members
+    const scored = potentialProfiles.map(profile => {
+      let score = 0;
+      if (profile.isVerified) score += 3;
+      if (profile.isPremium) score += 2;
+      if (profile.membershipTier === 'elite') score += 2;
+      else if (profile.membershipTier === 'pro') score += 1;
+      if (profile.photoUrl) score += 1; // Has a photo
+      if (profile.bio && profile.bio.length > 20) score += 1; // Has a bio
+      return { profile, score };
+    });
+
+    // Sort by score descending, take top 6
+    return scored
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map(s => s.profile);
   }
 
   async createSwipe(swipe: InsertSwipe): Promise<void> {

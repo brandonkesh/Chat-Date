@@ -67,6 +67,20 @@ export async function registerRoutes(
     res.json(profiles);
   });
 
+  // Get recommended profiles (based on shared interests)
+  app.get(api.profiles.recommended.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profiles = await storage.getRecommendedProfiles(userId);
+    res.json(profiles);
+  });
+
+  // Get crush picks (verified & premium users)
+  app.get(api.profiles.crushPicks.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profiles = await storage.getCrushPicks(userId);
+    res.json(profiles);
+  });
+
   // Get specific profile
   app.get(api.profiles.get.path, isAuthenticated, async (req: any, res) => {
     const profile = await storage.getProfileById(Number(req.params.id));

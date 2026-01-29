@@ -63,6 +63,28 @@ export function useFeed() {
   });
 }
 
+export function useRecommendedProfiles() {
+  return useQuery({
+    queryKey: [api.profiles.recommended.path],
+    queryFn: async () => {
+      const res = await fetch(api.profiles.recommended.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch recommended profiles");
+      return api.profiles.recommended.responses[200].parse(await res.json());
+    },
+  });
+}
+
+export function useCrushPicks() {
+  return useQuery({
+    queryKey: [api.profiles.crushPicks.path],
+    queryFn: async () => {
+      const res = await fetch(api.profiles.crushPicks.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch crush picks");
+      return api.profiles.crushPicks.responses[200].parse(await res.json());
+    },
+  });
+}
+
 // ============================================
 // SWIPE HOOKS
 // ============================================

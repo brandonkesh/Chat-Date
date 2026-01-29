@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil } from "lucide-react";
+import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -42,6 +42,11 @@ export function Navbar() {
           <Link href="/feed" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/feed')}`} data-testid="nav-discover">
             <Heart className={`w-6 h-6 ${location === '/feed' ? 'fill-current' : ''}`} />
             <span className="text-[10px] md:hidden font-medium">Discover</span>
+          </Link>
+
+          <Link href="/recommendations" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/recommendations')}`} data-testid="nav-recommendations">
+            <Sparkles className={`w-6 h-6 ${location === '/recommendations' ? 'fill-current' : ''}`} />
+            <span className="text-[10px] md:hidden font-medium">For You</span>
           </Link>
 
           <Link href="/matches" className={`flex flex-col items-center gap-1 transition-colors ${isActive('/matches')}`} data-testid="nav-matches">

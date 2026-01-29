@@ -54,6 +54,20 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    recommended: {
+      method: 'GET' as const,
+      path: '/api/profiles/recommended',
+      responses: {
+        200: z.array(z.custom<typeof profiles.$inferSelect>()),
+      },
+    },
+    crushPicks: {
+      method: 'GET' as const,
+      path: '/api/profiles/crush-picks',
+      responses: {
+        200: z.array(z.custom<typeof profiles.$inferSelect>()),
+      },
+    },
   },
   swipes: {
     create: {
