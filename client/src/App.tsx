@@ -19,6 +19,7 @@ import Premium from "@/pages/Premium";
 import EditProfile from "@/pages/EditProfile";
 import Verification from "@/pages/Verification";
 import Recommendations from "@/pages/Recommendations";
+import Preferences from "@/pages/Preferences";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -98,6 +99,10 @@ function Router() {
 
         <Route path="/recommendations">
           <ProtectedRoute component={Recommendations} />
+        </Route>
+
+        <Route path="/preferences">
+          <ProtectedRoute component={Preferences} />
         </Route>
         
         <Route component={NotFound} />

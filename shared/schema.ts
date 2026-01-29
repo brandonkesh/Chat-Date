@@ -33,6 +33,10 @@ export const profiles = pgTable("profiles", {
   isVerified: boolean("is_verified").default(false),
   verificationPhotoUrl: text("verification_photo_url"),
   verificationStatus: text("verification_status").default("none"), // 'none', 'pending', 'approved', 'rejected'
+  // Basic preferences
+  minAgePreference: integer("min_age_preference").default(18),
+  maxAgePreference: integer("max_age_preference").default(50),
+  maxDistance: integer("max_distance").default(50), // in miles
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
