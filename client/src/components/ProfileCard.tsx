@@ -1,6 +1,6 @@
 import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
-import { MapPin } from "lucide-react";
+import { MapPin, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -74,13 +74,18 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
 
       {/* Content */}
       <div className="h-[25%] p-6 flex flex-col justify-center bg-white dark:bg-gray-900 relative">
-        <div className="flex items-baseline gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1">
           <h2 className="text-3xl font-display font-bold text-foreground">
             {profile.displayName}
           </h2>
           <span className="text-xl text-muted-foreground font-medium">
             {profile.age}
           </span>
+          {profile.isVerified && (
+            <Badge className="bg-blue-500 text-white" title="Verified profile" data-testid="verified-badge">
+              <ShieldCheck className="w-3 h-3" />
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">

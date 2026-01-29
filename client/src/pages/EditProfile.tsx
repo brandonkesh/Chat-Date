@@ -22,10 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { Link } from "wouter";
 
 function EditProfileForm({ profile }: { profile: Profile }) {
   const [, setLocation] = useLocation();
@@ -36,7 +37,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
     resolver: zodResolver(insertProfileSchema),
     defaultValues: {
       displayName: profile.displayName,
-      bio: profile.bio || "",
+      bio: profile.bio ?? "",
       age: profile.age,
       gender: profile.gender,
       interestedIn: profile.interestedIn,
@@ -95,11 +96,19 @@ function EditProfileForm({ profile }: { profile: Profile }) {
         <Card className="border-none shadow-xl">
           <CardHeader className="text-center pb-4">
             <PhotoUpload
-              currentPhotoUrl={form.watch("photoUrl")}
+              currentPhotoUrl={form.watch("photoUrl") ?? undefined}
               displayName={form.watch("displayName")}
               onPhotoUploaded={handlePhotoUploaded}
             />
-            <CardTitle className="text-2xl font-display mt-4">Edit Profile</CardTitle>
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <CardTitle className="text-2xl font-display">Edit Profile</CardTitle>
+              {profile.isVerified && (
+                <Badge className="bg-blue-500 text-white" title="Verified profile" data-testid="verified-badge-profile">
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                  Verified
+                </Badge>
+              )}
+            </div>
             <CardDescription>Update your dating profile</CardDescription>
           </CardHeader>
           <CardContent>
@@ -205,7 +214,8 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                           placeholder="What makes you unique?" 
                           className="min-h-[100px] rounded-xl resize-none"
                           data-testid="input-bio"
-                          {...field} 
+                          {...field}
+                          value={field.value ?? ""} 
                         />
                       </FormControl>
                       <FormMessage />
@@ -258,11 +268,33 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                   )}
                 </FormItem>
 
+                {/* Verification Status Section */}
+                {!profile.isVerified && (
+                  <Link href="/verification" data-testid="link-verification-section">
+                    <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-xl cursor-pointer hover-elevate" data-testid="div-verification-section">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <ShieldCheck className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {profile.verificationStatus === 'pending' ? 'Verification Pending' : 'Get Verified'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {profile.verificationStatus === 'pending' 
+                            ? 'Your verification is being reviewed' 
+                            : 'Build trust with a verified badge'}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                  </Link>
+                )}
+
                 <div className="flex gap-3">
                   <Button 
                     type="button"
                     variant="outline"
-                    className="flex-1 h-12 rounded-full"
+                    className="flex-1"
                     onClick={() => setLocation("/feed")}
                     data-testid="button-cancel"
                   >
@@ -270,7 +302,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="flex-1 h-12 rounded-full font-semibold shadow-lg shadow-primary/20"
+                    className="flex-1"
                     disabled={isPending}
                     data-testid="button-save"
                   >

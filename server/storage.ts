@@ -13,6 +13,7 @@ import {
   type Message,
   type UpsertUser,
   type MembershipTier,
+  type VerificationStatus,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -38,6 +39,10 @@ export interface IStorage {
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
   createMessage(message: InsertMessage & { senderId: string }): Promise<Message>;
+  
+  // Verification
+  submitVerification(userId: string, photoUrl: string): Promise<Profile>;
+  updateVerificationStatus(userId: string, status: VerificationStatus): Promise<Profile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -208,6 +213,33 @@ export class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage & { senderId: string }): Promise<Message> {
     const [msg] = await db.insert(messages).values(message).returning();
     return msg;
+  }
+
+  async submitVerification(userId: string, photoUrl: string): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ 
+        verificationPhotoUrl: photoUrl,
+        verificationStatus: 'pending',
+      })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async updateVerificationStatus(userId: string, status: VerificationStatus): Promise<Profile> {
+    const updates: Record<string, any> = { verificationStatus: status };
+    if (status === 'approved') {
+      updates.isVerified = true;
+    } else if (status === 'rejected') {
+      updates.isVerified = false;
+    }
+    const [updated] = await db
+      .update(profiles)
+      .set(updates)
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
   }
 }
 

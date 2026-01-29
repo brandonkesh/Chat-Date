@@ -1,13 +1,14 @@
 import { useFeed, useSwipe, useMyProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Profile } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "wouter";
+import { Card } from "@/components/ui/card";
 
 export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
@@ -38,7 +39,7 @@ export default function Feed() {
       onSuccess: (data) => {
         if (data.match) {
           toast({
-            title: "It's a Match! 🎉",
+            title: "It's a Match!",
             description: `You and ${currentProfile.displayName} liked each other!`,
             className: "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-none",
             duration: 5000,
@@ -71,6 +72,24 @@ export default function Feed() {
   return (
     <div className="h-[calc(100vh-64px)] w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
       
+      {/* Verification Banner - shown for unverified users */}
+      {myProfile && !myProfile.isVerified && myProfile.verificationStatus !== 'pending' && (
+        <Link href="/verification" className="w-full mb-4 block" data-testid="link-verification-banner">
+          <Card className="p-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-verification-banner">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Get verified</p>
+                <p className="text-xs text-white/80 truncate">Stand out and build trust with matches</p>
+              </div>
+              <ChevronRight className="w-5 h-5 flex-shrink-0" />
+            </div>
+          </Card>
+        </Link>
+      )}
+
       {/* Profile Picture with Edit Icon - Fixed at top right */}
       <Link href="/profile/edit" data-testid="link-edit-profile">
         <div className="fixed top-3 right-4 z-50">
@@ -110,7 +129,7 @@ export default function Feed() {
               </div>
               <h3 className="text-2xl font-display font-bold mb-2">No more profiles</h3>
               <p className="text-muted-foreground mb-6">You've seen everyone nearby. Check back later for new people!</p>
-              <Button onClick={() => window.location.reload()} variant="outline" className="rounded-full">
+              <Button onClick={() => window.location.reload()} variant="outline">
                 Refresh Feed
               </Button>
             </motion.div>
@@ -122,20 +141,22 @@ export default function Feed() {
       {stack.length > 0 && (
         <div className="flex items-center gap-6 mt-8">
           <Button 
-            size="lg" 
+            size="icon" 
             variant="outline"
-            className="w-16 h-16 rounded-full border-2 border-red-100 text-red-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 shadow-sm transition-transform active:scale-90"
+            className="text-red-500"
             onClick={() => handleSwipe("left")}
+            data-testid="button-swipe-left"
           >
-            <X className="w-8 h-8" />
+            <X className="w-6 h-6" />
           </Button>
 
           <Button 
-            size="lg" 
-            className="w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-green-500 text-white shadow-lg shadow-green-200 hover:shadow-xl hover:shadow-green-300 transition-transform hover:-translate-y-1 active:translate-y-0 active:scale-95 border-none"
+            size="icon"
+            className="bg-green-500 text-white"
             onClick={() => handleSwipe("right")}
+            data-testid="button-swipe-right"
           >
-            <Heart className="w-8 h-8 fill-current" />
+            <Heart className="w-6 h-6 fill-current" />
           </Button>
         </div>
       )}

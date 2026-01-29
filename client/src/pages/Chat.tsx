@@ -61,7 +61,7 @@ export default function Chat() {
       {/* Header */}
       <header className="flex-none p-4 border-b border-border bg-white/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
         <Link href="/matches">
-          <Button variant="ghost" size="icon" className="rounded-full">
+          <Button variant="ghost" size="icon" data-testid="button-back">
             <ChevronLeft className="w-6 h-6" />
           </Button>
         </Link>
@@ -77,7 +77,7 @@ export default function Chat() {
             {partnerProfile.displayName}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Matched {formatDistanceToNow(new Date(matchData.match.createdAt), { addSuffix: true })}
+            Matched {matchData.match.createdAt ? formatDistanceToNow(new Date(matchData.match.createdAt), { addSuffix: true }) : 'recently'}
           </p>
         </div>
       </header>
@@ -154,14 +154,15 @@ export default function Chat() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={isTrialExpired ? "Subscription required to chat..." : "Type a message..."}
-            className="rounded-full bg-secondary/50 border-transparent focus:border-primary px-6 h-12"
+            className="flex-1"
             disabled={sending || isTrialExpired}
+            data-testid="input-message"
           />
           <Button 
             type="submit" 
             size="icon" 
             disabled={!inputValue.trim() || sending || isTrialExpired}
-            className="rounded-full h-12 w-12 shrink-0 shadow-lg shadow-primary/20"
+            data-testid="button-send"
           >
             {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </Button>

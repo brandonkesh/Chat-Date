@@ -9,6 +9,9 @@ export * from "./models/auth";
 // Membership tiers: free, basic, pro, elite
 export type MembershipTier = 'free' | 'basic' | 'pro' | 'elite';
 
+// Verification status: none, pending, approved, rejected
+export type VerificationStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 // === PROFILES ===
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
@@ -26,6 +29,10 @@ export const profiles = pgTable("profiles", {
   stripePriceId: text("stripe_price_id"), // Track which price they subscribed to
   isPremium: boolean("is_premium").default(false),
   membershipTier: text("membership_tier").default("free"), // 'free', 'basic', 'pro', 'elite'
+  // Verification fields
+  isVerified: boolean("is_verified").default(false),
+  verificationPhotoUrl: text("verification_photo_url"),
+  verificationStatus: text("verification_status").default("none"), // 'none', 'pending', 'approved', 'rejected'
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -35,6 +42,9 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   stripeCustomerId: true,
   stripeSubscriptionId: true,
   isPremium: true,
+  isVerified: true,
+  verificationPhotoUrl: true,
+  verificationStatus: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;

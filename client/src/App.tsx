@@ -17,6 +17,7 @@ import Chat from "@/pages/Chat";
 import Inbox from "@/pages/Inbox";
 import Premium from "@/pages/Premium";
 import EditProfile from "@/pages/EditProfile";
+import Verification from "@/pages/Verification";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -88,6 +89,10 @@ function Router() {
 
         <Route path="/profile/edit">
           <ProtectedRoute component={EditProfile} />
+        </Route>
+
+        <Route path="/verification">
+          <ProtectedRoute component={Verification} />
         </Route>
         
         <Route component={NotFound} />

@@ -76,6 +76,39 @@ export async function registerRoutes(
     res.json(profile);
   });
 
+  // === VERIFICATION ===
+  
+  // Submit verification photo
+  app.post("/api/verification/submit", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      const { photoUrl } = req.body;
+      if (!photoUrl) {
+        return res.status(400).json({ message: "Photo URL is required" });
+      }
+      
+      const profile = await storage.submitVerification(userId, photoUrl);
+      
+      // For now, auto-approve verification (in production, this would go to admin review)
+      // Simulate a brief delay then approve
+      setTimeout(async () => {
+        try {
+          await storage.updateVerificationStatus(userId, 'approved');
+        } catch (error) {
+          console.error("Failed to auto-approve verification:", error);
+        }
+      }, 3000);
+      
+      res.json({ 
+        message: "Verification submitted successfully", 
+        status: profile.verificationStatus 
+      });
+    } catch (err) {
+      console.error("Verification submission error:", err);
+      res.status(500).json({ message: "Failed to submit verification" });
+    }
+  });
+
   // === SWIPES ===
   app.post(api.swipes.create.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

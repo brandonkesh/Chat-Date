@@ -90,6 +90,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### January 29, 2026
+- **Profile Verification**: Added photo verification system for profile authenticity
+  - Users take a selfie matching a random pose to verify their identity
+  - Verification page with camera capture and pose guidance
+  - Auto-approval system with polling for status updates
+  - Verified badge displayed on profile cards and profile pages
+  - Verification prompts on Feed and Edit Profile pages for unverified users
+  - Profile fields: `isVerified`, `verificationPhotoUrl`, `verificationStatus`
+
 ### January 28, 2026
 - **Multiple Membership Tiers**: Expanded from single premium to three-tier subscription system
   - Basic ($4.99), Pro ($9.99), Elite ($19.99) monthly plans
