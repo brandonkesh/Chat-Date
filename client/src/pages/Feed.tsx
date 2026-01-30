@@ -9,6 +9,7 @@ import { Profile } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
+import { AdBanner } from "@/components/AdBanner";
 
 export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
@@ -160,6 +161,11 @@ export default function Feed() {
           </Button>
         </div>
       )}
+
+      {/* Ad Banner */}
+      <div className="fixed bottom-20 left-0 right-0 px-4 max-w-md mx-auto">
+        <AdBanner size="banner" />
+      </div>
     </div>
   );
 }

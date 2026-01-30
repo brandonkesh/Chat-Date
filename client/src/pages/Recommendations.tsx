@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
+import { AdBanner } from "@/components/AdBanner";
 
 function ProfilePreviewCard({ profile, onLike }: { profile: Profile; onLike: () => void }) {
   const avatarUrl = profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`;
@@ -159,6 +160,9 @@ export default function Recommendations() {
           </Card>
         )}
       </section>
+
+      {/* Ad Banner between sections */}
+      <AdBanner size="leaderboard" className="my-2" />
 
       <section data-testid="section-recommended">
         <div className="flex items-center gap-2 mb-4">

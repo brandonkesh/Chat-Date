@@ -4,6 +4,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, MessageCircle, User } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { AdBanner } from "@/components/AdBanner";
 
 export default function Inbox() {
   const { data: matches, isLoading } = useMatches();
@@ -73,6 +74,11 @@ export default function Inbox() {
             })}
           </div>
         )}
+
+        {/* Ad Banner */}
+        <div className="mt-6">
+          <AdBanner size="rectangle" className="mx-auto" />
+        </div>
       </div>
     </div>
   );
