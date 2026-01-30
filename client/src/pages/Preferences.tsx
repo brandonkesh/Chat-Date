@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,16 @@ export default function Preferences() {
   const [latitude, setLatitude] = useState<string | null>(null);
   const [longitude, setLongitude] = useState<string | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [looksPreference, setLooksPreference] = useState("any");
+  const [bodyTypePreference, setBodyTypePreference] = useState("any");
+  const [heightRange, setHeightRange] = useState<[number, number]>([48, 84]); // 4'0" to 7'0"
+
+  // Helper to format height in feet and inches
+  const formatHeight = (inches: number) => {
+    const feet = Math.floor(inches / 12);
+    const remainingInches = inches % 12;
+    return `${feet}'${remainingInches}"`;
+  };
 
   useEffect(() => {
     if (profile) {
@@ -30,6 +40,9 @@ export default function Preferences() {
       setLocationName(profile.locationName || null);
       setLatitude(profile.latitude || null);
       setLongitude(profile.longitude || null);
+      setLooksPreference(profile.looksPreference || "any");
+      setBodyTypePreference(profile.bodyTypePreference || "any");
+      setHeightRange([profile.minHeightPreference || 48, profile.maxHeightPreference || 84]);
     }
   }, [profile]);
 
@@ -121,6 +134,10 @@ export default function Preferences() {
       locationName: locationName,
       latitude: latitude,
       longitude: longitude,
+      looksPreference: looksPreference,
+      bodyTypePreference: bodyTypePreference,
+      minHeightPreference: heightRange[0],
+      maxHeightPreference: heightRange[1],
     }, {
       onSuccess: () => {
         toast({
@@ -276,6 +293,84 @@ export default function Preferences() {
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>1 mi</span>
               <span>100 mi</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-appearance">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-pink-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Appearance</CardTitle>
+              <CardDescription>What you're looking for in a match</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-muted-foreground" />
+              <Label className="font-medium">Looks preference</Label>
+            </div>
+            <Select value={looksPreference} onValueChange={setLooksPreference}>
+              <SelectTrigger data-testid="select-looks">
+                <SelectValue placeholder="Select looks preference" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">No preference</SelectItem>
+                <SelectItem value="attractive">Very attractive</SelectItem>
+                <SelectItem value="above_average">Above average</SelectItem>
+                <SelectItem value="average">Average</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Dumbbell className="w-4 h-4 text-muted-foreground" />
+              <Label className="font-medium">Body type preference</Label>
+            </div>
+            <Select value={bodyTypePreference} onValueChange={setBodyTypePreference}>
+              <SelectTrigger data-testid="select-body-type">
+                <SelectValue placeholder="Select body type preference" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">No preference</SelectItem>
+                <SelectItem value="slim">Slim</SelectItem>
+                <SelectItem value="athletic">Athletic</SelectItem>
+                <SelectItem value="average">Average</SelectItem>
+                <SelectItem value="curvy">Curvy</SelectItem>
+                <SelectItem value="plus_size">Plus size</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Ruler className="w-4 h-4 text-muted-foreground" />
+                <Label className="font-medium">Height range</Label>
+              </div>
+              <span className="text-sm font-medium text-primary" data-testid="text-height-range">
+                {formatHeight(heightRange[0])} - {formatHeight(heightRange[1])}
+              </span>
+            </div>
+            <Slider
+              value={heightRange}
+              onValueChange={(value) => setHeightRange(value as [number, number])}
+              min={48}
+              max={84}
+              step={1}
+              className="w-full"
+              data-testid="slider-height-range"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>4'0"</span>
+              <span>7'0"</span>
             </div>
           </div>
         </CardContent>

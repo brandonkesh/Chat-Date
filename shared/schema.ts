@@ -41,6 +41,11 @@ export const profiles = pgTable("profiles", {
   locationName: text("location_name"), // City, State or address display name
   latitude: text("latitude"),
   longitude: text("longitude"),
+  // Appearance preferences (what you're looking for)
+  looksPreference: text("looks_preference"), // 'any', 'attractive', 'average', 'below_average'
+  bodyTypePreference: text("body_type_preference"), // 'any', 'slim', 'athletic', 'average', 'curvy', 'plus_size'
+  minHeightPreference: integer("min_height_preference"), // in inches
+  maxHeightPreference: integer("max_height_preference"), // in inches
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
