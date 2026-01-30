@@ -305,7 +305,7 @@ export default function Preferences() {
               <Sparkles className="w-4 h-4 text-pink-500" />
             </div>
             <div>
-              <CardTitle className="text-lg">Appearance</CardTitle>
+              <CardTitle className="text-lg">Looks</CardTitle>
               <CardDescription>What you're looking for in a match</CardDescription>
             </div>
           </div>
