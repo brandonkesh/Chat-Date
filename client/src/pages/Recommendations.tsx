@@ -11,8 +11,17 @@ import { AdBanner } from "@/components/AdBanner";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 
+interface DailyMatchResponse {
+  id: number;
+  user1Id: string;
+  user2Id: string;
+  isDailyMatch: boolean;
+  createdAt: Date;
+  partnerProfile: Profile;
+}
+
 function DailyMatchCard() {
-  const { data: dailyMatch, isLoading } = useQuery({
+  const { data: dailyMatch, isLoading } = useQuery<DailyMatchResponse | null>({
     queryKey: ["/api/matches/daily"],
   });
 

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -389,6 +389,31 @@ export default function Preferences() {
         )}
         Save Preferences
       </Button>
+
+      <Card data-testid="card-support">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+              <HelpCircle className="w-4 h-4 text-green-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Support</CardTitle>
+              <CardDescription>Get help and contact support</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Link href="/help">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-help-support">
+              <span className="flex items-center gap-2">
+                <HelpCircle className="w-4 h-4" />
+                Help & Support
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }
