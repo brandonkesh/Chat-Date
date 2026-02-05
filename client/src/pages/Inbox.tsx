@@ -1,13 +1,15 @@
 import { useMatches } from "@/hooks/use-dating";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, MessageCircle, User } from "lucide-react";
-import { Link } from "wouter";
-import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Loader2, MessageCircle, User, Video } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { AdBanner } from "@/components/AdBanner";
+import { formatDistanceToNow } from "date-fns";
 
 export default function Inbox() {
   const { data: matches, isLoading } = useMatches();
+  const [, navigate] = useLocation();
 
   if (isLoading) {
     return (
@@ -17,15 +19,14 @@ export default function Inbox() {
     );
   }
 
-  const matchesWithMessages = matches?.filter(m => m.lastMessage) || [];
-  const hasConversations = matchesWithMessages.length > 0;
+  const hasMatches = matches && matches.length > 0;
 
   return (
     <div className="min-h-screen bg-secondary/30 pb-24 md:pt-20">
       <div className="max-w-lg mx-auto p-4">
         <h1 className="text-2xl font-display font-bold mb-6" data-testid="inbox-title">Inbox</h1>
 
-        {!hasConversations ? (
+        {!hasMatches ? (
           <Card className="p-8 text-center border-none shadow-lg">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
               <MessageCircle className="w-8 h-8 text-primary" />
@@ -37,39 +38,49 @@ export default function Inbox() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {matchesWithMessages.map((match) => {
-              const avatarUrl = match.profile.photoUrl || 
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${match.profile.displayName}`;
+            {matches.map(({ match, partnerProfile }) => {
+              const avatarUrl = partnerProfile.photoUrl || 
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${partnerProfile.displayName}`;
               
               return (
-                <Link key={match.id} href={`/chat/${match.id}`}>
-                  <Card 
-                    className="p-4 border-none shadow-sm hover-elevate cursor-pointer"
-                    data-testid={`inbox-conversation-${match.id}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-12 h-12 border-2 border-background">
-                        <AvatarImage src={avatarUrl} alt={match.profile.displayName} />
-                        <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="font-semibold truncate">{match.profile.displayName}</h3>
-                          {match.lastMessage && (
-                            <span className="text-xs text-muted-foreground flex-shrink-0">
-                              {formatDistanceToNow(new Date(match.lastMessage.createdAt), { addSuffix: true })}
-                            </span>
-                          )}
-                        </div>
-                        {match.lastMessage && (
-                          <p className="text-sm text-muted-foreground truncate">
-                            {match.lastMessage.content}
-                          </p>
+                <Card 
+                  key={match.id}
+                  className="p-4 border-none shadow-sm hover-elevate cursor-pointer"
+                  data-testid={`inbox-conversation-${match.id}`}
+                  onClick={() => navigate(`/chat/${match.id}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-12 h-12 border-2 border-background">
+                      <AvatarImage src={avatarUrl} alt={partnerProfile.displayName} />
+                      <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold truncate">{partnerProfile.displayName}, {partnerProfile.age}</h3>
+                        {match.createdAt && (
+                          <span className="text-xs text-muted-foreground flex-shrink-0">
+                            {formatDistanceToNow(new Date(match.createdAt), { addSuffix: true })}
+                          </span>
                         )}
                       </div>
+                      <p className="text-sm text-muted-foreground truncate">
+                        Tap to start chatting
+                      </p>
                     </div>
-                  </Card>
-                </Link>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="flex-shrink-0"
+                      data-testid={`video-call-btn-${match.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/video-call/${match.id}`);
+                      }}
+                    >
+                      <Video className="w-5 h-5 text-primary" />
+                    </Button>
+                  </div>
+                </Card>
               );
             })}
           </div>
