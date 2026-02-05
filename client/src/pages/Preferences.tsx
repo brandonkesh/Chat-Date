@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -389,6 +389,51 @@ export default function Preferences() {
         )}
         Save Preferences
       </Button>
+
+      <Card data-testid="card-identity">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4 text-violet-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Identity & Verification</CardTitle>
+              <CardDescription>Verify your profile to build trust</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+            <div className="flex items-center gap-3">
+              <BadgeCheck className={`w-5 h-5 ${profile?.isVerified ? 'text-blue-500' : 'text-muted-foreground'}`} />
+              <div>
+                <p className="font-medium text-sm">Photo Verification</p>
+                <p className="text-xs text-muted-foreground">
+                  {profile?.isVerified ? 'Your profile is verified' : 'Verify your identity with a selfie'}
+                </p>
+              </div>
+            </div>
+            {profile?.isVerified ? (
+              <span className="text-xs font-medium text-blue-500 bg-blue-500/10 px-2 py-1 rounded-full">Verified</span>
+            ) : (
+              <Link href="/verification">
+                <Button variant="outline" size="sm" data-testid="button-verify">
+                  Verify
+                </Button>
+              </Link>
+            )}
+          </div>
+          <Link href="/verification" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-identity-settings">
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" />
+                Identity Settings
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-support">
         <CardHeader>
