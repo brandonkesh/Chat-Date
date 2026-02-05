@@ -84,6 +84,36 @@ export async function registerRoutes(
     res.json(profiles);
   });
 
+  // Get daily match
+  app.get("/api/matches/daily", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      let dailyMatch = await storage.getDailyMatch(userId);
+      
+      if (!dailyMatch) {
+        // Find a highly compatible profile that isn't already matched/swiped
+        const recommendations = await storage.getRecommendedProfiles(userId);
+        if (recommendations.length > 0) {
+          const target = recommendations[0];
+          const matchId = await storage.createMatch(userId, target.userId, true);
+          dailyMatch = {
+            id: matchId,
+            user1Id: userId,
+            user2Id: target.userId,
+            isDailyMatch: true,
+            createdAt: new Date(),
+            partnerProfile: target
+          };
+        }
+      }
+      
+      res.json(dailyMatch || null);
+    } catch (error) {
+      console.error("Daily match error:", error);
+      res.status(500).json({ error: "Failed to get daily match" });
+    }
+  });
+
   // === AI MATCH ===
   // Get AI-powered match suggestions
   app.get("/api/ai-matches", isAuthenticated, async (req: any, res) => {

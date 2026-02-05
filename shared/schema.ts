@@ -95,6 +95,7 @@ export const matches = pgTable("matches", {
   id: serial("id").primaryKey(),
   user1Id: varchar("user1_id").notNull().references(() => users.id),
   user2Id: varchar("user2_id").notNull().references(() => users.id),
+  isDailyMatch: boolean("is_daily_match").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

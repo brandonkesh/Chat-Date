@@ -1,13 +1,86 @@
 import { useRecommendedProfiles, useCrushPicks, useSwipe } from "@/hooks/use-dating";
-import { Loader2, Sparkles, Star, Heart, X, ShieldCheck, Crown } from "lucide-react";
+import { Loader2, Sparkles, Star, Heart, X, ShieldCheck, Crown, Calendar } from "lucide-react";
 import { Profile } from "@shared/schema";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { AdBanner } from "@/components/AdBanner";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+
+function DailyMatchCard() {
+  const { data: dailyMatch, isLoading } = useQuery({
+    queryKey: ["/api/matches/daily"],
+  });
+
+  if (isLoading || !dailyMatch) return null;
+
+  const profile = dailyMatch.partnerProfile;
+  const avatarUrl = profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`;
+
+  return (
+    <section data-testid="section-daily-match">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+          <Calendar className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h2 className="font-display text-xl font-bold">Daily Match</h2>
+          <p className="text-sm text-muted-foreground">Hand-picked just for you today</p>
+        </div>
+      </div>
+
+      <Card className="overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent hover-elevate transition-all">
+        <div className="flex flex-col md:flex-row gap-6 p-6">
+          <div className="w-full md:w-48 h-64 relative rounded-xl overflow-hidden shrink-0 shadow-lg">
+            <img 
+              src={avatarUrl} 
+              alt={profile.displayName}
+              className="w-full h-full object-cover"
+            />
+            {profile.isVerified && (
+              <Badge className="absolute top-2 right-2 bg-blue-500 text-white border-none">
+                <ShieldCheck className="w-3 h-3 mr-1" />
+                Verified
+              </Badge>
+            )}
+          </div>
+          
+          <div className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-2xl font-display font-bold">{profile.displayName}, {profile.age}</h3>
+                {profile.isPremium && <Badge className="bg-amber-500 text-white border-none"><Crown className="w-3 h-3" /></Badge>}
+              </div>
+              <p className="text-muted-foreground mb-4 line-clamp-3">
+                {profile.bio || "No bio yet, but we think you'd get along great!"}
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {profile.interests?.slice(0, 4).map((interest, i) => (
+                  <Badge key={i} variant="secondary" className="bg-primary/10 text-primary border-none">
+                    {interest}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Link href={`/chat/${dailyMatch.id}`} className="flex-1">
+                <Button className="w-full h-12 rounded-xl text-lg font-semibold gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform">
+                  <Heart className="w-5 h-5 fill-current" />
+                  Start Chatting
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </section>
+  );
+}
 
 function ProfilePreviewCard({ profile, onLike }: { profile: Profile; onLike: () => void }) {
   const avatarUrl = profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`;
@@ -132,6 +205,8 @@ export default function Recommendations() {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 space-y-8" data-testid="page-recommendations">
       
+      <DailyMatchCard />
+
       <section data-testid="section-crush-picks">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center">

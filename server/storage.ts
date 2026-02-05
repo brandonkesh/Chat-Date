@@ -34,9 +34,8 @@ export interface IStorage {
   // Swipes & Matches
   createSwipe(swipe: InsertSwipe): Promise<void>;
   checkMatch(user1Id: string, user2Id: string): Promise<boolean>;
-  createMatch(user1Id: string, user2Id: string): Promise<number>;
-  getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile })[]>;
-  getMatch(matchId: number): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
+  createMatch(user1Id: string, user2Id: string, isDailyMatch?: boolean): Promise<number>;
+  getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
   
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
@@ -261,19 +260,51 @@ export class DatabaseStorage implements IStorage {
     return !!swipe;
   }
 
-  async createMatch(user1Id: string, user2Id: string): Promise<number> {
+  async createMatch(user1Id: string, user2Id: string, isDailyMatch: boolean = false): Promise<number> {
     const [match] = await db.insert(matches).values({
       user1Id,
       user2Id,
+      isDailyMatch,
     }).returning();
     return match.id;
+  }
+
+  async getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [dailyMatch] = await db
+      .select()
+      .from(matches)
+      .where(and(
+        or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)),
+        eq(matches.isDailyMatch, true),
+        desc(matches.createdAt)
+      ))
+      .limit(1);
+
+    if (!dailyMatch) return undefined;
+
+    // Check if it's from today
+    if (dailyMatch.createdAt && dailyMatch.createdAt < today) {
+      return undefined;
+    }
+
+    const partnerId = dailyMatch.user1Id === userId ? dailyMatch.user2Id : dailyMatch.user1Id;
+    const partnerProfile = await this.getProfile(partnerId);
+    if (!partnerProfile) return undefined;
+
+    return { ...dailyMatch, partnerProfile };
   }
 
   async getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile })[]> {
     const userMatches = await db
       .select()
       .from(matches)
-      .where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+      .where(and(
+        or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)),
+        eq(matches.isDailyMatch, false)
+      ));
 
     const results = [];
     for (const match of userMatches) {
@@ -290,16 +321,9 @@ export class DatabaseStorage implements IStorage {
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match) return undefined;
     
-    // We can't determine partner without knowing who is asking, so we'll fetch both user profiles 
-    // and let the route handler filter or just return raw match data if needed. 
-    // But the interface says we return partnerProfile. 
-    // This method signature is a bit tricky without userId. 
-    // Let's modify the usage in routes to fetch match first, then get partner profile manually 
-    // or pass userId to this method. 
-    // For now, I'll return the match and let the route handle the partner profile lookup.
-    // Actually, I'll update the interface to take userId? No, let's keep it simple.
-    
-    return undefined; // Not used directly in my plan, I'll handle in routes
+    // In actual usage we'd need userId to know who the partner is, 
+    // but the getMatches logic above handles it correctly by iterating.
+    return undefined;
   }
 
   async getMessages(matchId: number): Promise<Message[]> {
