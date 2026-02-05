@@ -6,13 +6,14 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
-import { matches } from "@shared/schema";
-import { eq, or, and } from "drizzle-orm";
+import { matches, profiles } from "@shared/schema";
+import { eq, or, and, ne, notInArray } from "drizzle-orm";
 import { stripeService } from "./stripeService";
 import { stripeStorage } from "./stripeStorage";
 import { getStripePublishableKey } from "./stripeClient";
 import { WebSocketServer, WebSocket } from "ws";
 import crypto from "crypto";
+import { openai } from "./replit_integrations/image/client";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -81,6 +82,130 @@ export async function registerRoutes(
     const userId = req.user.claims.sub;
     const profiles = await storage.getCrushPicks(userId);
     res.json(profiles);
+  });
+
+  // === AI MATCH ===
+  // Get AI-powered match suggestions
+  app.get("/api/ai-matches", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    
+    try {
+      // Get user's profile
+      const userProfile = await storage.getProfile(userId);
+      if (!userProfile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+
+      // Get existing matches to exclude
+      const existingMatches = await db
+        .select()
+        .from(matches)
+        .where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+      
+      const matchedUserIds = existingMatches.flatMap(m => 
+        [m.user1Id, m.user2Id].filter(id => id !== userId)
+      );
+
+      // Get potential matches based on preferences
+      let potentialMatchesQuery = db
+        .select()
+        .from(profiles)
+        .where(ne(profiles.userId, userId));
+      
+      if (matchedUserIds.length > 0) {
+        potentialMatchesQuery = db
+          .select()
+          .from(profiles)
+          .where(
+            and(
+              ne(profiles.userId, userId),
+              notInArray(profiles.userId, matchedUserIds)
+            )
+          );
+      }
+      
+      const potentialMatches = await potentialMatchesQuery.limit(20);
+
+      if (potentialMatches.length === 0) {
+        return res.json({ matches: [], analysis: "No potential matches found yet. Keep swiping!" });
+      }
+
+      // Prepare profile summaries for AI analysis
+      const userSummary = `
+        Name: ${userProfile.displayName}, Age: ${userProfile.age}
+        Gender: ${userProfile.gender}, Looking for: ${userProfile.interestedIn}
+        Bio: ${userProfile.bio || 'No bio'}
+        Interests: ${userProfile.interests?.join(', ') || 'Not specified'}
+      `;
+
+      const candidateSummaries = potentialMatches.map((p, i) => `
+        Candidate ${i + 1} (ID: ${p.id}):
+        Name: ${p.displayName}, Age: ${p.age}
+        Gender: ${p.gender}, Looking for: ${p.interestedIn}
+        Bio: ${p.bio || 'No bio'}
+        Interests: ${p.interests?.join(', ') || 'Not specified'}
+        Verified: ${p.isVerified ? 'Yes' : 'No'}
+        Premium: ${p.isPremium ? 'Yes' : 'No'}
+      `).join('\n');
+
+      // Use AI to analyze compatibility
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a dating matchmaker AI. Analyze the user's profile and the candidate profiles to find the best matches based on compatibility.
+            
+            Consider:
+            - Shared interests and hobbies
+            - Age compatibility
+            - Gender preferences matching
+            - Bio compatibility and personality hints
+            - Verified and premium status (slight preference)
+            
+            Return a JSON response with:
+            {
+              "topMatches": [
+                {
+                  "candidateId": number,
+                  "compatibilityScore": number (0-100),
+                  "reason": "Brief explanation of why they're a good match"
+                }
+              ],
+              "overallAnalysis": "A brief, friendly summary of the matching results"
+            }
+            
+            Return up to 5 best matches, sorted by compatibility score.`
+          },
+          {
+            role: "user",
+            content: `User Profile:\n${userSummary}\n\nCandidate Profiles:\n${candidateSummaries}`
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 1000,
+      });
+
+      const aiResult = JSON.parse(response.choices[0]?.message?.content || '{"topMatches":[],"overallAnalysis":"Unable to analyze"}');
+
+      // Enrich AI results with full profile data
+      const enrichedMatches = aiResult.topMatches?.map((match: any) => {
+        const profile = potentialMatches.find(p => p.id === match.candidateId);
+        return {
+          profile,
+          compatibilityScore: match.compatibilityScore,
+          reason: match.reason
+        };
+      }).filter((m: any) => m.profile) || [];
+
+      res.json({
+        matches: enrichedMatches,
+        analysis: aiResult.overallAnalysis
+      });
+    } catch (error) {
+      console.error("AI match error:", error);
+      res.status(500).json({ error: "Failed to get AI matches" });
+    }
   });
 
   // Get specific profile

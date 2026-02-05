@@ -21,6 +21,7 @@ import Verification from "@/pages/Verification";
 import Recommendations from "@/pages/Recommendations";
 import Preferences from "@/pages/Preferences";
 import VideoCall from "@/pages/VideoCall";
+import AIMatches from "@/pages/AIMatches";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -82,7 +83,7 @@ function Router() {
           <ProtectedRoute component={Chat} />
         </Route>
 
-        <Route path="/video/:id">
+        <Route path="/video-call/:id">
           <ProtectedRoute component={VideoCall} />
         </Route>
 
@@ -108,6 +109,10 @@ function Router() {
 
         <Route path="/preferences">
           <ProtectedRoute component={Preferences} />
+        </Route>
+
+        <Route path="/ai-matches">
+          <ProtectedRoute component={AIMatches} />
         </Route>
         
         <Route component={NotFound} />

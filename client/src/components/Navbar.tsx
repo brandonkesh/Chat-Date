@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -93,6 +93,12 @@ export function Navbar() {
                     Preferences
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/ai-matches">
+                  <DropdownMenuItem data-testid="button-ai-matches">
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    AI Matches
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout">
                   <LogOut className="w-4 h-4 mr-2" />
@@ -128,6 +134,12 @@ export function Navbar() {
                 <DropdownMenuItem data-testid="button-preferences-mobile">
                   <SlidersHorizontal className="w-4 h-4 mr-2" />
                   Preferences
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/ai-matches">
+                <DropdownMenuItem data-testid="button-ai-matches-mobile">
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  AI Matches
                 </DropdownMenuItem>
               </Link>
               <DropdownMenuSeparator />
