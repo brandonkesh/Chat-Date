@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -43,6 +43,17 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       interestedIn: profile.interestedIn,
       photoUrl: profile.photoUrl || "",
       interests: profile.interests || [],
+      // Lifestyle fields
+      drinking: profile.drinking || "",
+      smoking: profile.smoking || "",
+      exercise: profile.exercise || "",
+      diet: profile.diet || "",
+      pets: profile.pets || "",
+      kids: profile.kids || "",
+      religion: profile.religion || "",
+      education: profile.education || "",
+      jobTitle: profile.jobTitle || "",
+      company: profile.company || "",
     },
   });
 
@@ -268,6 +279,288 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                     </div>
                   )}
                 </FormItem>
+
+                {/* Lifestyle Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Briefcase className="w-5 h-5" />
+                    Lifestyle
+                  </h3>
+                  
+                  {/* Work */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="jobTitle"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Job Title</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g., Software Engineer" 
+                              className="h-12 rounded-xl"
+                              data-testid="input-job-title"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="company"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Company</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Where you work" 
+                              className="h-12 rounded-xl"
+                              data-testid="input-company"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Education & Religion */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="education"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <GraduationCap className="w-4 h-4" />
+                            Education
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-education">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="high_school">High School</SelectItem>
+                              <SelectItem value="some_college">Some College</SelectItem>
+                              <SelectItem value="bachelors">Bachelor's</SelectItem>
+                              <SelectItem value="masters">Master's</SelectItem>
+                              <SelectItem value="doctorate">Doctorate</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="religion"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Church className="w-4 h-4" />
+                            Religion
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-religion">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="not_religious">Not Religious</SelectItem>
+                              <SelectItem value="spiritual">Spiritual</SelectItem>
+                              <SelectItem value="christian">Christian</SelectItem>
+                              <SelectItem value="jewish">Jewish</SelectItem>
+                              <SelectItem value="muslim">Muslim</SelectItem>
+                              <SelectItem value="hindu">Hindu</SelectItem>
+                              <SelectItem value="buddhist">Buddhist</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Drinking & Smoking */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="drinking"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Wine className="w-4 h-4" />
+                            Drinking
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-drinking">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="never">Never</SelectItem>
+                              <SelectItem value="socially">Socially</SelectItem>
+                              <SelectItem value="regularly">Regularly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="smoking"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Cigarette className="w-4 h-4" />
+                            Smoking
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-smoking">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="never">Never</SelectItem>
+                              <SelectItem value="socially">Socially</SelectItem>
+                              <SelectItem value="regularly">Regularly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Exercise & Diet */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="exercise"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Dumbbell className="w-4 h-4" />
+                            Exercise
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-exercise">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="never">Never</SelectItem>
+                              <SelectItem value="sometimes">Sometimes</SelectItem>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="very_active">Very Active</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="diet"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Utensils className="w-4 h-4" />
+                            Diet
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-diet">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="anything">Anything</SelectItem>
+                              <SelectItem value="vegetarian">Vegetarian</SelectItem>
+                              <SelectItem value="vegan">Vegan</SelectItem>
+                              <SelectItem value="pescatarian">Pescatarian</SelectItem>
+                              <SelectItem value="kosher">Kosher</SelectItem>
+                              <SelectItem value="halal">Halal</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Pets & Kids */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="pets"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Dog className="w-4 h-4" />
+                            Pets
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-pets">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">No Pets</SelectItem>
+                              <SelectItem value="have_dog">Have Dog(s)</SelectItem>
+                              <SelectItem value="have_cat">Have Cat(s)</SelectItem>
+                              <SelectItem value="have_other">Have Other Pets</SelectItem>
+                              <SelectItem value="want_pets">Want Pets</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="kids"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Baby className="w-4 h-4" />
+                            Kids
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-kids">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="have_and_want_more">Have & Want More</SelectItem>
+                              <SelectItem value="have_and_done">Have & Done</SelectItem>
+                              <SelectItem value="want_someday">Want Someday</SelectItem>
+                              <SelectItem value="dont_want">Don't Want</SelectItem>
+                              <SelectItem value="not_sure">Not Sure</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
 
                 {/* Verification Status Section */}
                 {!profile.isVerified && (

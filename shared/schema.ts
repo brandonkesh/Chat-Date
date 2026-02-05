@@ -46,6 +46,17 @@ export const profiles = pgTable("profiles", {
   bodyTypePreference: text("body_type_preference"), // 'any', 'slim', 'athletic', 'average', 'curvy', 'plus_size'
   minHeightPreference: integer("min_height_preference"), // in inches
   maxHeightPreference: integer("max_height_preference"), // in inches
+  // Lifestyle fields
+  drinking: text("drinking"), // 'never', 'socially', 'regularly'
+  smoking: text("smoking"), // 'never', 'socially', 'regularly'
+  exercise: text("exercise"), // 'never', 'sometimes', 'active', 'very_active'
+  diet: text("diet"), // 'anything', 'vegetarian', 'vegan', 'pescatarian', 'kosher', 'halal', 'other'
+  pets: text("pets"), // 'none', 'have_dog', 'have_cat', 'have_other', 'want_pets'
+  kids: text("kids"), // 'have_and_want_more', 'have_and_done', 'want_someday', 'dont_want', 'not_sure'
+  religion: text("religion"), // 'not_religious', 'spiritual', 'christian', 'jewish', 'muslim', 'hindu', 'buddhist', 'other'
+  education: text("education"), // 'high_school', 'some_college', 'bachelors', 'masters', 'doctorate'
+  jobTitle: text("job_title"), // Free text for job title
+  company: text("company"), // Free text for company name
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
