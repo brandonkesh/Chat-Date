@@ -1,7 +1,7 @@
 import { useFeed, useSwipe, useMyProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -91,9 +91,19 @@ export default function Feed() {
         </Link>
       )}
 
-      {/* Profile Picture with Edit Icon - Fixed at top right */}
-      <Link href="/profile/edit" data-testid="link-edit-profile">
-        <div className="fixed top-3 right-4 z-50">
+      {/* Quick Actions - Fixed at top right */}
+      <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
+        <Link href="/matches" data-testid="link-video-chat">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="w-11 h-11 rounded-full bg-white/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate"
+            data-testid="button-video-chat-home"
+          >
+            <Video className="w-5 h-5 text-primary" />
+          </Button>
+        </Link>
+        <Link href="/profile/edit" data-testid="link-edit-profile">
           <div className="relative group cursor-pointer">
             <Avatar className="w-11 h-11 border-2 border-primary/20 shadow-md">
               <AvatarImage 
@@ -108,8 +118,8 @@ export default function Feed() {
               <Pencil className="w-2.5 h-2.5 text-primary-foreground" />
             </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+      </div>
 
       <div className="w-full h-[500px] sm:h-[600px] relative">
         <AnimatePresence>
