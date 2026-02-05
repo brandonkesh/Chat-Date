@@ -20,6 +20,7 @@ import EditProfile from "@/pages/EditProfile";
 import Verification from "@/pages/Verification";
 import Recommendations from "@/pages/Recommendations";
 import Preferences from "@/pages/Preferences";
+import VideoCall from "@/pages/VideoCall";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -79,6 +80,10 @@ function Router() {
         
         <Route path="/chat/:id">
           <ProtectedRoute component={Chat} />
+        </Route>
+
+        <Route path="/video/:id">
+          <ProtectedRoute component={VideoCall} />
         </Route>
 
         <Route path="/inbox">

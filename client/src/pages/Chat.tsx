@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useMatch, useMessages, useSendMessage, useMyProfile } from "@/hooks/use-dating";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, ChevronLeft, Clock, Lock } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { formatDistanceToNow, isPast } from "date-fns";
@@ -80,6 +80,12 @@ export default function Chat() {
             Matched {matchData.match.createdAt ? formatDistanceToNow(new Date(matchData.match.createdAt), { addSuffix: true }) : 'recently'}
           </p>
         </div>
+        
+        <Link href={`/video/${matchId}`}>
+          <Button variant="ghost" size="icon" data-testid="button-video-call">
+            <Video className="w-5 h-5" />
+          </Button>
+        </Link>
       </header>
 
       {/* Trial Banner */}

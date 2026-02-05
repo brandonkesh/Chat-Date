@@ -11,6 +11,8 @@ import { eq, or, and } from "drizzle-orm";
 import { stripeService } from "./stripeService";
 import { stripeStorage } from "./stripeStorage";
 import { getStripePublishableKey } from "./stripeClient";
+import { WebSocketServer, WebSocket } from "ws";
+import crypto from "crypto";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -353,6 +355,173 @@ export async function registerRoutes(
       console.error("Portal error:", error);
       res.status(500).json({ error: "Failed to create portal session" });
     }
+  });
+
+  // === VIDEO CALL TOKEN (for WebSocket auth) ===
+  // Store temporary video call tokens: token -> { oderId, matchId, expiresAt }
+  const videoCallTokens = new Map<string, { userId: string; matchId: number; expiresAt: Date }>();
+  
+  // Generate video call token (validates match membership)
+  app.post("/api/video-call/token", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { matchId } = req.body;
+    
+    if (!matchId) {
+      return res.status(400).json({ error: "Match ID required" });
+    }
+    
+    // Verify user is part of the match
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized for this call" });
+    }
+    
+    // Generate token
+    const token = crypto.randomUUID();
+    videoCallTokens.set(token, {
+      userId,
+      matchId,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+    });
+    
+    // Clean up expired tokens
+    const now = new Date();
+    videoCallTokens.forEach((data, t) => {
+      if (data.expiresAt < now) {
+        videoCallTokens.delete(t);
+      }
+    });
+    
+    res.json({ token });
+  });
+
+  // === VIDEO CALL SIGNALING (WebSocket) ===
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // Track connected users: matchId -> { userId: WebSocket }
+  const callRooms = new Map<string, Map<string, WebSocket>>();
+  
+  wss.on('connection', (ws: WebSocket) => {
+    let currentRoom: string | null = null;
+    let currentUserId: string | null = null;
+    let authenticated = false;
+    
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        
+        switch (message.type) {
+          case 'join':
+            // Validate token
+            const token = message.token;
+            if (!token) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Token required' }));
+              ws.close();
+              return;
+            }
+            
+            const tokenData = videoCallTokens.get(token);
+            if (!tokenData || tokenData.expiresAt < new Date()) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Invalid or expired token' }));
+              ws.close();
+              videoCallTokens.delete(token);
+              return;
+            }
+            
+            // Verify matchId matches token
+            if (tokenData.matchId.toString() !== message.matchId) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Token mismatch' }));
+              ws.close();
+              return;
+            }
+            
+            // Use userId from token, not from client
+            currentRoom = message.matchId as string;
+            currentUserId = tokenData.userId;
+            authenticated = true;
+            
+            // Consume token (one-time use)
+            videoCallTokens.delete(token);
+            
+            const roomId = currentRoom;
+            const oderId = currentUserId;
+            
+            if (!callRooms.has(roomId)) {
+              callRooms.set(roomId, new Map());
+            }
+            
+            const room = callRooms.get(roomId)!;
+            
+            // Limit room to 2 participants
+            if (room.size >= 2) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Call room is full' }));
+              ws.close();
+              return;
+            }
+            
+            room.set(oderId, ws);
+            
+            // Notify other user in room that someone joined
+            room.forEach((socket, oderId) => {
+              if (oderId !== currentUserId && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: 'user-joined', userId: currentUserId }));
+              }
+            });
+            break;
+            
+          case 'offer':
+          case 'answer':
+          case 'ice-candidate':
+            // Only allow signaling if authenticated
+            if (!authenticated || !currentRoom) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Not authenticated' }));
+              return;
+            }
+            
+            // Forward signaling messages to the other user in the room
+            if (callRooms.has(currentRoom)) {
+              callRooms.get(currentRoom)!.forEach((socket, oderId) => {
+                if (oderId !== currentUserId && socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify(message));
+                }
+              });
+            }
+            break;
+            
+          case 'leave':
+            // User leaving the call
+            if (currentRoom && callRooms.has(currentRoom)) {
+              callRooms.get(currentRoom)!.delete(currentUserId!);
+              callRooms.get(currentRoom)!.forEach((socket) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify({ type: 'user-left', userId: currentUserId }));
+                }
+              });
+              if (callRooms.get(currentRoom)!.size === 0) {
+                callRooms.delete(currentRoom);
+              }
+            }
+            break;
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      // Clean up on disconnect
+      if (currentRoom && currentUserId && callRooms.has(currentRoom)) {
+        callRooms.get(currentRoom)!.delete(currentUserId);
+        callRooms.get(currentRoom)!.forEach((socket) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'user-left', userId: currentUserId }));
+          }
+        });
+        if (callRooms.get(currentRoom)!.size === 0) {
+          callRooms.delete(currentRoom);
+        }
+      }
+    });
   });
 
   return httpServer;
