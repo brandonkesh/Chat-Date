@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -54,6 +54,10 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       education: profile.education || "",
       jobTitle: profile.jobTitle || "",
       company: profile.company || "",
+      // Family fields
+      relationshipGoal: profile.relationshipGoal || "",
+      familyPlans: profile.familyPlans || "",
+      livingSituation: profile.livingSituation || "",
     },
   });
 
@@ -552,6 +556,97 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                               <SelectItem value="want_someday">Want Someday</SelectItem>
                               <SelectItem value="dont_want">Don't Want</SelectItem>
                               <SelectItem value="not_sure">Not Sure</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Family & Relationship Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Heart className="w-5 h-5" />
+                    Family & Relationship
+                  </h3>
+                  
+                  <FormField
+                    control={form.control}
+                    name="relationshipGoal"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <Heart className="w-4 h-4" />
+                          Looking For
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <FormControl>
+                            <SelectTrigger className="h-12 rounded-xl" data-testid="select-relationship-goal">
+                              <SelectValue placeholder="What are you looking for?" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="casual">Something Casual</SelectItem>
+                            <SelectItem value="serious">Serious Relationship</SelectItem>
+                            <SelectItem value="marriage">Marriage</SelectItem>
+                            <SelectItem value="not_sure">Not Sure Yet</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="familyPlans"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Users className="w-4 h-4" />
+                            Family Plans
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-family-plans">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="want_kids">Want Kids</SelectItem>
+                              <SelectItem value="dont_want_kids">Don't Want Kids</SelectItem>
+                              <SelectItem value="have_kids">Already Have Kids</SelectItem>
+                              <SelectItem value="open_to_kids">Open to Kids</SelectItem>
+                              <SelectItem value="not_sure">Not Sure</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="livingSituation"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Home className="w-4 h-4" />
+                            Living Situation
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-living-situation">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="alone">Living Alone</SelectItem>
+                              <SelectItem value="with_roommates">With Roommates</SelectItem>
+                              <SelectItem value="with_family">With Family</SelectItem>
+                              <SelectItem value="with_partner">With Partner</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

@@ -57,6 +57,10 @@ export const profiles = pgTable("profiles", {
   education: text("education"), // 'high_school', 'some_college', 'bachelors', 'masters', 'doctorate'
   jobTitle: text("job_title"), // Free text for job title
   company: text("company"), // Free text for company name
+  // Family & Relationship fields
+  relationshipGoal: text("relationship_goal"), // 'casual', 'serious', 'marriage', 'not_sure'
+  familyPlans: text("family_plans"), // 'want_kids', 'dont_want_kids', 'have_kids', 'open_to_kids', 'not_sure'
+  livingSituation: text("living_situation"), // 'alone', 'with_roommates', 'with_family', 'with_partner'
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

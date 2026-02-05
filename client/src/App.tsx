@@ -22,6 +22,7 @@ import Recommendations from "@/pages/Recommendations";
 import Preferences from "@/pages/Preferences";
 import VideoCall from "@/pages/VideoCall";
 import AIMatches from "@/pages/AIMatches";
+import Help from "@/pages/Help";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -113,6 +114,10 @@ function Router() {
 
         <Route path="/ai-matches">
           <ProtectedRoute component={AIMatches} />
+        </Route>
+
+        <Route path="/help">
+          <ProtectedRoute component={Help} />
         </Route>
         
         <Route component={NotFound} />
