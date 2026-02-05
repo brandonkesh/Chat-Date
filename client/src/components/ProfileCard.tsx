@@ -1,6 +1,6 @@
 import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
-import { MapPin, ShieldCheck } from "lucide-react";
+import { MapPin, ShieldCheck, Briefcase, GraduationCap, Wine, Dumbbell, Dog, Baby, Church } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -8,6 +8,56 @@ interface ProfileCardProps {
   profile: Profile;
   onSwipe: (direction: "left" | "right") => void;
 }
+
+// Helper to format lifestyle values for display
+const formatLifestyle = (key: string, value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const labels: Record<string, Record<string, string>> = {
+    education: {
+      high_school: "High School",
+      some_college: "Some College",
+      bachelors: "Bachelor's",
+      masters: "Master's",
+      doctorate: "Doctorate",
+    },
+    drinking: {
+      never: "Non-drinker",
+      socially: "Social drinker",
+      regularly: "Regular drinker",
+    },
+    exercise: {
+      never: "Not active",
+      sometimes: "Sometimes active",
+      active: "Active",
+      very_active: "Very active",
+    },
+    pets: {
+      none: "No pets",
+      have_dog: "Has dog",
+      have_cat: "Has cat",
+      have_other: "Has pets",
+      want_pets: "Wants pets",
+    },
+    kids: {
+      have_and_want_more: "Has kids, wants more",
+      have_and_done: "Has kids",
+      want_someday: "Wants kids",
+      dont_want: "Doesn't want kids",
+      not_sure: "Not sure about kids",
+    },
+    religion: {
+      not_religious: "Not religious",
+      spiritual: "Spiritual",
+      christian: "Christian",
+      jewish: "Jewish",
+      muslim: "Muslim",
+      hindu: "Hindu",
+      buddhist: "Buddhist",
+      other: "Religious",
+    },
+  };
+  return labels[key]?.[value] || value;
+};
 
 export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
   const [exitX, setExitX] = useState<number | null>(null);
@@ -96,6 +146,55 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
         <p className="text-muted-foreground line-clamp-2 leading-relaxed">
           {profile.bio || "No bio yet..."}
         </p>
+
+        {/* Lifestyle Info */}
+        {(profile.jobTitle || profile.education || profile.drinking || profile.exercise || profile.pets || profile.kids || profile.religion) && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground" data-testid="lifestyle-info">
+            {profile.jobTitle && (
+              <span className="flex items-center gap-1">
+                <Briefcase className="w-3 h-3" />
+                {profile.jobTitle}
+                {profile.company && ` at ${profile.company}`}
+              </span>
+            )}
+            {profile.education && (
+              <span className="flex items-center gap-1">
+                <GraduationCap className="w-3 h-3" />
+                {formatLifestyle("education", profile.education)}
+              </span>
+            )}
+            {profile.religion && (
+              <span className="flex items-center gap-1">
+                <Church className="w-3 h-3" />
+                {formatLifestyle("religion", profile.religion)}
+              </span>
+            )}
+            {profile.pets && (
+              <span className="flex items-center gap-1">
+                <Dog className="w-3 h-3" />
+                {formatLifestyle("pets", profile.pets)}
+              </span>
+            )}
+            {profile.kids && (
+              <span className="flex items-center gap-1">
+                <Baby className="w-3 h-3" />
+                {formatLifestyle("kids", profile.kids)}
+              </span>
+            )}
+            {profile.drinking && (
+              <span className="flex items-center gap-1">
+                <Wine className="w-3 h-3" />
+                {formatLifestyle("drinking", profile.drinking)}
+              </span>
+            )}
+            {profile.exercise && (
+              <span className="flex items-center gap-1">
+                <Dumbbell className="w-3 h-3" />
+                {formatLifestyle("exercise", profile.exercise)}
+              </span>
+            )}
+          </div>
+        )}
 
         {profile.interests && profile.interests.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2" data-testid="profile-interests">

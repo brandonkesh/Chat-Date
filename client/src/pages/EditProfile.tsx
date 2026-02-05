@@ -251,7 +251,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                       variant="outline"
                       size="icon"
                       onClick={addInterest}
-                      className="h-12 w-12 rounded-xl"
                       data-testid="button-add-interest"
                     >
                       <Plus className="w-4 h-4" />
