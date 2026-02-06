@@ -90,6 +90,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### February 6, 2026
+- **Background & Identity Feature**: Added comprehensive identity fields to user profiles
+  - New schema fields: `languages` (array), `orientation`, `ethnicity`, `politicalViews`, `astrologicalSign`
+  - Edit Profile: "Background & Identity" section with language tags, orientation, ethnicity, politics, and zodiac sign selectors
+  - Preferences: Expanded "Background & Identity" card showing all identity fields (languages, orientation, ethnicity, religion, politics, education, employment, zodiac sign) with summary view
+  - Verification status integrated into the same card
+- **Video Chat Icon**: Added video chat quick action button to Feed/Home page top-right corner
+
 ### January 29, 2026
 - **Recommendations & Crush Picks**: Added personalized profile discovery features
   - "For You" tab in navigation with Sparkles icon

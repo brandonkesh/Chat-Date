@@ -4,10 +4,31 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+
+function formatIdentityValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function IdentityRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-2 border-b border-border last:border-0" data-testid={`identity-row-${label.toLowerCase().replace(/\s/g, '-')}`}>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-sm">{label}</span>
+      </div>
+      <span className={`text-sm font-medium ${value ? '' : 'text-muted-foreground'}`}>
+        {value || "Not set"}
+      </span>
+    </div>
+  );
+}
 
 export default function Preferences() {
   const { data: profile, isLoading } = useMyProfile();
@@ -394,15 +415,15 @@ export default function Preferences() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4 text-violet-500" />
+              <Globe className="w-4 h-4 text-violet-500" />
             </div>
             <div>
-              <CardTitle className="text-lg">Identity & Verification</CardTitle>
-              <CardDescription>Verify your profile to build trust</CardDescription>
+              <CardTitle className="text-lg">Background & Identity</CardTitle>
+              <CardDescription>Your background details and verification</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
             <div className="flex items-center gap-3">
               <BadgeCheck className={`w-5 h-5 ${profile?.isVerified ? 'text-blue-500' : 'text-muted-foreground'}`} />
@@ -423,11 +444,55 @@ export default function Preferences() {
               </Link>
             )}
           </div>
-          <Link href="/verification" className="block">
-            <Button variant="outline" className="w-full justify-between" data-testid="button-identity-settings">
+
+          <div className="space-y-3">
+            <IdentityRow
+              icon={<Languages className="w-4 h-4" />}
+              label="Languages"
+              value={profile?.languages?.length ? profile.languages.join(", ") : null}
+            />
+            <IdentityRow
+              icon={<Compass className="w-4 h-4" />}
+              label="Orientation"
+              value={formatIdentityValue(profile?.orientation)}
+            />
+            <IdentityRow
+              icon={<Palette className="w-4 h-4" />}
+              label="Ethnicity"
+              value={formatIdentityValue(profile?.ethnicity)}
+            />
+            <IdentityRow
+              icon={<Church className="w-4 h-4" />}
+              label="Religion"
+              value={formatIdentityValue(profile?.religion)}
+            />
+            <IdentityRow
+              icon={<Vote className="w-4 h-4" />}
+              label="Politics"
+              value={formatIdentityValue(profile?.politicalViews)}
+            />
+            <IdentityRow
+              icon={<GraduationCap className="w-4 h-4" />}
+              label="Education"
+              value={formatIdentityValue(profile?.education)}
+            />
+            <IdentityRow
+              icon={<Briefcase className="w-4 h-4" />}
+              label="Employment"
+              value={profile?.jobTitle ? `${profile.jobTitle}${profile.company ? ` at ${profile.company}` : ''}` : null}
+            />
+            <IdentityRow
+              icon={<Star className="w-4 h-4" />}
+              label="Zodiac Sign"
+              value={formatIdentityValue(profile?.astrologicalSign)}
+            />
+          </div>
+
+          <Link href="/profile/edit" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-edit-identity">
               <span className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" />
-                Identity Settings
+                <Globe className="w-4 h-4" />
+                Edit Background & Identity
               </span>
               <ChevronRight className="w-4 h-4" />
             </Button>

@@ -61,6 +61,12 @@ export const profiles = pgTable("profiles", {
   relationshipGoal: text("relationship_goal"), // 'casual', 'serious', 'marriage', 'not_sure'
   familyPlans: text("family_plans"), // 'want_kids', 'dont_want_kids', 'have_kids', 'open_to_kids', 'not_sure'
   livingSituation: text("living_situation"), // 'alone', 'with_roommates', 'with_family', 'with_partner'
+  // Background & Identity fields
+  languages: text("languages").array(), // Array of languages spoken
+  orientation: text("orientation"), // 'straight', 'gay', 'lesbian', 'bisexual', 'pansexual', 'asexual', 'queer', 'other'
+  ethnicity: text("ethnicity"), // 'asian', 'black', 'hispanic', 'middle_eastern', 'native_american', 'pacific_islander', 'white', 'mixed', 'other'
+  politicalViews: text("political_views"), // 'liberal', 'moderate', 'conservative', 'apolitical', 'other'
+  astrologicalSign: text("astrological_sign"), // 'aries', 'taurus', 'gemini', etc.
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

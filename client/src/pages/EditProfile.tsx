@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -32,6 +32,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
   const [, setLocation] = useLocation();
   const { mutateAsync: updateProfile, isPending } = useUpdateProfile();
   const [newInterest, setNewInterest] = useState("");
+  const [newLanguage, setNewLanguage] = useState("");
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
@@ -58,10 +59,17 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       relationshipGoal: profile.relationshipGoal || "",
       familyPlans: profile.familyPlans || "",
       livingSituation: profile.livingSituation || "",
+      // Background & Identity fields
+      languages: profile.languages || [],
+      orientation: profile.orientation || "",
+      ethnicity: profile.ethnicity || "",
+      politicalViews: profile.politicalViews || "",
+      astrologicalSign: profile.astrologicalSign || "",
     },
   });
 
   const interests = form.watch("interests") || [];
+  const languages = form.watch("languages") || [];
 
   const addInterest = () => {
     const trimmed = newInterest.trim();
@@ -79,6 +87,25 @@ function EditProfileForm({ profile }: { profile: Profile }) {
     if (e.key === "Enter") {
       e.preventDefault();
       addInterest();
+    }
+  };
+
+  const addLanguage = () => {
+    const trimmed = newLanguage.trim();
+    if (trimmed && !languages.includes(trimmed)) {
+      form.setValue("languages", [...languages, trimmed]);
+      setNewLanguage("");
+    }
+  };
+
+  const removeLanguage = (lang: string) => {
+    form.setValue("languages", languages.filter(l => l !== lang));
+  };
+
+  const handleLanguageKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addLanguage();
     }
   };
 
@@ -647,6 +674,189 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                               <SelectItem value="with_roommates">With Roommates</SelectItem>
                               <SelectItem value="with_family">With Family</SelectItem>
                               <SelectItem value="with_partner">With Partner</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Background & Identity Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Globe className="w-5 h-5" />
+                    Background & Identity
+                  </h3>
+
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1">
+                      <Languages className="w-4 h-4" />
+                      Languages
+                    </FormLabel>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newLanguage}
+                        onChange={(e) => setNewLanguage(e.target.value)}
+                        onKeyDown={handleLanguageKeyDown}
+                        placeholder="Add a language..."
+                        className="h-12 rounded-xl flex-1"
+                        data-testid="input-language"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={addLanguage}
+                        data-testid="button-add-language"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    {languages.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3" data-testid="languages-list">
+                        {languages.map((lang) => (
+                          <Badge 
+                            key={lang} 
+                            variant="secondary" 
+                            className="px-3 py-1 text-sm"
+                          >
+                            {lang}
+                            <button
+                              type="button"
+                              onClick={() => removeLanguage(lang)}
+                              className="ml-2 hover:text-destructive"
+                              data-testid={`button-remove-language-${lang}`}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </FormItem>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="orientation"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Compass className="w-4 h-4" />
+                            Orientation
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-orientation">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="straight">Straight</SelectItem>
+                              <SelectItem value="gay">Gay</SelectItem>
+                              <SelectItem value="lesbian">Lesbian</SelectItem>
+                              <SelectItem value="bisexual">Bisexual</SelectItem>
+                              <SelectItem value="pansexual">Pansexual</SelectItem>
+                              <SelectItem value="asexual">Asexual</SelectItem>
+                              <SelectItem value="queer">Queer</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ethnicity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Palette className="w-4 h-4" />
+                            Ethnicity
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-ethnicity">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="asian">Asian</SelectItem>
+                              <SelectItem value="black">Black / African American</SelectItem>
+                              <SelectItem value="hispanic">Hispanic / Latino</SelectItem>
+                              <SelectItem value="middle_eastern">Middle Eastern</SelectItem>
+                              <SelectItem value="native_american">Native American</SelectItem>
+                              <SelectItem value="pacific_islander">Pacific Islander</SelectItem>
+                              <SelectItem value="white">White / Caucasian</SelectItem>
+                              <SelectItem value="mixed">Mixed / Multiracial</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="politicalViews"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Vote className="w-4 h-4" />
+                            Politics
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-politics">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="liberal">Liberal</SelectItem>
+                              <SelectItem value="moderate">Moderate</SelectItem>
+                              <SelectItem value="conservative">Conservative</SelectItem>
+                              <SelectItem value="apolitical">Apolitical</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="astrologicalSign"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Star className="w-4 h-4" />
+                            Zodiac Sign
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 rounded-xl" data-testid="select-zodiac">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="aries">Aries</SelectItem>
+                              <SelectItem value="taurus">Taurus</SelectItem>
+                              <SelectItem value="gemini">Gemini</SelectItem>
+                              <SelectItem value="cancer">Cancer</SelectItem>
+                              <SelectItem value="leo">Leo</SelectItem>
+                              <SelectItem value="virgo">Virgo</SelectItem>
+                              <SelectItem value="libra">Libra</SelectItem>
+                              <SelectItem value="scorpio">Scorpio</SelectItem>
+                              <SelectItem value="sagittarius">Sagittarius</SelectItem>
+                              <SelectItem value="capricorn">Capricorn</SelectItem>
+                              <SelectItem value="aquarius">Aquarius</SelectItem>
+                              <SelectItem value="pisces">Pisces</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
