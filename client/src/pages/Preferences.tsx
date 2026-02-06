@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Info, MessageSquare } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -548,6 +548,56 @@ export default function Preferences() {
         </CardContent>
       </Card>
 
+      <Card data-testid="card-about">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Info className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">About Us</CardTitle>
+              <CardDescription>Learn more about Crush</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Link href="/about" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-about-us">
+              <span className="flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                About Crush
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-faq">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-amber-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">FAQ</CardTitle>
+              <CardDescription>Frequently asked questions</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Link href="/help" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-faq">
+              <span className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                View FAQ & Support
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
       <Card data-testid="card-support">
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -561,7 +611,7 @@ export default function Preferences() {
           </div>
         </CardHeader>
         <CardContent>
-          <Link href="/help">
+          <Link href="/help" className="block">
             <Button variant="outline" className="w-full justify-between" data-testid="button-help-support">
               <span className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4" />

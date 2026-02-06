@@ -101,6 +101,10 @@ Preferred communication style: Simple, everyday language.
   - New `marijuana` schema field added to profiles
   - Preferences: "Lifestyle" card showing alcohol, smoking, marijuana, and diet with icons and "Edit Lifestyle" link
   - EditProfile: Marijuana dropdown added to Lifestyle section
+- **About Us & FAQ**: Added informational cards to Preferences page
+  - New About Us page (`/about`) with mission, how it works, and values sections
+  - "About Us" card on Preferences linking to `/about`
+  - "FAQ" card on Preferences linking to existing `/help` page
 
 ### January 29, 2026
 - **Recommendations & Crush Picks**: Added personalized profile discovery features

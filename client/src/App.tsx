@@ -23,6 +23,7 @@ import Preferences from "@/pages/Preferences";
 import VideoCall from "@/pages/VideoCall";
 import AIMatches from "@/pages/AIMatches";
 import Help from "@/pages/Help";
+import AboutUs from "@/pages/AboutUs";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -118,6 +119,10 @@ function Router() {
 
         <Route path="/help">
           <ProtectedRoute component={Help} />
+        </Route>
+
+        <Route path="/about">
+          <ProtectedRoute component={AboutUs} />
         </Route>
         
         <Route component={NotFound} />
