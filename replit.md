@@ -97,6 +97,10 @@ Preferred communication style: Simple, everyday language.
   - Preferences: Expanded "Background & Identity" card showing all identity fields (languages, orientation, ethnicity, religion, politics, education, employment, zodiac sign) with summary view
   - Verification status integrated into the same card
 - **Video Chat Icon**: Added video chat quick action button to Feed/Home page top-right corner
+- **Lifestyle Preferences**: Added Lifestyle card to Preferences page
+  - New `marijuana` schema field added to profiles
+  - Preferences: "Lifestyle" card showing alcohol, smoking, marijuana, and diet with icons and "Edit Lifestyle" link
+  - EditProfile: Marijuana dropdown added to Lifestyle section
 
 ### January 29, 2026
 - **Recommendations & Crush Picks**: Added personalized profile discovery features

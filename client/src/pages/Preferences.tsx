@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, HelpCircle, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -410,6 +410,54 @@ export default function Preferences() {
         )}
         Save Preferences
       </Button>
+
+      <Card data-testid="card-lifestyle">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center">
+              <Wine className="w-4 h-4 text-orange-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Lifestyle</CardTitle>
+              <CardDescription>Your habits and preferences</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <IdentityRow
+              icon={<Wine className="w-4 h-4" />}
+              label="Alcohol"
+              value={formatIdentityValue(profile?.drinking)}
+            />
+            <IdentityRow
+              icon={<Cigarette className="w-4 h-4" />}
+              label="Smoking"
+              value={formatIdentityValue(profile?.smoking)}
+            />
+            <IdentityRow
+              icon={<Leaf className="w-4 h-4" />}
+              label="Marijuana"
+              value={formatIdentityValue(profile?.marijuana)}
+            />
+            <IdentityRow
+              icon={<Utensils className="w-4 h-4" />}
+              label="Diet"
+              value={formatIdentityValue(profile?.diet)}
+            />
+          </div>
+
+          <Link href="/profile/edit" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-edit-lifestyle">
+              <span className="flex items-center gap-2">
+                <Wine className="w-4 h-4" />
+                Edit Lifestyle
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-identity">
         <CardHeader>
