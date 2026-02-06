@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle } from "lucide-react";
+import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Info, MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";

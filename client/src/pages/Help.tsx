@@ -24,8 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, HelpCircle, MessageSquare, Shield, CreditCard, Heart, Users, AlertTriangle } from "lucide-react";
-import { useLocation } from "wouter";
+import { ArrowLeft, HelpCircle, MessageSquare, Shield, CreditCard, Heart, Users, AlertTriangle, Info, ChevronRight } from "lucide-react";
+import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -156,7 +156,32 @@ export default function Help() {
           <p className="text-muted-foreground mt-2">Find answers or contact our support team</p>
         </div>
 
-        <Card className="mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <Link href="/about" className="block">
+            <Card className="hover-elevate h-full" data-testid="card-about-link">
+              <CardContent className="flex flex-col items-center gap-2 p-4 text-center">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Info className="w-5 h-5 text-primary" />
+                </div>
+                <p className="font-medium text-sm">About Us</p>
+                <p className="text-xs text-muted-foreground">Learn about Crush</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <a href="#faq-section" className="block">
+            <Card className="hover-elevate h-full" data-testid="card-faq-link">
+              <CardContent className="flex flex-col items-center gap-2 p-4 text-center">
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                </div>
+                <p className="font-medium text-sm">FAQ</p>
+                <p className="text-xs text-muted-foreground">Common questions</p>
+              </CardContent>
+            </Card>
+          </a>
+        </div>
+
+        <Card className="mb-6" id="faq-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
