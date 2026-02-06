@@ -49,6 +49,7 @@ export const profiles = pgTable("profiles", {
   // Lifestyle fields
   drinking: text("drinking"), // 'never', 'socially', 'regularly'
   smoking: text("smoking"), // 'never', 'socially', 'regularly'
+  marijuana: text("marijuana"), // 'never', 'socially', 'regularly'
   exercise: text("exercise"), // 'never', 'sometimes', 'active', 'very_active'
   diet: text("diet"), // 'anything', 'vegetarian', 'vegan', 'pescatarian', 'kosher', 'halal', 'other'
   pets: text("pets"), // 'none', 'have_dog', 'have_cat', 'have_other', 'want_pets'

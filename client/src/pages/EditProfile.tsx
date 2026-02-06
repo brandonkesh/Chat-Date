@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -47,6 +47,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       // Lifestyle fields
       drinking: profile.drinking || "",
       smoking: profile.smoking || "",
+      marijuana: profile.marijuana || "",
       exercise: profile.exercise || "",
       diet: profile.diet || "",
       pets: profile.pets || "",
@@ -473,6 +474,33 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                       )}
                     />
                   </div>
+
+                  {/* Marijuana */}
+                  <FormField
+                    control={form.control}
+                    name="marijuana"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <Leaf className="w-4 h-4" />
+                          Marijuana
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <FormControl>
+                            <SelectTrigger className="h-12 rounded-xl" data-testid="select-marijuana">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="never">Never</SelectItem>
+                            <SelectItem value="socially">Socially</SelectItem>
+                            <SelectItem value="regularly">Regularly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   {/* Exercise & Diet */}
                   <div className="grid grid-cols-2 gap-4">
