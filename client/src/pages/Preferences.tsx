@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -191,6 +192,56 @@ export default function Preferences() {
           <p className="text-sm text-muted-foreground">Customize your dating experience</p>
         </div>
       </div>
+
+      <Card data-testid="card-age-verification">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${profile.ageVerified ? 'bg-green-500/10' : 'bg-amber-500/10'}`}>
+              <ShieldCheck className={`w-4 h-4 ${profile.ageVerified ? 'text-green-500' : 'text-amber-500'}`} />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Age Verification</CardTitle>
+              <CardDescription>
+                {profile.ageVerified ? "Your age has been verified" : "Verify your age for a trusted profile"}
+              </CardDescription>
+            </div>
+            {profile.ageVerified && (
+              <Badge variant="secondary" data-testid="badge-age-verified-status">
+                <Check className="w-3 h-3 mr-1" />
+                Verified
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Date of Birth</span>
+              <span className="text-sm font-medium" data-testid="text-dob-display">
+                {profile.dateOfBirth ? new Date(profile.dateOfBirth + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Not provided"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Age</span>
+              <span className="text-sm font-medium" data-testid="text-age-display">{profile.age}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Status</span>
+              <span className={`text-sm font-medium ${profile.ageVerified ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} data-testid="text-age-status">
+                {profile.ageVerified ? "Verified" : "Not Verified"}
+              </span>
+            </div>
+            {!profile.ageVerified && (
+              <Link href="/profile/edit">
+                <Button variant="outline" className="w-full mt-2" data-testid="button-verify-age">
+                  <ShieldCheck className="w-4 h-4 mr-2" />
+                  Verify Age
+                </Button>
+              </Link>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-location">
         <CardHeader>

@@ -22,14 +22,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Heart, X, Plus } from "lucide-react";
+import { Heart, X, Plus, ShieldCheck, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { differenceInYears, parse, isValid } from "date-fns";
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { mutateAsync: createProfile, isPending } = useUpdateProfile();
   const [newInterest, setNewInterest] = useState("");
+
+  const [dobError, setDobError] = useState("");
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
@@ -37,6 +40,7 @@ export default function Onboarding() {
       displayName: "",
       bio: "",
       age: 18,
+      dateOfBirth: "",
       gender: "male",
       interestedIn: "female",
       photoUrl: "",
@@ -66,8 +70,18 @@ export default function Onboarding() {
   };
 
   const onSubmit = async (data: InsertProfile) => {
+    if (!data.dateOfBirth) {
+      setDobError("Please enter your date of birth.");
+      return;
+    }
+    const dob = new Date(data.dateOfBirth);
+    const age = differenceInYears(new Date(), dob);
+    if (age < 18) {
+      setDobError("You must be at least 18 years old.");
+      return;
+    }
     try {
-      await createProfile(data);
+      await createProfile({ ...data, age });
       setLocation("/feed");
     } catch (error) {
       // Error handled by hook toast
@@ -101,27 +115,53 @@ export default function Onboarding() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="age"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Age</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min={18} 
-                          className="h-12 rounded-xl"
-                          {...field}
-                          onChange={e => field.onChange(parseInt(e.target.value))} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="dateOfBirth"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      Date of Birth
+                      <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        className="h-12 rounded-xl"
+                        data-testid="input-date-of-birth"
+                        max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                        {...field}
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          field.onChange(e.target.value);
+                          setDobError("");
+                          if (e.target.value) {
+                            const dob = new Date(e.target.value);
+                            const age = differenceInYears(new Date(), dob);
+                            if (age < 18) {
+                              setDobError("You must be at least 18 years old.");
+                            } else {
+                              form.setValue("age", age);
+                            }
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    {dobError && (
+                      <p className="text-sm text-destructive flex items-center gap-1" data-testid="text-dob-error">
+                        <AlertCircle className="w-3 h-3" />
+                        {dobError}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Your age will be calculated and verified from your date of birth.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="gender"
@@ -144,31 +184,31 @@ export default function Onboarding() {
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={form.control}
-                name="interestedIn"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Interested In</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-12 rounded-xl">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="male">Men</SelectItem>
-                        <SelectItem value="female">Women</SelectItem>
-                        <SelectItem value="nonbinary">Non-binary</SelectItem>
-                        <SelectItem value="everyone">Everyone</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="interestedIn"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Interested In</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-12 rounded-xl">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="male">Men</SelectItem>
+                          <SelectItem value="female">Women</SelectItem>
+                          <SelectItem value="nonbinary">Non-binary</SelectItem>
+                          <SelectItem value="everyone">Everyone</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
@@ -180,7 +220,8 @@ export default function Onboarding() {
                       <Textarea 
                         placeholder="What makes you unique?" 
                         className="min-h-[100px] rounded-xl resize-none" 
-                        {...field} 
+                        {...field}
+                        value={field.value || ""}
                       />
                     </FormControl>
                     <FormMessage />

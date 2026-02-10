@@ -22,8 +22,8 @@ export interface IStorage {
   // Profiles
   getProfile(userId: string): Promise<Profile | undefined>;
   getProfileById(id: number): Promise<Profile | undefined>;
-  createProfile(profile: InsertProfile & { userId: string }): Promise<Profile>;
-  updateProfile(userId: string, profile: Partial<InsertProfile>): Promise<Profile>;
+  createProfile(profile: InsertProfile & { userId: string; ageVerified?: boolean }): Promise<Profile>;
+  updateProfile(userId: string, profile: Partial<InsertProfile> & { ageVerified?: boolean }): Promise<Profile>;
   getPotentialMatches(userId: string): Promise<Profile[]>;
   getRecommendedProfiles(userId: string): Promise<Profile[]>;
   getCrushPicks(userId: string): Promise<Profile[]>;
@@ -57,7 +57,7 @@ export class DatabaseStorage implements IStorage {
     return profile;
   }
 
-  async createProfile(profileData: InsertProfile & { userId: string }): Promise<Profile> {
+  async createProfile(profileData: InsertProfile & { userId: string; ageVerified?: boolean }): Promise<Profile> {
     // Set trial ends at to 1 month from now
     const trialEndsAt = new Date();
     trialEndsAt.setMonth(trialEndsAt.getMonth() + 1);
@@ -69,7 +69,7 @@ export class DatabaseStorage implements IStorage {
     return profile;
   }
 
-  async updateProfile(userId: string, updates: Partial<InsertProfile>): Promise<Profile> {
+  async updateProfile(userId: string, updates: Partial<InsertProfile> & { ageVerified?: boolean }): Promise<Profile> {
     const [updated] = await db
       .update(profiles)
       .set(updates)

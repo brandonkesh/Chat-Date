@@ -44,12 +44,57 @@ export async function registerRoutes(
     try {
       const input = api.profiles.me.update.input.parse(req.body);
       const existing = await storage.getProfile(userId);
-      
+
+      let ageVerified = existing?.ageVerified ?? false;
+      if (input.dateOfBirth) {
+        const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dobRegex.test(input.dateOfBirth)) {
+          return res.status(400).json({
+            message: "Invalid date format. Use YYYY-MM-DD.",
+            field: "dateOfBirth",
+          });
+        }
+        const dob = new Date(input.dateOfBirth + "T00:00:00");
+        if (isNaN(dob.getTime())) {
+          return res.status(400).json({
+            message: "Invalid date of birth.",
+            field: "dateOfBirth",
+          });
+        }
+        const today = new Date();
+        let calculatedAge = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+          calculatedAge--;
+        }
+        if (calculatedAge < 18) {
+          return res.status(400).json({
+            message: "You must be at least 18 years old to use this app.",
+            field: "dateOfBirth",
+          });
+        }
+        if (calculatedAge > 120) {
+          return res.status(400).json({
+            message: "Please enter a valid date of birth.",
+            field: "dateOfBirth",
+          });
+        }
+        input.age = calculatedAge;
+        ageVerified = true;
+      } else if (!existing) {
+        if (input.age < 18) {
+          return res.status(400).json({
+            message: "You must be at least 18 years old to use this app.",
+            field: "age",
+          });
+        }
+      }
+
       let profile;
       if (existing) {
-        profile = await storage.updateProfile(userId, input);
+        profile = await storage.updateProfile(userId, { ...input, ageVerified });
       } else {
-        profile = await storage.createProfile({ ...input, userId });
+        profile = await storage.createProfile({ ...input, userId, ageVerified });
       }
       res.json(profile);
     } catch (err) {

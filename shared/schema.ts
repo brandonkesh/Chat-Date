@@ -19,6 +19,8 @@ export const profiles = pgTable("profiles", {
   displayName: text("display_name").notNull(),
   bio: text("bio"),
   age: integer("age").notNull(),
+  dateOfBirth: text("date_of_birth"),
+  ageVerified: boolean("age_verified").default(false),
   gender: text("gender").notNull(), // 'male', 'female', 'other'
   interestedIn: text("interested_in").notNull(), // 'male', 'female', 'everyone'
   photoUrl: text("photo_url"),
@@ -82,6 +84,7 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   isVerified: true,
   verificationPhotoUrl: true,
   verificationStatus: true,
+  ageVerified: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;

@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf, AlertCircle, CalendarDays } from "lucide-react";
+import { differenceInYears } from "date-fns";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { VoiceIntro } from "@/components/VoiceIntro";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
   const { mutateAsync: updateProfile, isPending } = useUpdateProfile();
   const [newInterest, setNewInterest] = useState("");
   const [newLanguage, setNewLanguage] = useState("");
+  const [dobError, setDobError] = useState("");
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
@@ -41,6 +43,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       displayName: profile.displayName,
       bio: profile.bio ?? "",
       age: profile.age,
+      dateOfBirth: profile.dateOfBirth || "",
       gender: profile.gender,
       interestedIn: profile.interestedIn,
       photoUrl: profile.photoUrl || "",
@@ -180,28 +183,61 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="dateOfBirth"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4" />
+                        Date of Birth
+                        {profile.ageVerified && (
+                          <Badge variant="secondary" className="ml-1" data-testid="badge-age-verified">
+                            <ShieldCheck className="w-3 h-3 mr-1" />
+                            Age Verified
+                          </Badge>
+                        )}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          className="h-12 rounded-xl"
+                          data-testid="input-date-of-birth"
+                          max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                          {...field}
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                            setDobError("");
+                            if (e.target.value) {
+                              const dob = new Date(e.target.value);
+                              const age = differenceInYears(new Date(), dob);
+                              if (age < 18) {
+                                setDobError("You must be at least 18 years old.");
+                              } else {
+                                form.setValue("age", age);
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      {dobError && (
+                        <p className="text-sm text-destructive flex items-center gap-1" data-testid="text-dob-error">
+                          <AlertCircle className="w-3 h-3" />
+                          {dobError}
+                        </p>
+                      )}
+                      {!profile.ageVerified && (
+                        <p className="text-xs text-muted-foreground">
+                          Enter your date of birth to verify your age.
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Age</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min={18} 
-                            className="h-12 rounded-xl"
-                            data-testid="input-age"
-                            {...field}
-                            value={field.value}
-                            onChange={e => field.onChange(parseInt(e.target.value) || 18)} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
 
                   <FormField
                     control={form.control}

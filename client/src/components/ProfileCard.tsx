@@ -129,8 +129,11 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
           <h2 className="text-3xl font-display font-bold text-foreground">
             {profile.displayName}
           </h2>
-          <span className="text-xl text-muted-foreground font-medium">
+          <span className="text-xl text-muted-foreground font-medium flex items-center gap-1">
             {profile.age}
+            {profile.ageVerified && (
+              <ShieldCheck className="w-4 h-4 text-green-500" title="Age verified" data-testid="badge-age-verified" />
+            )}
           </span>
           {profile.isVerified && (
             <Badge className="bg-blue-500 text-white" title="Verified profile" data-testid="verified-badge">
