@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -452,6 +452,49 @@ export default function Preferences() {
               <span className="flex items-center gap-2">
                 <Wine className="w-4 h-4" />
                 Edit Lifestyle
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-family">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
+              <Home className="w-4 h-4 text-pink-500 dark:text-pink-400" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Family</CardTitle>
+              <CardDescription>Pets, kids, and family plans</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <IdentityRow
+              icon={<PawPrint className="w-4 h-4" />}
+              label="Pets"
+              value={formatIdentityValue(profile?.pets)}
+            />
+            <IdentityRow
+              icon={<Baby className="w-4 h-4" />}
+              label="Has Kids"
+              value={formatIdentityValue(profile?.kids)}
+            />
+            <IdentityRow
+              icon={<Users className="w-4 h-4" />}
+              label="Wants Kids"
+              value={formatIdentityValue(profile?.familyPlans)}
+            />
+          </div>
+
+          <Link href="/profile/edit" className="block">
+            <Button variant="outline" className="w-full justify-between" data-testid="button-edit-family">
+              <span className="flex items-center gap-2">
+                <Home className="w-4 h-4" />
+                Edit Family
               </span>
               <ChevronRight className="w-4 h-4" />
             </Button>
