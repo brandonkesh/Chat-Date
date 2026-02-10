@@ -44,6 +44,11 @@ export interface IStorage {
   // Verification
   submitVerification(userId: string, photoUrl: string): Promise<Profile>;
   updateVerificationStatus(userId: string, status: VerificationStatus): Promise<Profile>;
+
+  // Two-factor authentication
+  enableTwoFactor(userId: string, secret: string): Promise<Profile>;
+  disableTwoFactor(userId: string): Promise<Profile>;
+  getTwoFactorSecret(userId: string): Promise<string | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -364,6 +369,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
+  }
+
+  async enableTwoFactor(userId: string, secret: string): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ twoFactorEnabled: true, twoFactorSecret: secret })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async disableTwoFactor(userId: string): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ twoFactorEnabled: false, twoFactorSecret: null })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async getTwoFactorSecret(userId: string): Promise<string | null> {
+    const profile = await this.getProfile(userId);
+    return profile?.twoFactorSecret ?? null;
   }
 }
 

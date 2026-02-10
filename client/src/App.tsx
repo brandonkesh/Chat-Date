@@ -1,6 +1,6 @@
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,13 +24,25 @@ import VideoCall from "@/pages/VideoCall";
 import AIMatches from "@/pages/AIMatches";
 import Help from "@/pages/Help";
 import AboutUs from "@/pages/AboutUs";
+import TwoFactorSetup from "@/pages/TwoFactorSetup";
+import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+type TwoFactorStatus = {
+  enabled: boolean;
+  verified: boolean;
+};
+
+function ProtectedRoute({ component: Component, skip2FA = false }: { component: React.ComponentType; skip2FA?: boolean }) {
   const { user, isLoading } = useAuth();
   const { data: profile, isLoading: profileLoading } = useMyProfile();
   const [, setLocation] = useLocation();
+
+  const { data: twoFactorStatus, isLoading: twoFALoading } = useQuery<TwoFactorStatus>({
+    queryKey: ["/api/2fa/status"],
+    enabled: !!user && !!profile && !skip2FA,
+  });
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -48,10 +60,20 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  // If we have a user but no profile, and we aren't on onboarding, effect redirects.
-  // We return null here to prevent flashing protected content.
   if (user && !profile) return null;
   if (!user) return null;
+
+  if (!skip2FA && twoFALoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!skip2FA && twoFactorStatus?.enabled && !twoFactorStatus?.verified) {
+    return <TwoFactorChallenge />;
+  }
 
   return <Component />;
 }
@@ -123,6 +145,10 @@ function Router() {
 
         <Route path="/about">
           <ProtectedRoute component={AboutUs} />
+        </Route>
+
+        <Route path="/security/2fa">
+          <ProtectedRoute component={TwoFactorSetup} skip2FA />
         </Route>
         
         <Route component={NotFound} />

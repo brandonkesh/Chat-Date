@@ -72,6 +72,9 @@ export const profiles = pgTable("profiles", {
   astrologicalSign: text("astrological_sign"), // 'aries', 'taurus', 'gemini', etc.
   // Voice intro
   voiceIntroUrl: text("voice_intro_url"),
+  // Two-factor authentication
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  twoFactorSecret: text("two_factor_secret"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -85,6 +88,8 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   verificationPhotoUrl: true,
   verificationStatus: true,
   ageVerified: true,
+  twoFactorEnabled: true,
+  twoFactorSecret: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;

@@ -14,6 +14,8 @@ import { getStripePublishableKey } from "./stripeClient";
 import { WebSocketServer, WebSocket } from "ws";
 import crypto from "crypto";
 import { openai } from "./replit_integrations/image/client";
+import { generateSecret, generateURI, verifySync } from "otplib";
+import QRCode from "qrcode";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -35,7 +37,8 @@ export async function registerRoutes(
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
-    res.json(profile);
+    const { twoFactorSecret, ...safeProfile } = profile;
+    res.json(safeProfile);
   });
 
   // Create/Update current user profile
@@ -106,6 +109,102 @@ export async function registerRoutes(
       }
       throw err;
     }
+  });
+
+  // === TWO-FACTOR AUTHENTICATION ===
+
+  // Get 2FA status
+  app.get("/api/2fa/status", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    res.json({
+      enabled: profile.twoFactorEnabled ?? false,
+      verified: (req.session as any).twoFactorVerified ?? false,
+    });
+  });
+
+  // Begin 2FA setup - generate secret and QR code
+  app.post("/api/2fa/setup", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    if (profile.twoFactorEnabled) {
+      return res.status(400).json({ message: "Two-factor authentication is already enabled." });
+    }
+    const secret = generateSecret();
+    const otpauthUrl = generateURI({
+      secret,
+      issuer: "Crush Dating",
+      label: profile.displayName || userId,
+    });
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+    (req.session as any).pendingTwoFactorSecret = secret;
+    res.json({ qrCode: qrCodeDataUrl, secret, otpauthUrl });
+  });
+
+  // Verify and enable 2FA
+  app.post("/api/2fa/enable", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ message: "Verification code is required." });
+    }
+    const secret = (req.session as any).pendingTwoFactorSecret;
+    if (!secret) {
+      return res.status(400).json({ message: "Please start 2FA setup first." });
+    }
+    const result = verifySync({ token: code, secret });
+    if (!result.valid) {
+      return res.status(400).json({ message: "Invalid verification code. Please try again." });
+    }
+    await storage.enableTwoFactor(userId, secret);
+    delete (req.session as any).pendingTwoFactorSecret;
+    (req.session as any).twoFactorVerified = true;
+    res.json({ success: true, message: "Two-factor authentication enabled." });
+  });
+
+  // Disable 2FA
+  app.post("/api/2fa/disable", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ message: "Verification code is required to disable 2FA." });
+    }
+    const secret = await storage.getTwoFactorSecret(userId);
+    if (!secret) {
+      return res.status(400).json({ message: "Two-factor authentication is not enabled." });
+    }
+    const result = verifySync({ token: code, secret });
+    if (!result.valid) {
+      return res.status(400).json({ message: "Invalid verification code." });
+    }
+    await storage.disableTwoFactor(userId);
+    (req.session as any).twoFactorVerified = false;
+    res.json({ success: true, message: "Two-factor authentication disabled." });
+  });
+
+  // Verify 2FA code (for login challenge)
+  app.post("/api/2fa/verify", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ message: "Verification code is required." });
+    }
+    const profile = await storage.getProfile(userId);
+    if (!profile?.twoFactorEnabled || !profile.twoFactorSecret) {
+      return res.status(400).json({ message: "Two-factor authentication is not enabled." });
+    }
+    const result = verifySync({ token: code, secret: profile.twoFactorSecret });
+    if (!result.valid) {
+      return res.status(400).json({ message: "Invalid verification code. Please try again." });
+    }
+    (req.session as any).twoFactorVerified = true;
+    res.json({ success: true });
   });
 
   // Get potential matches (Feed)

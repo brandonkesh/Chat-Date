@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { VoiceIntro } from "@/components/VoiceIntro";
+import { useQuery } from "@tanstack/react-query";
 
 function formatIdentityValue(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -47,6 +48,10 @@ export default function Preferences() {
   const [looksPreference, setLooksPreference] = useState("any");
   const [bodyTypePreference, setBodyTypePreference] = useState("any");
   const [heightRange, setHeightRange] = useState<[number, number]>([48, 84]); // 4'0" to 7'0"
+
+  const { data: twoFactorStatus } = useQuery<{ enabled: boolean; verified: boolean }>({
+    queryKey: ["/api/2fa/status"],
+  });
 
   // Helper to format height in feet and inches
   const formatHeight = (inches: number) => {
@@ -239,6 +244,53 @@ export default function Preferences() {
                 </Button>
               </Link>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-two-factor">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${twoFactorStatus?.enabled ? 'bg-green-500/10' : 'bg-muted'}`}>
+              <Shield className={`w-4 h-4 ${twoFactorStatus?.enabled ? 'text-green-500' : 'text-muted-foreground'}`} />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Two-Step Verification</CardTitle>
+              <CardDescription>
+                {twoFactorStatus?.enabled ? "Your account has extra security" : "Add an extra layer of security"}
+              </CardDescription>
+            </div>
+            {twoFactorStatus?.enabled && (
+              <Badge variant="secondary" data-testid="badge-2fa-enabled">
+                <Check className="w-3 h-3 mr-1" />
+                Enabled
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Status</span>
+              <span className={`text-sm font-medium ${twoFactorStatus?.enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} data-testid="text-2fa-status">
+                {twoFactorStatus?.enabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {twoFactorStatus?.enabled
+                ? "You'll need to enter a code from your authenticator app each time you sign in."
+                : "Use an authenticator app to generate a verification code each time you sign in."}
+            </p>
+            <Link href="/security/2fa">
+              <Button
+                variant={twoFactorStatus?.enabled ? "outline" : "default"}
+                className="w-full mt-2"
+                data-testid="button-manage-2fa"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                {twoFactorStatus?.enabled ? "Manage Two-Step Verification" : "Enable Two-Step Verification"}
+              </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>
