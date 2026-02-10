@@ -49,6 +49,10 @@ export interface IStorage {
   enableTwoFactor(userId: string, secret: string): Promise<Profile>;
   disableTwoFactor(userId: string): Promise<Profile>;
   getTwoFactorSecret(userId: string): Promise<string | null>;
+
+  // Email verification
+  setEmailVerificationCode(userId: string, code: string, expiry: Date): Promise<Profile>;
+  verifyEmail(userId: string): Promise<Profile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -392,6 +396,24 @@ export class DatabaseStorage implements IStorage {
   async getTwoFactorSecret(userId: string): Promise<string | null> {
     const profile = await this.getProfile(userId);
     return profile?.twoFactorSecret ?? null;
+  }
+
+  async setEmailVerificationCode(userId: string, code: string, expiry: Date): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ emailVerificationCode: code, emailVerificationExpiry: expiry })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async verifyEmail(userId: string): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ emailVerified: true, emailVerificationCode: null, emailVerificationExpiry: null })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
   }
 }
 

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
-import { matches, profiles } from "@shared/schema";
+import { matches, profiles, users } from "@shared/schema";
 import { eq, or, and, ne, notInArray } from "drizzle-orm";
 import { stripeService } from "./stripeService";
 import { stripeStorage } from "./stripeStorage";
@@ -16,6 +16,12 @@ import crypto from "crypto";
 import { openai } from "./replit_integrations/image/client";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
+
+function sanitizeProfile(profile: any) {
+  if (!profile) return profile;
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, ...safe } = profile;
+  return safe;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -37,8 +43,7 @@ export async function registerRoutes(
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
-    const { twoFactorSecret, ...safeProfile } = profile;
-    res.json(safeProfile);
+    res.json(sanitizeProfile(profile));
   });
 
   // Create/Update current user profile
@@ -99,7 +104,7 @@ export async function registerRoutes(
       } else {
         profile = await storage.createProfile({ ...input, userId, ageVerified });
       }
-      res.json(profile);
+      res.json(sanitizeProfile(profile));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({
@@ -207,25 +212,96 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // === EMAIL VERIFICATION ===
+
+  // Get email verification status
+  app.get("/api/email-verification/status", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    const user = await db.select().from(users).where(eq(users.id, userId));
+    res.json({
+      emailVerified: profile.emailVerified ?? false,
+      email: user[0]?.email ?? null,
+      codeSent: !!profile.emailVerificationCode,
+      codeExpiry: profile.emailVerificationExpiry,
+    });
+  });
+
+  // Send email verification code
+  app.post("/api/email-verification/send", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    if (profile.emailVerified) {
+      return res.status(400).json({ message: "Email is already verified." });
+    }
+    const user = await db.select().from(users).where(eq(users.id, userId));
+    if (!user[0]?.email) {
+      return res.status(400).json({ message: "No email address found on your account." });
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await storage.setEmailVerificationCode(userId, code, expiry);
+    console.log(`[Email Verification] Code for ${user[0].email}: ${code}`);
+    res.json({
+      success: true,
+      message: "Verification code sent to your email.",
+      email: user[0].email,
+      codePreview: code,
+    });
+  });
+
+  // Verify email code
+  app.post("/api/email-verification/verify", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ message: "Verification code is required." });
+    }
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    if (profile.emailVerified) {
+      return res.status(400).json({ message: "Email is already verified." });
+    }
+    if (!profile.emailVerificationCode || !profile.emailVerificationExpiry) {
+      return res.status(400).json({ message: "No verification code has been sent. Please request a new one." });
+    }
+    if (new Date() > new Date(profile.emailVerificationExpiry)) {
+      return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
+    }
+    if (profile.emailVerificationCode !== code) {
+      return res.status(400).json({ message: "Invalid verification code. Please try again." });
+    }
+    await storage.verifyEmail(userId);
+    res.json({ success: true, message: "Email verified successfully." });
+  });
+
   // Get potential matches (Feed)
   app.get(api.profiles.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getPotentialMatches(userId);
-    res.json(profiles);
+    res.json(profiles.map(sanitizeProfile));
   });
 
   // Get recommended profiles (based on shared interests)
   app.get(api.profiles.recommended.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getRecommendedProfiles(userId);
-    res.json(profiles);
+    res.json(profiles.map(sanitizeProfile));
   });
 
   // Get crush picks (verified & premium users)
   app.get(api.profiles.crushPicks.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getCrushPicks(userId);
-    res.json(profiles);
+    res.json(profiles.map(sanitizeProfile));
   });
 
   // Get daily match
@@ -388,7 +464,7 @@ export async function registerRoutes(
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
-    res.json(profile);
+    res.json(sanitizeProfile(profile));
   });
 
   // === VERIFICATION ===
@@ -445,7 +521,7 @@ export async function registerRoutes(
       const schema = z.object({ voiceIntroUrl: z.string().nullable() });
       const { voiceIntroUrl } = schema.parse(req.body);
       const profile = await storage.updateProfile(userId, { voiceIntroUrl });
-      res.json(profile);
+      res.json(sanitizeProfile(profile));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: err.errors });

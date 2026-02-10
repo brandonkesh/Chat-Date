@@ -26,6 +26,7 @@ import Help from "@/pages/Help";
 import AboutUs from "@/pages/AboutUs";
 import TwoFactorSetup from "@/pages/TwoFactorSetup";
 import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
+import EmailVerification from "@/pages/EmailVerification";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -149,6 +150,10 @@ function Router() {
 
         <Route path="/security/2fa">
           <ProtectedRoute component={TwoFactorSetup} skip2FA />
+        </Route>
+
+        <Route path="/security/email-verification">
+          <ProtectedRoute component={EmailVerification} />
         </Route>
         
         <Route component={NotFound} />

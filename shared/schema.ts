@@ -75,6 +75,10 @@ export const profiles = pgTable("profiles", {
   // Two-factor authentication
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecret: text("two_factor_secret"),
+  // Email verification
+  emailVerified: boolean("email_verified").default(false),
+  emailVerificationCode: text("email_verification_code"),
+  emailVerificationExpiry: timestamp("email_verification_expiry"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -90,6 +94,9 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   ageVerified: true,
   twoFactorEnabled: true,
   twoFactorSecret: true,
+  emailVerified: true,
+  emailVerificationCode: true,
+  emailVerificationExpiry: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;
