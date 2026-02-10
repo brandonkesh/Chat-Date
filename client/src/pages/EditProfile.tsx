@@ -24,6 +24,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf } from "lucide-react";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { VoiceIntro } from "@/components/VoiceIntro";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -153,6 +154,9 @@ function EditProfileForm({ profile }: { profile: Profile }) {
               )}
             </div>
             <CardDescription>Update your dating profile</CardDescription>
+            <div className="mt-4">
+              <VoiceIntro voiceIntroUrl={profile.voiceIntroUrl} editable />
+            </div>
           </CardHeader>
           <CardContent>
             <Form {...form}>

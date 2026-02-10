@@ -68,6 +68,8 @@ export const profiles = pgTable("profiles", {
   ethnicity: text("ethnicity"), // 'asian', 'black', 'hispanic', 'middle_eastern', 'native_american', 'pacific_islander', 'white', 'mixed', 'other'
   politicalViews: text("political_views"), // 'liberal', 'moderate', 'conservative', 'apolitical', 'other'
   astrologicalSign: text("astrological_sign"), // 'aries', 'taurus', 'gemini', etc.
+  // Voice intro
+  voiceIntroUrl: text("voice_intro_url"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

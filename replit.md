@@ -101,10 +101,19 @@ Preferred communication style: Simple, everyday language.
   - New `marijuana` schema field added to profiles
   - Preferences: "Lifestyle" card showing alcohol, smoking, marijuana, and diet with icons and "Edit Lifestyle" link
   - EditProfile: Marijuana dropdown added to Lifestyle section
-- **About Us & FAQ**: Added informational cards to Preferences page
+- **About Us & FAQ**: Added informational content
   - New About Us page (`/about`) with mission, how it works, and values sections
-  - "About Us" card on Preferences linking to `/about`
-  - "FAQ" card on Preferences linking to existing `/help` page
+  - About Us and FAQ quick-link cards added to Help & Support page
+- **Family Preferences**: Added Family card to Preferences page
+  - Displays pets, has kids, and wants kids fields with icons
+  - "Edit Family" button links to Edit Profile
+- **Voice Intro**: Users can record a short voice introduction (up to 30 seconds)
+  - New `voiceIntroUrl` field in profiles schema
+  - VoiceIntro component with record/play/save/delete functionality
+  - Uses MediaRecorder API and Replit Object Storage for audio files
+  - Available on Edit Profile and Preferences pages
+  - VoiceIntroPlayer shows inline on profile cards in Feed for playback
+  - API endpoints: POST `/api/uploads/voice-intro`, PUT `/api/profiles/voice-intro`
 
 ### January 29, 2026
 - **Recommendations & Crush Picks**: Added personalized profile discovery features

@@ -8,6 +8,7 @@ import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { VoiceIntro } from "@/components/VoiceIntro";
 
 function formatIdentityValue(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -410,6 +411,8 @@ export default function Preferences() {
         )}
         Save Preferences
       </Button>
+
+      <VoiceIntro voiceIntroUrl={profile?.voiceIntroUrl} editable />
 
       <Card data-testid="card-lifestyle">
         <CardHeader>

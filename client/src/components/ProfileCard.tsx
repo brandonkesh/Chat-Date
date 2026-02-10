@@ -1,6 +1,7 @@
 import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
 import { MapPin, ShieldCheck, Briefcase, GraduationCap, Wine, Dumbbell, Dog, Baby, Church } from "lucide-react";
+import { VoiceIntroPlayer } from "@/components/VoiceIntro";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -135,6 +136,9 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
             <Badge className="bg-blue-500 text-white" title="Verified profile" data-testid="verified-badge">
               <ShieldCheck className="w-3 h-3" />
             </Badge>
+          )}
+          {profile.voiceIntroUrl && (
+            <VoiceIntroPlayer voiceIntroUrl={profile.voiceIntroUrl} />
           )}
         </div>
 

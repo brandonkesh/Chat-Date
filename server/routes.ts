@@ -280,6 +280,37 @@ export async function registerRoutes(
     }
   });
 
+  // === VOICE INTRO ===
+
+  app.post("/api/uploads/voice-intro", isAuthenticated, async (req: any, res) => {
+    try {
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      res.json({ uploadURL, objectPath });
+    } catch (error) {
+      console.error("Error generating voice upload URL:", error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  app.put("/api/profiles/voice-intro", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      const schema = z.object({ voiceIntroUrl: z.string().nullable() });
+      const { voiceIntroUrl } = schema.parse(req.body);
+      const profile = await storage.updateProfile(userId, { voiceIntroUrl });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: err.errors });
+      }
+      console.error("Voice intro update error:", err);
+      res.status(500).json({ message: "Failed to update voice intro" });
+    }
+  });
+
   // === SWIPES ===
   app.post(api.swipes.create.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
