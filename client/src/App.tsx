@@ -27,6 +27,7 @@ import AboutUs from "@/pages/AboutUs";
 import TwoFactorSetup from "@/pages/TwoFactorSetup";
 import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
 import EmailVerification from "@/pages/EmailVerification";
+import MicroDate from "@/pages/MicroDate";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -154,6 +155,10 @@ function Router() {
 
         <Route path="/security/email-verification">
           <ProtectedRoute component={EmailVerification} />
+        </Route>
+
+        <Route path="/micro-date/:id">
+          <ProtectedRoute component={MicroDate} />
         </Route>
         
         <Route component={NotFound} />

@@ -881,6 +881,198 @@ export async function registerRoutes(
     }
   });
 
+  // === MICRO DATES ===
+
+  // Invite a match to a micro-date
+  app.post("/api/micro-dates/invite", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      const schema = z.object({ matchId: z.number() });
+      const { matchId } = schema.parse(req.body);
+
+      const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+      if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+
+      const inviteeId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+      const blockedEither = await storage.isBlockedEither(userId, inviteeId);
+      if (blockedEither) {
+        return res.status(403).json({ message: "Cannot start a micro-date with this user." });
+      }
+
+      const existing = await storage.getMicroDateByMatch(matchId);
+      if (existing) {
+        return res.status(409).json({ message: "A micro-date is already active or pending for this match.", microDate: existing });
+      }
+
+      const { generateMicroDateLineup } = await import("./microDateActivities");
+      const lineup = generateMicroDateLineup();
+
+      const microDate = await storage.createMicroDate(matchId, userId, inviteeId, JSON.stringify(lineup));
+      res.status(201).json(microDate);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Micro-date invite error:", err);
+      res.status(500).json({ message: "Failed to create micro-date invitation." });
+    }
+  });
+
+  // Accept a micro-date invitation
+  app.post("/api/micro-dates/:id/accept", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const microDateId = parseInt(req.params.id);
+
+    const microDate = await storage.getMicroDate(microDateId);
+    if (!microDate) {
+      return res.status(404).json({ message: "Micro-date not found" });
+    }
+    if (microDate.inviteeId !== userId && microDate.inviterId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    if (microDate.status !== "pending") {
+      return res.status(400).json({ message: "This invitation is no longer pending." });
+    }
+
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + 5 * 60 * 1000);
+    const updated = await storage.updateMicroDateStatus(microDateId, "active", now, endsAt);
+    res.json(updated);
+  });
+
+  // Decline a micro-date invitation
+  app.post("/api/micro-dates/:id/decline", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const microDateId = parseInt(req.params.id);
+
+    const microDate = await storage.getMicroDate(microDateId);
+    if (!microDate) {
+      return res.status(404).json({ message: "Micro-date not found" });
+    }
+    if (microDate.inviteeId !== userId && microDate.inviterId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const updated = await storage.updateMicroDateStatus(microDateId, "declined");
+    res.json(updated);
+  });
+
+  // Get micro-date session state
+  app.get("/api/micro-dates/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const microDateId = parseInt(req.params.id);
+
+    const microDate = await storage.getMicroDate(microDateId);
+    if (!microDate) {
+      return res.status(404).json({ message: "Micro-date not found" });
+    }
+    if (microDate.inviterId !== userId && microDate.inviteeId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    if (microDate.status === "active" && microDate.endsAt && new Date() > microDate.endsAt) {
+      const updated = await storage.updateMicroDateStatus(microDateId, "completed");
+      const responses = await storage.getMicroDateResponses(microDateId);
+      const inviterProfile = await storage.getProfile(microDate.inviterId);
+      const inviteeProfile = await storage.getProfile(microDate.inviteeId);
+      return res.json({
+        ...updated,
+        responses,
+        inviterProfile: sanitizeProfile(inviterProfile),
+        inviteeProfile: sanitizeProfile(inviteeProfile),
+      });
+    }
+
+    const responses = await storage.getMicroDateResponses(microDateId);
+    const inviterProfile = await storage.getProfile(microDate.inviterId);
+    const inviteeProfile = await storage.getProfile(microDate.inviteeId);
+    res.json({
+      ...microDate,
+      responses,
+      inviterProfile: sanitizeProfile(inviterProfile),
+      inviteeProfile: sanitizeProfile(inviteeProfile),
+    });
+  });
+
+  // Submit a response to a micro-date activity
+  app.post("/api/micro-dates/:id/respond", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const microDateId = parseInt(req.params.id);
+
+    const microDate = await storage.getMicroDate(microDateId);
+    if (!microDate) {
+      return res.status(404).json({ message: "Micro-date not found" });
+    }
+    if (microDate.inviterId !== userId && microDate.inviteeId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    if (microDate.status !== "active") {
+      return res.status(400).json({ message: "Micro-date is not active." });
+    }
+
+    try {
+      const schema = z.object({
+        activityIndex: z.number().min(0),
+        response: z.string().min(1).max(500),
+      });
+      const { activityIndex, response } = schema.parse(req.body);
+
+      const created = await storage.createMicroDateResponse(microDateId, activityIndex, userId, response);
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to submit response." });
+    }
+  });
+
+  // Complete a micro-date manually
+  app.post("/api/micro-dates/:id/complete", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const microDateId = parseInt(req.params.id);
+
+    const microDate = await storage.getMicroDate(microDateId);
+    if (!microDate) {
+      return res.status(404).json({ message: "Micro-date not found" });
+    }
+    if (microDate.inviterId !== userId && microDate.inviteeId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const updated = await storage.updateMicroDateStatus(microDateId, "completed");
+    res.json(updated);
+  });
+
+  // Get active/pending micro-date for a match
+  app.get("/api/micro-dates/match/:matchId", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const matchId = parseInt(req.params.matchId);
+
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    const microDate = await storage.getMicroDateByMatch(matchId);
+    if (!microDate) {
+      return res.json(null);
+    }
+
+    const responses = await storage.getMicroDateResponses(microDate.id);
+    const inviterProfile = await storage.getProfile(microDate.inviterId);
+    const inviteeProfile = await storage.getProfile(microDate.inviteeId);
+    res.json({
+      ...microDate,
+      responses,
+      inviterProfile: sanitizeProfile(inviterProfile),
+      inviteeProfile: sanitizeProfile(inviteeProfile),
+    });
+  });
+
   // === VIDEO CALL TOKEN (for WebSocket auth) ===
   // Store temporary video call tokens: token -> { oderId, matchId, expiresAt }
   const videoCallTokens = new Map<string, { userId: string; matchId: number; expiresAt: Date }>();

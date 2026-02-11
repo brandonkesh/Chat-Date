@@ -144,6 +144,19 @@ Preferred communication style: Simple, everyday language.
   - Block & Report combined option in ReportDialog
   - Block check on message sending (403 if blocked)
   - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
+- **Micro-Date Feature**: Built-in 5-minute virtual dates between matched users
+  - Activity catalog: icebreakers, would-you-rather, this-or-that, rapid-fire, hot takes, word association
+  - 10 randomized activities per session from different categories
+  - Real-time polling for partner responses (3s interval during active dates)
+  - 5-minute countdown timer with visual progress bar
+  - Response reveal: see partner's answer after both respond, auto-advance after 2.5s
+  - Completion recap showing all answers side-by-side with match highlights
+  - Zap button in Chat header to invite match to micro-date
+  - Pending/active/completed/declined session states
+  - Schema: `micro_dates` table (sessions), `micro_date_responses` table (per-activity answers)
+  - API endpoints: POST `/api/micro-dates/invite`, POST `/:id/accept`, POST `/:id/decline`, GET `/:id`, POST `/:id/respond`, POST `/:id/complete`, GET `/match/:matchId`
+  - Block check prevents micro-dates with blocked users
+  - Route: `/micro-date/:id`
 
 ### January 28, 2026
 - **Multiple Membership Tiers**: Expanded from single premium to three-tier subscription system

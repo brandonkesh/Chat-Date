@@ -1,11 +1,14 @@
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useMatch, useMessages, useSendMessage, useMyProfile } from "@/hooks/use-dating";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
+import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion } from "framer-motion";
 
@@ -21,8 +24,32 @@ export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { data: existingMicroDate } = useQuery({
+    queryKey: ["/api/micro-dates/match", matchId],
+    queryFn: () => fetch(`/api/micro-dates/match/${matchId}`, { credentials: "include" }).then(r => r.json()),
+    enabled: matchId > 0,
+  });
+
+  const { mutate: inviteMicroDate, isPending: inviting } = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/micro-dates/invite", { matchId }),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/micro-dates/match", matchId] });
+      setLocation(`/micro-date/${data.id}`);
+    },
+    onError: (err: any) => {
+      if (err.message?.includes("already active")) {
+        toast({ title: "A micro-date is already in progress", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to start micro-date", variant: "destructive" });
+      }
+    },
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -83,6 +110,24 @@ export default function Chat() {
           </p>
         </div>
         
+        {existingMicroDate?.id ? (
+          <Link href={`/micro-date/${existingMicroDate.id}`}>
+            <Button variant="ghost" size="icon" data-testid="button-resume-micro-date">
+              <Zap className="w-5 h-5 text-primary" />
+            </Button>
+          </Link>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => inviteMicroDate()}
+            disabled={inviting}
+            data-testid="button-start-micro-date"
+          >
+            {inviting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+          </Button>
+        )}
+
         <Link href={`/video/${matchId}`}>
           <Button variant="ghost" size="icon" data-testid="button-video-call">
             <Video className="w-5 h-5" />

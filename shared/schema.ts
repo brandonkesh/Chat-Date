@@ -178,6 +178,42 @@ export const blocks = pgTable("blocks", {
 
 export type Block = typeof blocks.$inferSelect;
 
+// === MICRO DATES ===
+export type MicroDateStatus = 'pending' | 'active' | 'completed' | 'expired' | 'declined';
+
+export const microDates = pgTable("micro_dates", {
+  id: serial("id").primaryKey(),
+  matchId: integer("match_id").notNull().references(() => matches.id),
+  inviterId: varchar("inviter_id").notNull().references(() => users.id),
+  inviteeId: varchar("invitee_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("pending"),
+  activities: text("activities").notNull(), // JSON string of activity lineup
+  currentActivityIndex: integer("current_activity_index").default(0),
+  startedAt: timestamp("started_at"),
+  endsAt: timestamp("ends_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type MicroDate = typeof microDates.$inferSelect;
+
+export const microDateResponses = pgTable("micro_date_responses", {
+  id: serial("id").primaryKey(),
+  microDateId: integer("micro_date_id").notNull().references(() => microDates.id),
+  activityIndex: integer("activity_index").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  response: text("response").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type MicroDateResponse = typeof microDateResponses.$inferSelect;
+
+export interface MicroDateActivity {
+  type: 'icebreaker' | 'would_you_rather' | 'this_or_that' | 'rapid_fire' | 'word_association' | 'hot_take';
+  prompt: string;
+  options?: string[];
+  timeLimit: number; // seconds per activity
+}
+
 // === RELATIONS ===
 export const profilesRelations = relations(profiles, ({ one }) => ({
   user: one(users, {

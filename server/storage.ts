@@ -7,6 +7,8 @@ import {
   swipes,
   reports,
   blocks,
+  microDates,
+  microDateResponses,
   type User,
   type Profile,
   type InsertProfile,
@@ -19,6 +21,8 @@ import {
   type Report,
   type InsertReport,
   type Block,
+  type MicroDate,
+  type MicroDateResponse,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -78,6 +82,16 @@ export interface IStorage {
   isBlockedEither(userId1: string, userId2: string): Promise<boolean>;
   getBlockedUserIds(userId: string): Promise<string[]>;
   getBlockedUsers(userId: string): Promise<{ block: Block; profile: Profile }[]>;
+
+  // Micro Dates
+  createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate>;
+  getMicroDate(id: number): Promise<MicroDate | undefined>;
+  getMicroDateByMatch(matchId: number, status?: string): Promise<MicroDate | undefined>;
+  updateMicroDateStatus(id: number, status: string, startedAt?: Date, endsAt?: Date): Promise<MicroDate>;
+  advanceMicroDateActivity(id: number, newIndex: number): Promise<MicroDate>;
+  getMicroDateResponses(microDateId: number): Promise<MicroDateResponse[]>;
+  createMicroDateResponse(microDateId: number, activityIndex: number, userId: string, response: string): Promise<MicroDateResponse>;
+  getMicroDatesForUser(userId: string): Promise<MicroDate[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -664,6 +678,102 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return results;
+  }
+
+  async createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate> {
+    const [created] = await db
+      .insert(microDates)
+      .values({ matchId, inviterId, inviteeId, activities, status: "pending" })
+      .returning();
+    return created;
+  }
+
+  async getMicroDate(id: number): Promise<MicroDate | undefined> {
+    const [md] = await db.select().from(microDates).where(eq(microDates.id, id));
+    return md;
+  }
+
+  async getMicroDateByMatch(matchId: number, status?: string): Promise<MicroDate | undefined> {
+    if (status) {
+      const [md] = await db
+        .select()
+        .from(microDates)
+        .where(and(eq(microDates.matchId, matchId), eq(microDates.status, status)))
+        .orderBy(desc(microDates.createdAt))
+        .limit(1);
+      return md;
+    }
+    const [md] = await db
+      .select()
+      .from(microDates)
+      .where(and(
+        eq(microDates.matchId, matchId),
+        or(eq(microDates.status, "pending"), eq(microDates.status, "active"))
+      ))
+      .orderBy(desc(microDates.createdAt))
+      .limit(1);
+    return md;
+  }
+
+  async updateMicroDateStatus(id: number, status: string, startedAt?: Date, endsAt?: Date): Promise<MicroDate> {
+    const updates: Record<string, any> = { status };
+    if (startedAt) updates.startedAt = startedAt;
+    if (endsAt) updates.endsAt = endsAt;
+    const [updated] = await db
+      .update(microDates)
+      .set(updates)
+      .where(eq(microDates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async advanceMicroDateActivity(id: number, newIndex: number): Promise<MicroDate> {
+    const [updated] = await db
+      .update(microDates)
+      .set({ currentActivityIndex: newIndex })
+      .where(eq(microDates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getMicroDateResponses(microDateId: number): Promise<MicroDateResponse[]> {
+    return db
+      .select()
+      .from(microDateResponses)
+      .where(eq(microDateResponses.microDateId, microDateId))
+      .orderBy(microDateResponses.activityIndex, microDateResponses.createdAt);
+  }
+
+  async createMicroDateResponse(microDateId: number, activityIndex: number, userId: string, response: string): Promise<MicroDateResponse> {
+    const [existing] = await db
+      .select()
+      .from(microDateResponses)
+      .where(and(
+        eq(microDateResponses.microDateId, microDateId),
+        eq(microDateResponses.activityIndex, activityIndex),
+        eq(microDateResponses.userId, userId)
+      ));
+    if (existing) {
+      const [updated] = await db
+        .update(microDateResponses)
+        .set({ response })
+        .where(eq(microDateResponses.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(microDateResponses)
+      .values({ microDateId, activityIndex, userId, response })
+      .returning();
+    return created;
+  }
+
+  async getMicroDatesForUser(userId: string): Promise<MicroDate[]> {
+    return db
+      .select()
+      .from(microDates)
+      .where(or(eq(microDates.inviterId, userId), eq(microDates.inviteeId, userId)))
+      .orderBy(desc(microDates.createdAt));
   }
 }
 
