@@ -1,7 +1,7 @@
 import { useFeed, useSwipe, useMyProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -10,12 +10,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { AdBanner } from "@/components/AdBanner";
+import { ReportDialog } from "@/components/ReportDialog";
 
 export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
   const { data: myProfile } = useMyProfile();
   const { mutate: swipe } = useSwipe();
   const { toast } = useToast();
+  
+  const [reportOpen, setReportOpen] = useState(false);
   
   // Local state to manage the stack of profiles
   // We pop them off locally for instant UI update, then invalidate query on idle
@@ -169,6 +172,15 @@ export default function Feed() {
           >
             <Heart className="w-6 h-6 fill-current" />
           </Button>
+
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setReportOpen(true)}
+            data-testid="button-report-feed"
+          >
+            <Flag className="w-5 h-5" />
+          </Button>
         </div>
       )}
 
@@ -176,6 +188,15 @@ export default function Feed() {
       <div className="fixed bottom-20 left-0 right-0 px-4 max-w-md mx-auto">
         <AdBanner size="banner" />
       </div>
+
+      {stack.length > 0 && (
+        <ReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          reportedUserId={stack[0].userId}
+          reportedUserName={stack[0].displayName}
+        />
+      )}
     </div>
   );
 }

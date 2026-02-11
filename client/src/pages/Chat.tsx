@@ -2,9 +2,10 @@ import { useRoute } from "wouter";
 import { useMatch, useMessages, useSendMessage, useMyProfile } from "@/hooks/use-dating";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
+import { ReportDialog } from "@/components/ReportDialog";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion } from "framer-motion";
 
@@ -19,6 +20,7 @@ export default function Chat() {
   
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,15 @@ export default function Chat() {
             <Video className="w-5 h-5" />
           </Button>
         </Link>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setReportOpen(true)}
+          data-testid="button-report-user"
+        >
+          <Flag className="w-5 h-5" />
+        </Button>
       </header>
 
       {/* Trial Banner */}
@@ -174,6 +185,13 @@ export default function Chat() {
           </Button>
         </form>
       </div>
+
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        reportedUserId={partnerProfile.userId}
+        reportedUserName={partnerProfile.displayName}
+      />
     </div>
   );
 }
