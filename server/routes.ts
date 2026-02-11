@@ -304,6 +304,15 @@ export async function registerRoutes(
     res.json(profiles.map(sanitizeProfile));
   });
 
+  app.get("/api/profiles/matchmaking", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const results = await storage.getMatchmakingProfiles(userId);
+    res.json(results.map(r => ({
+      ...r,
+      profile: sanitizeProfile(r.profile),
+    })));
+  });
+
   // Get daily match
   app.get("/api/matches/daily", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

@@ -1,5 +1,5 @@
 import { useRecommendedProfiles, useCrushPicks, useSwipe } from "@/hooks/use-dating";
-import { Loader2, Sparkles, Star, Heart, X, ShieldCheck, Crown, Calendar } from "lucide-react";
+import { Loader2, Sparkles, Star, Heart, X, ShieldCheck, Crown, Calendar, Flame, HeartHandshake } from "lucide-react";
 import { Profile } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,12 @@ import { api } from "@shared/routes";
 import { AdBanner } from "@/components/AdBanner";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+
+interface MatchmakingResult {
+  profile: Profile;
+  compatibilityScore: number;
+  matchReasons: string[];
+}
 
 interface DailyMatchResponse {
   id: number;
@@ -193,6 +199,159 @@ function ProfilePreviewCard({ profile, onLike }: { profile: Profile; onLike: () 
   );
 }
 
+function CompatibilityBadge({ score, profileId }: { score: number; profileId: number }) {
+  let color = "bg-muted text-muted-foreground";
+  if (score >= 80) color = "bg-green-500/15 text-green-700 dark:text-green-400";
+  else if (score >= 60) color = "bg-blue-500/15 text-blue-700 dark:text-blue-400";
+  else if (score >= 40) color = "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+
+  return (
+    <Badge variant="secondary" className={`${color} border-none gap-1 font-bold`} data-testid={`badge-compat-score-${profileId}`}>
+      <Flame className="w-3 h-3" />
+      {score}%
+    </Badge>
+  );
+}
+
+function MatchmakingCard({ result, onAction }: { result: MatchmakingResult; onAction: () => void }) {
+  const { toast } = useToast();
+  const { mutate: swipe, isPending } = useSwipe();
+  const profile = result.profile;
+  const avatarUrl = profile.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.displayName}`;
+
+  const handleSwipe = (liked: boolean) => {
+    swipe({ swipedId: profile.userId, liked }, {
+      onSuccess: (data) => {
+        if (data.match) {
+          toast({
+            title: "It's a Match!",
+            description: `You and ${profile.displayName} liked each other!`,
+            className: "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-none",
+            duration: 5000,
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/profiles/matchmaking"] });
+        onAction();
+      }
+    });
+  };
+
+  return (
+    <Card className="overflow-visible hover-elevate" data-testid={`card-matchmaking-${profile.id}`}>
+      <div className="flex gap-4 p-4">
+        <div className="w-20 h-20 rounded-md overflow-hidden shrink-0 relative">
+          <img
+            src={avatarUrl}
+            alt={profile.displayName}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-display font-bold truncate" data-testid={`text-matchmaking-name-${profile.id}`}>
+              {profile.displayName}, {profile.age}
+            </h3>
+            <CompatibilityBadge score={result.compatibilityScore} profileId={profile.id} />
+            {profile.isVerified && (
+              <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                <span className="sr-only sm:not-sr-only">Verified</span>
+              </Badge>
+            )}
+          </div>
+          {result.matchReasons.length > 0 && (
+            <div className="flex flex-wrap gap-1" data-testid={`reasons-${profile.id}`}>
+              {result.matchReasons.slice(0, 4).map((reason, i) => (
+                <Badge key={i} variant="outline" className="text-xs font-normal" data-testid={`badge-reason-${profile.id}-${i}`}>
+                  {reason}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {profile.bio && (
+            <p className="text-xs text-muted-foreground line-clamp-1">{profile.bio}</p>
+          )}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0 justify-center">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="rounded-full text-muted-foreground"
+            onClick={() => handleSwipe(false)}
+            disabled={isPending}
+            data-testid={`button-matchmaking-pass-${profile.id}`}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+          <Button
+            size="icon"
+            className="rounded-full"
+            onClick={() => handleSwipe(true)}
+            disabled={isPending}
+            data-testid={`button-matchmaking-like-${profile.id}`}
+          >
+            <Heart className="w-4 h-4 fill-current" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function MatchmakingSection() {
+  const { data: matchmakingResults, isLoading } = useQuery<MatchmakingResult[]>({
+    queryKey: ["/api/profiles/matchmaking"],
+  });
+
+  const handleAction = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/profiles/matchmaking"] });
+    queryClient.invalidateQueries({ queryKey: [api.profiles.recommended.path] });
+    queryClient.invalidateQueries({ queryKey: [api.profiles.crushPicks.path] });
+  };
+
+  return (
+    <section data-testid="section-matchmaking">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center">
+          <HeartHandshake className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h2 className="font-display text-xl font-bold" data-testid="heading-matchmaking">Best Matches</h2>
+          <p className="text-sm text-muted-foreground" data-testid="text-matchmaking-subtitle">Based on interests, lifestyle & values</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : matchmakingResults && matchmakingResults.length > 0 ? (
+        <div className="space-y-3" data-testid="list-matchmaking">
+          {matchmakingResults.map(result => (
+            <MatchmakingCard
+              key={result.profile.id}
+              result={result}
+              onAction={handleAction}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card className="p-8 text-center" data-testid="empty-matchmaking">
+          <HeartHandshake className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground" data-testid="text-empty-matchmaking">
+            Complete your profile with interests, lifestyle, and preferences to find your best matches!
+          </p>
+          <Link href="/profile/edit">
+            <Button variant="outline" className="mt-3" data-testid="button-complete-profile">
+              Complete Profile
+            </Button>
+          </Link>
+        </Card>
+      )}
+    </section>
+  );
+}
+
 export default function Recommendations() {
   const { data: recommended, isLoading: loadingRecommended } = useRecommendedProfiles();
   const { data: crushPicks, isLoading: loadingCrushPicks } = useCrushPicks();
@@ -200,6 +359,7 @@ export default function Recommendations() {
   const handleProfileAction = () => {
     queryClient.invalidateQueries({ queryKey: [api.profiles.recommended.path] });
     queryClient.invalidateQueries({ queryKey: [api.profiles.crushPicks.path] });
+    queryClient.invalidateQueries({ queryKey: ["/api/profiles/matchmaking"] });
   };
 
   if (loadingRecommended || loadingCrushPicks) {
@@ -215,6 +375,10 @@ export default function Recommendations() {
     <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 space-y-8" data-testid="page-recommendations">
       
       <DailyMatchCard />
+
+      <MatchmakingSection />
+
+      <AdBanner size="leaderboard" className="my-2" />
 
       <section data-testid="section-crush-picks">
         <div className="flex items-center gap-2 mb-4">
@@ -244,9 +408,6 @@ export default function Recommendations() {
           </Card>
         )}
       </section>
-
-      {/* Ad Banner between sections */}
-      <AdBanner size="leaderboard" className="my-2" />
 
       <section data-testid="section-recommended">
         <div className="flex items-center gap-2 mb-4">

@@ -23,6 +23,12 @@ import {
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
 
+export interface MatchmakingResult {
+  profile: Profile;
+  compatibilityScore: number;
+  matchReasons: string[];
+}
+
 export interface IStorage {
   // Profiles
   getProfile(userId: string): Promise<Profile | undefined>;
@@ -32,6 +38,7 @@ export interface IStorage {
   getPotentialMatches(userId: string): Promise<Profile[]>;
   getRecommendedProfiles(userId: string): Promise<Profile[]>;
   getCrushPicks(userId: string): Promise<Profile[]>;
+  getMatchmakingProfiles(userId: string): Promise<MatchmakingResult[]>;
   updateStripeCustomer(userId: string, customerId: string): Promise<void>;
   updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void>;
   getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined>;
@@ -262,6 +269,155 @@ export class DatabaseStorage implements IStorage {
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
       .map(s => s.profile);
+  }
+
+  async getMatchmakingProfiles(userId: string): Promise<MatchmakingResult[]> {
+    const myProfile = await this.getProfile(userId);
+    if (!myProfile) return [];
+
+    const swiped = await db
+      .select({ swipedId: swipes.swipedId })
+      .from(swipes)
+      .where(eq(swipes.swiperId, userId));
+    
+    const swipedIds = swiped.map(s => s.swipedId);
+    const blockedIds = await this.getBlockedUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
+
+    let potentialProfiles: Profile[];
+    if (myProfile.interestedIn !== 'everyone') {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(and(
+          notInArray(profiles.userId, excludeIds),
+          eq(profiles.gender, myProfile.interestedIn)
+        ));
+    } else {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(notInArray(profiles.userId, excludeIds));
+    }
+
+    const results: MatchmakingResult[] = potentialProfiles.map(candidate => {
+      let totalScore = 0;
+      let maxScore = 0;
+      const reasons: string[] = [];
+
+      const myInterests = myProfile.interests || [];
+      const theirInterests = candidate.interests || [];
+      if (myInterests.length > 0 && theirInterests.length > 0) {
+        maxScore += 25;
+        const common = myInterests.filter(i => theirInterests.includes(i));
+        const interestScore = Math.min(common.length / Math.max(myInterests.length, 1), 1);
+        totalScore += interestScore * 25;
+        if (common.length >= 3) reasons.push(`${common.length} shared interests`);
+        else if (common.length > 0) reasons.push(`Shares ${common.slice(0, 3).join(", ")}`);
+      }
+
+      const lifestyleFields: { field: keyof Profile; label: string }[] = [
+        { field: "drinking", label: "Drinking habits" },
+        { field: "smoking", label: "Smoking habits" },
+        { field: "exercise", label: "Exercise habits" },
+        { field: "diet", label: "Diet" },
+      ];
+
+      let lifestyleMatches = 0;
+      let lifestyleTotal = 0;
+      for (const { field } of lifestyleFields) {
+        const myVal = myProfile[field] as string | null;
+        const theirVal = candidate[field] as string | null;
+        if (myVal && theirVal) {
+          lifestyleTotal++;
+          if (myVal === theirVal) {
+            lifestyleMatches++;
+          }
+        }
+      }
+      if (lifestyleTotal > 0) {
+        maxScore += 20;
+        totalScore += (lifestyleMatches / lifestyleTotal) * 20;
+        if (lifestyleMatches >= 3) reasons.push("Similar lifestyle");
+        else if (lifestyleMatches >= 2) reasons.push("Compatible lifestyle");
+      }
+
+      if (myProfile.relationshipGoal && candidate.relationshipGoal) {
+        maxScore += 15;
+        if (myProfile.relationshipGoal === candidate.relationshipGoal) {
+          totalScore += 15;
+          const goalLabels: Record<string, string> = {
+            casual: "Both looking for something casual",
+            serious: "Both seeking a serious relationship",
+            marriage: "Both looking for marriage",
+            not_sure: "Both open to possibilities",
+          };
+          reasons.push(goalLabels[myProfile.relationshipGoal] || "Same relationship goals");
+        }
+      }
+
+      if (myProfile.religion && candidate.religion) {
+        maxScore += 10;
+        if (myProfile.religion === candidate.religion) {
+          totalScore += 10;
+          reasons.push("Same faith");
+        }
+      }
+
+      if (myProfile.familyPlans && candidate.familyPlans) {
+        maxScore += 10;
+        const compatible = myProfile.familyPlans === candidate.familyPlans ||
+          (["want_kids", "open_to_kids"].includes(myProfile.familyPlans) &&
+           ["want_kids", "open_to_kids"].includes(candidate.familyPlans));
+        if (compatible) {
+          totalScore += 10;
+          reasons.push("Compatible family plans");
+        }
+      }
+
+      if (myProfile.education && candidate.education) {
+        maxScore += 5;
+        if (myProfile.education === candidate.education) {
+          totalScore += 5;
+          reasons.push("Same education level");
+        }
+      }
+
+      if (myProfile.pets && candidate.pets) {
+        maxScore += 5;
+        if (myProfile.pets === candidate.pets) {
+          totalScore += 5;
+          reasons.push("Same pet preferences");
+        }
+      }
+
+      const myLangs = myProfile.languages || [];
+      const theirLangs = candidate.languages || [];
+      if (myLangs.length > 0 && theirLangs.length > 0) {
+        maxScore += 5;
+        const commonLangs = myLangs.filter(l => theirLangs.includes(l));
+        if (commonLangs.length > 0) {
+          totalScore += 5;
+          reasons.push(`Speaks ${commonLangs[0]}`);
+        }
+      }
+
+      maxScore += 5;
+      if (candidate.isVerified) {
+        totalScore += 3;
+        reasons.push("Verified profile");
+      }
+      if (candidate.photoUrl) totalScore += 2;
+
+      const compatibilityScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+      return { profile: candidate, compatibilityScore, matchReasons: reasons };
+    });
+
+    return results
+      .filter(r => r.compatibilityScore >= 15 && r.matchReasons.length >= 1)
+      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+      .slice(0, 20);
   }
 
   async createSwipe(swipe: InsertSwipe): Promise<void> {

@@ -130,6 +130,21 @@ Preferred communication style: Simple, everyday language.
   - Verification prompts on Feed and Edit Profile pages for unverified users
   - Profile fields: `isVerified`, `verificationPhotoUrl`, `verificationStatus`
 
+### February 11, 2026
+- **Matchmaking Feature**: Comprehensive compatibility-based matchmaking system
+  - Multi-dimensional scoring: interests (25pts), lifestyle (20pts), relationship goals (15pts), religion (10pts), family plans (10pts), education (5pts), pets (5pts), languages (5pts), profile quality (5pts)
+  - Only scores categories where both users have data (avoids penalizing incomplete profiles)
+  - "Best Matches" section on For You page with compatibility percentage and match reasons
+  - Each match card shows colored compatibility badge (green 80%+, blue 60%+, amber 40%+)
+  - Match reason badges explain why each profile was recommended
+  - Like/pass actions directly on matchmaking cards
+  - API endpoint: GET `/api/profiles/matchmaking`
+- **User Blocking**: Block/unblock users with bidirectional filtering
+  - Blocked Users card on Preferences page with unblock functionality
+  - Block & Report combined option in ReportDialog
+  - Block check on message sending (403 if blocked)
+  - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
+
 ### January 28, 2026
 - **Multiple Membership Tiers**: Expanded from single premium to three-tier subscription system
   - Basic ($4.99), Pro ($9.99), Elite ($19.99) monthly plans
