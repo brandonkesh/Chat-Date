@@ -4,13 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { VoiceIntro } from "@/components/VoiceIntro";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import type { Profile, Block } from "@shared/schema";
 
 function formatIdentityValue(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -737,6 +740,95 @@ export default function Preferences() {
         </CardContent>
       </Card>
 
+      <BlockedUsersCard />
+
     </div>
+  );
+}
+
+function BlockedUsersCard() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: blockedUsers, isLoading } = useQuery<{ block: Block; profile: Profile }[]>({
+    queryKey: ["/api/blocks"],
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      await apiRequest("DELETE", `/api/blocks/${userId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "User Unblocked", description: "This person can see your profile and contact you again." });
+      queryClient.invalidateQueries({ queryKey: ["/api/blocks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+    },
+    onError: () => {
+      toast({ title: "Failed", description: "Could not unblock this user.", variant: "destructive" });
+    },
+  });
+
+  const count = blockedUsers?.length || 0;
+
+  return (
+    <Card data-testid="card-blocked-users">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <div className="flex items-center gap-2">
+          <Ban className="w-5 h-5 text-destructive" />
+          <div>
+            <CardTitle className="text-base">Blocked Users</CardTitle>
+            <CardDescription className="text-xs">
+              {count === 0 ? "No blocked users" : `${count} blocked`}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : count === 0 ? (
+          <p className="text-sm text-muted-foreground py-2" data-testid="text-no-blocked-users">
+            You haven't blocked anyone. Blocked users can't see your profile or contact you.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {blockedUsers!.map(({ block, profile: blockedProfile }) => (
+              <div
+                key={block.id}
+                className="flex items-center justify-between gap-3 p-2 rounded-md border border-border"
+                data-testid={`blocked-user-${blockedProfile.userId}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="w-9 h-9 shrink-0">
+                    <AvatarImage src={blockedProfile.photoUrl || undefined} alt={blockedProfile.displayName} />
+                    <AvatarFallback>
+                      <UserX className="w-4 h-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{blockedProfile.displayName}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => unblockMutation.mutate(blockedProfile.userId)}
+                  disabled={unblockMutation.isPending}
+                  data-testid={`button-unblock-${blockedProfile.userId}`}
+                >
+                  {unblockMutation.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    "Unblock"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
