@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX, Lock, Eye, EyeOff, KeyRound, Copy } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -54,6 +55,73 @@ export default function Preferences() {
 
   const { data: twoFactorStatus } = useQuery<{ enabled: boolean; verified: boolean }>({
     queryKey: ["/api/2fa/status"],
+  });
+
+  const queryClientRef = useQueryClient();
+  const { data: passwordStatus } = useQuery<{ hasPassword: boolean; backupCodesCount: number }>({
+    queryKey: ["/api/password/status"],
+  });
+
+  const [passwordMode, setPasswordMode] = useState<"idle" | "set" | "change" | "remove">("idle");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const res = await apiRequest("POST", "/api/password/set", { password });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setBackupCodes(data.backupCodes);
+      queryClientRef.invalidateQueries({ queryKey: ["/api/password/status"] });
+      queryClientRef.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      toast({ title: "Password Set", description: "Save your backup codes!" });
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMode("idle");
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to set password.", variant: "destructive" });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) => {
+      const res = await apiRequest("POST", "/api/password/change", { currentPassword, newPassword });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClientRef.invalidateQueries({ queryKey: ["/api/password/status"] });
+      toast({ title: "Password Changed" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMode("idle");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Current password is incorrect.", variant: "destructive" });
+    },
+  });
+
+  const removePasswordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const res = await apiRequest("POST", "/api/password/remove", { password });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClientRef.invalidateQueries({ queryKey: ["/api/password/status"] });
+      queryClientRef.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      toast({ title: "Password Removed" });
+      setCurrentPassword("");
+      setPasswordMode("idle");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Password is incorrect.", variant: "destructive" });
+    },
   });
 
   // Helper to format height in feet and inches
@@ -246,6 +314,277 @@ export default function Preferences() {
                   Verify Age
                 </Button>
               </Link>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-app-lock">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${passwordStatus?.hasPassword ? 'bg-green-500/10' : 'bg-muted'}`}>
+              <Lock className={`w-4 h-4 ${passwordStatus?.hasPassword ? 'text-green-500' : 'text-muted-foreground'}`} />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">App Lock Password</CardTitle>
+              <CardDescription>
+                {passwordStatus?.hasPassword ? "Your app is protected with a password" : "Add a password to protect your privacy"}
+              </CardDescription>
+            </div>
+            {passwordStatus?.hasPassword && (
+              <Badge variant="secondary" data-testid="badge-password-enabled">
+                <Check className="w-3 h-3 mr-1" />
+                Active
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {backupCodes && (
+              <div className="bg-muted p-4 rounded-md space-y-3" data-testid="backup-codes-display">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">Your Backup Codes</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Save these codes somewhere safe. You can use them to recover your account if you forget your password. Each code can only be used once.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {backupCodes.map((code, idx) => (
+                    <div key={idx} className="font-mono text-sm bg-background px-3 py-1.5 rounded border border-border text-center" data-testid={`text-backup-code-${idx}`}>
+                      {code}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(backupCodes.join("\n"));
+                    toast({ title: "Copied to clipboard" });
+                  }}
+                  data-testid="button-copy-backup-codes"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy All Codes
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setBackupCodes(null)}
+                  data-testid="button-dismiss-backup-codes"
+                >
+                  I've Saved My Codes
+                </Button>
+              </div>
+            )}
+
+            {passwordMode === "idle" && !backupCodes && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <span className={`text-sm font-medium ${passwordStatus?.hasPassword ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} data-testid="text-password-status">
+                    {passwordStatus?.hasPassword ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+                {passwordStatus?.hasPassword && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Backup Codes</span>
+                    <span className="text-sm font-medium" data-testid="text-backup-codes-count">{passwordStatus.backupCodesCount} remaining</span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {passwordStatus?.hasPassword
+                    ? "You'll need to enter your password each time you open the app."
+                    : "Set a password to lock your app. You'll be asked for it each time you open Crush."}
+                </p>
+                {!passwordStatus?.hasPassword ? (
+                  <Button
+                    className="w-full mt-2"
+                    onClick={() => setPasswordMode("set")}
+                    data-testid="button-set-password"
+                  >
+                    <Lock className="w-4 h-4 mr-2" />
+                    Set Password
+                  </Button>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setPasswordMode("change")}
+                      data-testid="button-change-password"
+                    >
+                      Change Password
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setPasswordMode("remove")}
+                      data-testid="button-remove-password"
+                    >
+                      Remove Password
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {passwordMode === "set" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="new-pw" className="text-sm">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="new-pw"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="At least 4 characters"
+                      data-testid="input-new-password"
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowNewPassword(!showNewPassword)}>
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="confirm-pw" className="text-sm">Confirm Password</Label>
+                  <Input
+                    id="confirm-pw"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter your password"
+                    data-testid="input-confirm-password"
+                  />
+                </div>
+                {newPassword.length > 0 && newPassword.length < 4 && (
+                  <p className="text-xs text-destructive">Password must be at least 4 characters.</p>
+                )}
+                {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+                  <p className="text-xs text-destructive">Passwords don't match.</p>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setPasswordMode("idle"); setNewPassword(""); setConfirmPassword(""); }} data-testid="button-cancel-set-password">
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    disabled={newPassword.length < 4 || newPassword !== confirmPassword || setPasswordMutation.isPending}
+                    onClick={() => setPasswordMutation.mutate(newPassword)}
+                    data-testid="button-save-password"
+                  >
+                    {setPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set Password"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {passwordMode === "change" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="current-pw" className="text-sm">Current Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="current-pw"
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      data-testid="input-current-password"
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>
+                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="new-pw-change" className="text-sm">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="new-pw-change"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="At least 4 characters"
+                      data-testid="input-new-password-change"
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowNewPassword(!showNewPassword)}>
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="confirm-pw-change" className="text-sm">Confirm New Password</Label>
+                  <Input
+                    id="confirm-pw-change"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    data-testid="input-confirm-password-change"
+                  />
+                </div>
+                {newPassword.length > 0 && newPassword.length < 4 && (
+                  <p className="text-xs text-destructive">Password must be at least 4 characters.</p>
+                )}
+                {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+                  <p className="text-xs text-destructive">Passwords don't match.</p>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setPasswordMode("idle"); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }} data-testid="button-cancel-change-password">
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    disabled={!currentPassword || newPassword.length < 4 || newPassword !== confirmPassword || changePasswordMutation.isPending}
+                    onClick={() => changePasswordMutation.mutate({ currentPassword, newPassword })}
+                    data-testid="button-save-change-password"
+                  >
+                    {changePasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Change Password"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {passwordMode === "remove" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Enter your current password to remove the app lock.</p>
+                <div className="space-y-1">
+                  <Label htmlFor="remove-pw" className="text-sm">Current Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="remove-pw"
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      data-testid="input-remove-password"
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>
+                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => { setPasswordMode("idle"); setCurrentPassword(""); }} data-testid="button-cancel-remove-password">
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    disabled={!currentPassword || removePasswordMutation.isPending}
+                    onClick={() => removePasswordMutation.mutate(currentPassword)}
+                    data-testid="button-confirm-remove-password"
+                  >
+                    {removePasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Remove Password"}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </CardContent>

@@ -28,12 +28,18 @@ import TwoFactorSetup from "@/pages/TwoFactorSetup";
 import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
 import EmailVerification from "@/pages/EmailVerification";
 import MicroDate from "@/pages/MicroDate";
+import AppLock from "@/pages/AppLock";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
 type TwoFactorStatus = {
   enabled: boolean;
   verified: boolean;
+};
+
+type PasswordStatus = {
+  hasPassword: boolean;
+  appLockVerified: boolean;
 };
 
 function ProtectedRoute({ component: Component, skip2FA = false }: { component: React.ComponentType; skip2FA?: boolean }) {
@@ -44,6 +50,11 @@ function ProtectedRoute({ component: Component, skip2FA = false }: { component: 
   const { data: twoFactorStatus, isLoading: twoFALoading } = useQuery<TwoFactorStatus>({
     queryKey: ["/api/2fa/status"],
     enabled: !!user && !!profile && !skip2FA,
+  });
+
+  const { data: passwordStatus, isLoading: passwordLoading } = useQuery<PasswordStatus>({
+    queryKey: ["/api/password/status"],
+    enabled: !!user && !!profile,
   });
 
   useEffect(() => {
@@ -75,6 +86,18 @@ function ProtectedRoute({ component: Component, skip2FA = false }: { component: 
 
   if (!skip2FA && twoFactorStatus?.enabled && !twoFactorStatus?.verified) {
     return <TwoFactorChallenge />;
+  }
+
+  if (passwordLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (passwordStatus?.hasPassword && !passwordStatus?.appLockVerified) {
+    return <AppLock onUnlock={() => queryClient.invalidateQueries({ queryKey: ["/api/password/status"] })} />;
   }
 
   return <Component />;

@@ -19,8 +19,8 @@ import QRCode from "qrcode";
 
 function sanitizeProfile(profile: any) {
   if (!profile) return profile;
-  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, ...safe } = profile;
-  return safe;
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, ...safe } = profile;
+  return { ...safe, hasPassword: !!passwordHash };
 }
 
 export async function registerRoutes(
@@ -210,6 +210,137 @@ export async function registerRoutes(
     }
     (req.session as any).twoFactorVerified = true;
     res.json({ success: true });
+  });
+
+  // === APP LOCK PASSWORD ===
+
+  app.post("/api/password/set", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { password } = req.body;
+    if (!password || typeof password !== "string" || password.length < 4) {
+      return res.status(400).json({ message: "Password must be at least 4 characters." });
+    }
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found." });
+    }
+    if (profile.passwordHash) {
+      return res.status(400).json({ message: "Password already set. Use the change password endpoint." });
+    }
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.hash(password, 10);
+    const codes = Array.from({ length: 6 }, () => crypto.randomUUID().slice(0, 8).toUpperCase());
+    const hashedCodes = await Promise.all(codes.map(c => bcrypt.hash(c, 10)));
+    await db.update(profiles).set({ passwordHash: hash, backupCodes: hashedCodes }).where(eq(profiles.userId, userId));
+    res.json({ success: true, backupCodes: codes, message: "Password set. Save your backup codes in a safe place." });
+  });
+
+  app.post("/api/password/change", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 4) {
+      return res.status(400).json({ message: "New password must be at least 4 characters." });
+    }
+    const profile = await storage.getProfile(userId);
+    if (!profile || !profile.passwordHash) {
+      return res.status(400).json({ message: "No password set." });
+    }
+    const bcrypt = await import("bcryptjs");
+    const valid = await bcrypt.compare(currentPassword || "", profile.passwordHash);
+    if (!valid) {
+      return res.status(403).json({ message: "Current password is incorrect." });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.update(profiles).set({ passwordHash: hash }).where(eq(profiles.userId, userId));
+    res.json({ success: true, message: "Password changed successfully." });
+  });
+
+  app.post("/api/password/remove", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { password } = req.body;
+    const profile = await storage.getProfile(userId);
+    if (!profile || !profile.passwordHash) {
+      return res.status(400).json({ message: "No password set." });
+    }
+    const bcrypt = await import("bcryptjs");
+    const valid = await bcrypt.compare(password || "", profile.passwordHash);
+    if (!valid) {
+      return res.status(403).json({ message: "Password is incorrect." });
+    }
+    await db.update(profiles).set({ passwordHash: null, backupCodes: null }).where(eq(profiles.userId, userId));
+    (req.session as any).appLockVerified = true;
+    res.json({ success: true, message: "Password removed." });
+  });
+
+  app.post("/api/password/verify", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { password } = req.body;
+    const profile = await storage.getProfile(userId);
+    if (!profile || !profile.passwordHash) {
+      return res.json({ success: true });
+    }
+    const bcrypt = await import("bcryptjs");
+    const valid = await bcrypt.compare(password || "", profile.passwordHash);
+    if (!valid) {
+      return res.status(403).json({ message: "Incorrect password." });
+    }
+    (req.session as any).appLockVerified = true;
+    res.json({ success: true });
+  });
+
+  app.post("/api/password/recover", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { backupCode } = req.body;
+    if (!backupCode || typeof backupCode !== "string") {
+      return res.status(400).json({ message: "Backup code is required." });
+    }
+    const profile = await storage.getProfile(userId);
+    if (!profile || !profile.passwordHash || !profile.backupCodes?.length) {
+      return res.status(400).json({ message: "No password or backup codes found." });
+    }
+    const bcrypt = await import("bcryptjs");
+    const normalizedCode = backupCode.trim().toUpperCase();
+    let matchIndex = -1;
+    for (let i = 0; i < profile.backupCodes.length; i++) {
+      const match = await bcrypt.compare(normalizedCode, profile.backupCodes[i]);
+      if (match) { matchIndex = i; break; }
+    }
+    if (matchIndex === -1) {
+      return res.status(403).json({ message: "Invalid backup code." });
+    }
+    const remainingCodes = [...profile.backupCodes];
+    remainingCodes.splice(matchIndex, 1);
+    await db.update(profiles).set({ passwordHash: null, backupCodes: remainingCodes.length > 0 ? remainingCodes : null }).where(eq(profiles.userId, userId));
+    (req.session as any).appLockVerified = true;
+    res.json({ success: true, message: "Password removed using backup code. You can set a new password.", remainingCodes: remainingCodes.length });
+  });
+
+  app.get("/api/password/status", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found." });
+    }
+    res.json({
+      hasPassword: !!profile.passwordHash,
+      hasBackupCodes: !!(profile.backupCodes && profile.backupCodes.length > 0),
+      backupCodesCount: profile.backupCodes?.length || 0,
+      appLockVerified: !!(req.session as any).appLockVerified || !profile.passwordHash,
+    });
+  });
+
+  // === APP LOCK MIDDLEWARE ===
+  const appLockExemptPrefixes = [
+    "/password/", "/2fa/", "/auth/", "/login", "/logout", "/callback",
+  ];
+  app.use("/api", async (req: any, res: any, next: any) => {
+    if (req.path === "/profiles/me" || appLockExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    if (!req.user?.claims?.sub) return next();
+    const profile = await storage.getProfile(req.user.claims.sub);
+    if (profile?.passwordHash && !(req.session as any).appLockVerified) {
+      return res.status(423).json({ message: "App is locked. Please enter your password." });
+    }
+    next();
   });
 
   // === EMAIL VERIFICATION ===

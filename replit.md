@@ -144,6 +144,14 @@ Preferred communication style: Simple, everyday language.
   - Block & Report combined option in ReportDialog
   - Block check on message sending (403 if blocked)
   - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
+- **App Lock Password**: Password protection and recovery for the app
+  - Users can set/change/remove a password in Preferences
+  - App Lock screen shown when opening app if password is set
+  - Password recovery via one-time backup codes (6 codes generated on setup)
+  - Server-side enforcement: sensitive API routes return 423 when locked
+  - Schema fields: `passwordHash`, `backupCodes` on profiles
+  - API endpoints: POST `/api/password/set`, `/change`, `/remove`, `/verify`, `/recover`, GET `/status`
+  - Exempt routes: password, 2FA, auth, profiles/me endpoints bypass lock check
 - **Micro-Date Feature**: Built-in 5-minute virtual dates between matched users
   - Activity catalog: icebreakers, would-you-rather, this-or-that, rapid-fire, hot takes, word association
   - 10 randomized activities per session from different categories
