@@ -1086,7 +1086,11 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Match ID required" });
     }
     
-    // Verify user is part of the match
+    const userProfile = await storage.getProfile(userId);
+    if (!userProfile || userProfile.membershipTier !== 'elite') {
+      return res.status(403).json({ error: "Video chat is an Elite feature. Upgrade to Elite to access video calls." });
+    }
+
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
       return res.status(403).json({ error: "Not authorized for this call" });

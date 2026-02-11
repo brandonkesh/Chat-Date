@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -128,11 +128,20 @@ export default function Chat() {
           </Button>
         )}
 
-        <Link href={`/video/${matchId}`}>
-          <Button variant="ghost" size="icon" data-testid="button-video-call">
-            <Video className="w-5 h-5" />
-          </Button>
-        </Link>
+        {profile?.membershipTier === 'elite' ? (
+          <Link href={`/video/${matchId}`}>
+            <Button variant="ghost" size="icon" data-testid="button-video-call">
+              <Video className="w-5 h-5" />
+            </Button>
+          </Link>
+        ) : (
+          <Link href="/premium">
+            <Button variant="ghost" size="icon" className="relative" data-testid="button-video-call-locked">
+              <Video className="w-5 h-5 text-muted-foreground" />
+              <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
+            </Button>
+          </Link>
+        )}
 
         <Button
           variant="ghost"
