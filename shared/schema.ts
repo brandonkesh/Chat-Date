@@ -168,6 +168,16 @@ export const insertReportSchema = createInsertSchema(reports).omit({ id: true, c
 export type InsertReport = z.infer<typeof insertReportSchema>;
 export type Report = typeof reports.$inferSelect;
 
+// === BLOCKS ===
+export const blocks = pgTable("blocks", {
+  id: serial("id").primaryKey(),
+  blockerId: varchar("blocker_id").notNull().references(() => users.id),
+  blockedUserId: varchar("blocked_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Block = typeof blocks.$inferSelect;
+
 // === RELATIONS ===
 export const profilesRelations = relations(profiles, ({ one }) => ({
   user: one(users, {

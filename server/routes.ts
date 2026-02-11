@@ -515,6 +515,62 @@ export async function registerRoutes(
     res.json({ reported });
   });
 
+  // === BLOCKS ===
+
+  app.post("/api/blocks", isAuthenticated, async (req: any, res) => {
+    const blockerId = req.user.claims.sub;
+    try {
+      const schema = z.object({ blockedUserId: z.string().min(1) });
+      const { blockedUserId } = schema.parse(req.body);
+
+      if (blockedUserId === blockerId) {
+        return res.status(400).json({ message: "You cannot block yourself." });
+      }
+
+      const already = await storage.isBlocked(blockerId, blockedUserId);
+      if (already) {
+        return res.status(409).json({ message: "User is already blocked." });
+      }
+
+      const blockedProfile = await storage.getProfile(blockedUserId);
+      if (!blockedProfile) {
+        return res.status(404).json({ message: "User not found." });
+      }
+
+      await storage.blockUser(blockerId, blockedUserId);
+      res.status(201).json({ success: true, message: "User blocked successfully." });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to block user." });
+    }
+  });
+
+  app.delete("/api/blocks/:userId", isAuthenticated, async (req: any, res) => {
+    const blockerId = req.user.claims.sub;
+    const blockedUserId = req.params.userId;
+    await storage.unblockUser(blockerId, blockedUserId);
+    res.json({ success: true, message: "User unblocked." });
+  });
+
+  app.get("/api/blocks", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const blockedUsers = await storage.getBlockedUsers(userId);
+    const sanitized = blockedUsers.map(({ block, profile }) => ({
+      block,
+      profile: sanitizeProfile(profile),
+    }));
+    res.json(sanitized);
+  });
+
+  app.get("/api/blocks/check/:userId", isAuthenticated, async (req: any, res) => {
+    const blockerId = req.user.claims.sub;
+    const blockedUserId = req.params.userId;
+    const blocked = await storage.isBlocked(blockerId, blockedUserId);
+    res.json({ blocked });
+  });
+
   // === VERIFICATION ===
   
   // Submit verification photo
@@ -665,10 +721,15 @@ export async function registerRoutes(
     const userId = req.user.claims.sub;
     const matchId = Number(req.params.id);
 
-    // Check participation
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
       return res.status(404).json({ message: "Match not found" });
+    }
+
+    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const blockedEither = await storage.isBlockedEither(userId, otherUserId);
+    if (blockedEither) {
+      return res.status(403).json({ message: "You cannot message this user." });
     }
 
     // Check Trial/Premium Status

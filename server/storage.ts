@@ -6,6 +6,7 @@ import {
   messages,
   swipes,
   reports,
+  blocks,
   type User,
   type Profile,
   type InsertProfile,
@@ -17,6 +18,7 @@ import {
   type VerificationStatus,
   type Report,
   type InsertReport,
+  type Block,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -61,6 +63,14 @@ export interface IStorage {
   createReport(reporterId: string, report: InsertReport): Promise<Report>;
   hasReported(reporterId: string, reportedUserId: string): Promise<boolean>;
   getReportsByUser(reporterId: string): Promise<Report[]>;
+
+  // Blocks
+  blockUser(blockerId: string, blockedUserId: string): Promise<Block>;
+  unblockUser(blockerId: string, blockedUserId: string): Promise<void>;
+  isBlocked(blockerId: string, blockedUserId: string): Promise<boolean>;
+  isBlockedEither(userId1: string, userId2: string): Promise<boolean>;
+  getBlockedUserIds(userId: string): Promise<string[]>;
+  getBlockedUsers(userId: string): Promise<{ block: Block; profile: Profile }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -132,26 +142,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPotentialMatches(userId: string): Promise<Profile[]> {
-    // Get current user's profile to know preferences
     const myProfile = await this.getProfile(userId);
     if (!myProfile) return [];
 
-    // Get IDs already swiped
     const swiped = await db
       .select({ swipedId: swipes.swipedId })
       .from(swipes)
       .where(eq(swipes.swiperId, userId));
     
     const swipedIds = swiped.map(s => s.swipedId);
-    swipedIds.push(userId); // Exclude self
+    const blockedIds = await this.getBlockedUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
 
-    // Build query with gender filter
     if (myProfile.interestedIn !== 'everyone') {
       return await db
         .select()
         .from(profiles)
         .where(and(
-          notInArray(profiles.userId, swipedIds),
+          notInArray(profiles.userId, excludeIds),
           eq(profiles.gender, myProfile.interestedIn)
         ));
     }
@@ -159,38 +167,36 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(profiles)
-      .where(notInArray(profiles.userId, swipedIds));
+      .where(notInArray(profiles.userId, excludeIds));
   }
 
   async getRecommendedProfiles(userId: string): Promise<Profile[]> {
-    // Get current user's profile to know preferences and interests
     const myProfile = await this.getProfile(userId);
     if (!myProfile) return [];
 
-    // Get IDs already swiped
     const swiped = await db
       .select({ swipedId: swipes.swipedId })
       .from(swipes)
       .where(eq(swipes.swiperId, userId));
     
     const swipedIds = swiped.map(s => s.swipedId);
-    swipedIds.push(userId); // Exclude self
+    const blockedIds = await this.getBlockedUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
 
-    // Get potential profiles matching gender preference
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
       potentialProfiles = await db
         .select()
         .from(profiles)
         .where(and(
-          notInArray(profiles.userId, swipedIds),
+          notInArray(profiles.userId, excludeIds),
           eq(profiles.gender, myProfile.interestedIn)
         ));
     } else {
       potentialProfiles = await db
         .select()
         .from(profiles)
-        .where(notInArray(profiles.userId, swipedIds));
+        .where(notInArray(profiles.userId, excludeIds));
     }
 
     // Score and sort by matching interests
@@ -210,34 +216,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCrushPicks(userId: string): Promise<Profile[]> {
-    // Get current user's profile to know preferences
     const myProfile = await this.getProfile(userId);
     if (!myProfile) return [];
 
-    // Get IDs already swiped
     const swiped = await db
       .select({ swipedId: swipes.swipedId })
       .from(swipes)
       .where(eq(swipes.swiperId, userId));
     
     const swipedIds = swiped.map(s => s.swipedId);
-    swipedIds.push(userId); // Exclude self
+    const blockedIds = await this.getBlockedUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
 
-    // Get potential profiles matching gender preference
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
       potentialProfiles = await db
         .select()
         .from(profiles)
         .where(and(
-          notInArray(profiles.userId, swipedIds),
+          notInArray(profiles.userId, excludeIds),
           eq(profiles.gender, myProfile.interestedIn)
         ));
     } else {
       potentialProfiles = await db
         .select()
         .from(profiles)
-        .where(notInArray(profiles.userId, swipedIds));
+        .where(notInArray(profiles.userId, excludeIds));
     }
 
     // Crush picks: prioritize verified users and premium members
@@ -442,6 +446,68 @@ export class DatabaseStorage implements IStorage {
 
   async getReportsByUser(reporterId: string): Promise<Report[]> {
     return db.select().from(reports).where(eq(reports.reporterId, reporterId)).orderBy(desc(reports.createdAt));
+  }
+
+  async blockUser(blockerId: string, blockedUserId: string): Promise<Block> {
+    const [created] = await db
+      .insert(blocks)
+      .values({ blockerId, blockedUserId })
+      .returning();
+    return created;
+  }
+
+  async unblockUser(blockerId: string, blockedUserId: string): Promise<void> {
+    await db
+      .delete(blocks)
+      .where(and(eq(blocks.blockerId, blockerId), eq(blocks.blockedUserId, blockedUserId)));
+  }
+
+  async isBlocked(blockerId: string, blockedUserId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(blocks)
+      .where(and(eq(blocks.blockerId, blockerId), eq(blocks.blockedUserId, blockedUserId)));
+    return !!existing;
+  }
+
+  async isBlockedEither(userId1: string, userId2: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(blocks)
+      .where(or(
+        and(eq(blocks.blockerId, userId1), eq(blocks.blockedUserId, userId2)),
+        and(eq(blocks.blockerId, userId2), eq(blocks.blockedUserId, userId1))
+      ));
+    return !!existing;
+  }
+
+  async getBlockedUserIds(userId: string): Promise<string[]> {
+    const blocked = await db
+      .select({ blockedUserId: blocks.blockedUserId })
+      .from(blocks)
+      .where(eq(blocks.blockerId, userId));
+    const blockedBy = await db
+      .select({ blockerId: blocks.blockerId })
+      .from(blocks)
+      .where(eq(blocks.blockedUserId, userId));
+    return [...blocked.map(b => b.blockedUserId), ...blockedBy.map(b => b.blockerId)];
+  }
+
+  async getBlockedUsers(userId: string): Promise<{ block: Block; profile: Profile }[]> {
+    const blockedRows = await db
+      .select()
+      .from(blocks)
+      .where(eq(blocks.blockerId, userId))
+      .orderBy(desc(blocks.createdAt));
+    
+    const results: { block: Block; profile: Profile }[] = [];
+    for (const block of blockedRows) {
+      const profile = await this.getProfile(block.blockedUserId);
+      if (profile) {
+        results.push({ block, profile });
+      }
+    }
+    return results;
   }
 }
 
