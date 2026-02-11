@@ -72,6 +72,9 @@ export const profiles = pgTable("profiles", {
   astrologicalSign: text("astrological_sign"), // 'aries', 'taurus', 'gemini', etc.
   // Voice intro
   voiceIntroUrl: text("voice_intro_url"),
+  // App lock password
+  passwordHash: text("password_hash"),
+  backupCodes: text("backup_codes").array(),
   // Two-factor authentication
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecret: text("two_factor_secret"),
@@ -92,6 +95,8 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   verificationPhotoUrl: true,
   verificationStatus: true,
   ageVerified: true,
+  passwordHash: true,
+  backupCodes: true,
   twoFactorEnabled: true,
   twoFactorSecret: true,
   emailVerified: true,
