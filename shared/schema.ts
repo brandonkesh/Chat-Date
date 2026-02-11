@@ -140,6 +140,34 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 
+// === REPORTS ===
+export const reportReasons = [
+  'inappropriate_photos',
+  'harassment',
+  'fake_profile',
+  'spam',
+  'underage',
+  'offensive_content',
+  'scam',
+  'other',
+] as const;
+
+export type ReportReason = typeof reportReasons[number];
+
+export const reports = pgTable("reports", {
+  id: serial("id").primaryKey(),
+  reporterId: varchar("reporter_id").notNull().references(() => users.id),
+  reportedUserId: varchar("reported_user_id").notNull().references(() => users.id),
+  reason: text("reason").notNull(),
+  details: text("details"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertReportSchema = createInsertSchema(reports).omit({ id: true, createdAt: true, reporterId: true, status: true });
+export type InsertReport = z.infer<typeof insertReportSchema>;
+export type Report = typeof reports.$inferSelect;
+
 // === RELATIONS ===
 export const profilesRelations = relations(profiles, ({ one }) => ({
   user: one(users, {

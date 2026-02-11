@@ -467,6 +467,54 @@ export async function registerRoutes(
     res.json(sanitizeProfile(profile));
   });
 
+  // === REPORTS ===
+
+  app.post("/api/reports", isAuthenticated, async (req: any, res) => {
+    const reporterId = req.user.claims.sub;
+    try {
+      const schema = z.object({
+        reportedUserId: z.string().min(1),
+        reason: z.enum(['inappropriate_photos', 'harassment', 'fake_profile', 'spam', 'underage', 'offensive_content', 'scam', 'other']),
+        details: z.string().max(1000).optional(),
+      });
+      const { reportedUserId, reason, details } = schema.parse(req.body);
+
+      if (reportedUserId === reporterId) {
+        return res.status(400).json({ message: "You cannot report yourself." });
+      }
+
+      const alreadyReported = await storage.hasReported(reporterId, reportedUserId);
+      if (alreadyReported) {
+        return res.status(409).json({ message: "You have already reported this user." });
+      }
+
+      const reportedProfile = await storage.getProfile(reportedUserId);
+      if (!reportedProfile) {
+        return res.status(404).json({ message: "User not found." });
+      }
+
+      const report = await storage.createReport(reporterId, {
+        reportedUserId,
+        reason,
+        details: details || null,
+      });
+
+      res.status(201).json({ success: true, message: "Report submitted. Our team will review it shortly." });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to submit report." });
+    }
+  });
+
+  app.get("/api/reports/check/:userId", isAuthenticated, async (req: any, res) => {
+    const reporterId = req.user.claims.sub;
+    const reportedUserId = req.params.userId;
+    const reported = await storage.hasReported(reporterId, reportedUserId);
+    res.json({ reported });
+  });
+
   // === VERIFICATION ===
   
   // Submit verification photo

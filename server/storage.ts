@@ -5,6 +5,7 @@ import {
   matches,
   messages,
   swipes,
+  reports,
   type User,
   type Profile,
   type InsertProfile,
@@ -14,6 +15,8 @@ import {
   type UpsertUser,
   type MembershipTier,
   type VerificationStatus,
+  type Report,
+  type InsertReport,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -53,6 +56,11 @@ export interface IStorage {
   // Email verification
   setEmailVerificationCode(userId: string, code: string, expiry: Date): Promise<Profile>;
   verifyEmail(userId: string): Promise<Profile>;
+
+  // Reports
+  createReport(reporterId: string, report: InsertReport): Promise<Report>;
+  hasReported(reporterId: string, reportedUserId: string): Promise<boolean>;
+  getReportsByUser(reporterId: string): Promise<Report[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -414,6 +422,26 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
+  }
+
+  async createReport(reporterId: string, report: InsertReport): Promise<Report> {
+    const [created] = await db
+      .insert(reports)
+      .values({ ...report, reporterId })
+      .returning();
+    return created;
+  }
+
+  async hasReported(reporterId: string, reportedUserId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(reports)
+      .where(and(eq(reports.reporterId, reporterId), eq(reports.reportedUserId, reportedUserId)));
+    return !!existing;
+  }
+
+  async getReportsByUser(reporterId: string): Promise<Report[]> {
+    return db.select().from(reports).where(eq(reports.reporterId, reporterId)).orderBy(desc(reports.createdAt));
   }
 }
 
