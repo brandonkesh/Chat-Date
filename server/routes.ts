@@ -553,6 +553,105 @@ Be encouraging but honest. Give specific, actionable suggestions. Score fairly b
     }
   });
 
+  // === AI CONVERSATION COACH ===
+  app.post("/api/chat/coach", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { matchId, recentMessages } = req.body;
+
+    if (!matchId || !Array.isArray(recentMessages)) {
+      return res.status(400).json({ message: "matchId and recentMessages are required" });
+    }
+
+    const [match] = await db.select().from(matches).where(eq(matches.id, Number(matchId)));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    const myProfile = await storage.getProfile(userId);
+    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const otherProfile = await storage.getProfile(otherUserId);
+
+    if (!myProfile || !otherProfile) {
+      return res.status(400).json({ message: "Profile not found" });
+    }
+
+    const context: Record<string, any> = {
+      myName: myProfile.displayName,
+      partnerName: otherProfile.displayName,
+      partnerInterests: otherProfile.interests || [],
+      partnerBio: otherProfile.bio || "",
+      conversationLength: recentMessages.length,
+    };
+
+    const chatHistory = recentMessages.slice(-10).map((m: any) => ({
+      from: m.senderId === userId ? "me" : "them",
+      text: m.content,
+    }));
+
+    try {
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a friendly dating conversation coach. Analyze the recent chat messages and provide helpful, encouraging advice. Return a JSON object with this exact structure:
+{
+  "tone": "<one of: great, good, needs_work>",
+  "toneLabel": "<short label like 'Great energy!' or 'Keep it going' or 'Try something new'>",
+  "suggestions": ["<short, specific suggestion 1>", "<short suggestion 2>", "<short suggestion 3>"],
+  "nextMessage": "<a natural, ready-to-send message suggestion that fits the conversation>"
+}
+
+Guidelines:
+- Keep suggestions SHORT (under 15 words each), actionable, and positive
+- The nextMessage should feel natural and conversational, not generic
+- If conversation is empty or just starting, suggest ice-breakers based on partner info
+- Consider partner's interests and bio for personalized tips
+- Never be creepy, pushy, or suggest manipulation tactics
+- Focus on genuine connection and authentic conversation`
+          },
+          {
+            role: "user",
+            content: `Context: ${JSON.stringify(context)}\n\nRecent messages:\n${JSON.stringify(chatHistory)}`
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 512,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let coaching: any;
+      try {
+        coaching = JSON.parse(content);
+      } catch {
+        return res.status(500).json({ message: "Invalid AI response" });
+      }
+
+      const result = {
+        tone: ["great", "good", "needs_work"].includes(coaching.tone) ? coaching.tone : "good",
+        toneLabel: typeof coaching.toneLabel === "string" ? coaching.toneLabel : "Keep chatting!",
+        suggestions: Array.isArray(coaching.suggestions)
+          ? coaching.suggestions.filter((s: any) => typeof s === "string").slice(0, 3)
+          : ["Ask about their interests", "Share something about yourself", "Keep the conversation light and fun"],
+        nextMessage: typeof coaching.nextMessage === "string" ? coaching.nextMessage : "",
+      };
+      res.json(result);
+    } catch (error: any) {
+      console.error("AI conversation coach error:", error);
+      res.status(500).json({ message: "Failed to generate coaching tips" });
+    }
+  });
+
   app.get("/api/profiles/matchmaking", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const results = await storage.getMatchmakingProfiles(userId);

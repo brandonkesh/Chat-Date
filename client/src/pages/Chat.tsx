@@ -4,13 +4,162 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, isPast } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+
+interface CoachingData {
+  tone: "great" | "good" | "needs_work";
+  toneLabel: string;
+  suggestions: string[];
+  nextMessage: string;
+}
+
+function ConversationCoach({
+  matchId,
+  messages,
+  onUseSuggestion,
+}: {
+  matchId: number;
+  messages: any[];
+  onUseSuggestion: (text: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { toast } = useToast();
+
+  const { data: coaching, mutate: fetchCoaching, isPending } = useMutation<CoachingData>({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/chat/coach", {
+        matchId,
+        recentMessages: messages?.slice(-10) || [],
+      });
+      return res.json();
+    },
+  });
+
+  const handleOpen = () => {
+    setIsOpen(true);
+    if (!coaching) {
+      fetchCoaching();
+    }
+  };
+
+  const toneColors: Record<string, string> = {
+    great: "text-green-600 dark:text-green-400",
+    good: "text-blue-600 dark:text-blue-400",
+    needs_work: "text-amber-600 dark:text-amber-400",
+  };
+
+  const toneBg: Record<string, string> = {
+    great: "bg-green-500/10",
+    good: "bg-blue-500/10",
+    needs_work: "bg-amber-500/10",
+  };
+
+  if (!isOpen) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleOpen}
+        className="gap-1.5"
+        data-testid="button-open-coach"
+      >
+        <Sparkles className="w-4 h-4" />
+        <span className="text-xs">AI Coach</span>
+      </Button>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height: "auto", opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        className="border-t border-border bg-card"
+        data-testid="panel-coach"
+      >
+        <div className="p-3 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-foreground" />
+              <span className="text-sm font-medium">Conversation Coach</span>
+              {coaching && (
+                <Badge
+                  variant="secondary"
+                  className={`text-xs no-default-hover-elevate no-default-active-elevate ${toneBg[coaching.tone] || ""}`}
+                  data-testid="badge-tone"
+                >
+                  <span className={toneColors[coaching.tone] || ""}>{coaching.toneLabel}</span>
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => fetchCoaching()}
+                disabled={isPending}
+                data-testid="button-refresh-coach"
+              >
+                <Sparkles className={`w-4 h-4 ${isPending ? "animate-spin" : ""}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                data-testid="button-close-coach"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {isPending ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Getting tips...</span>
+            </div>
+          ) : coaching ? (
+            <div className="space-y-2">
+              {coaching.suggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {coaching.suggestions.map((tip, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-md px-2 py-1.5">
+                      <Lightbulb className="w-3 h-3 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
+                      <span data-testid={`text-coach-tip-${i}`}>{tip}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {coaching.nextMessage && (
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 p-2 rounded-md bg-muted/30 border border-border hover-elevate cursor-pointer text-left"
+                  onClick={() => {
+                    onUseSuggestion(coaching.nextMessage);
+                    toast({ title: "Message suggestion added" });
+                  }}
+                  data-testid="button-use-suggestion"
+                >
+                  <span className="flex-1 text-xs" data-testid="text-suggested-message">{coaching.nextMessage}</span>
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export default function Chat() {
   const [, params] = useRoute("/chat/:id");
@@ -75,7 +224,7 @@ export default function Chat() {
   if (loadingMatch || !profile) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -87,7 +236,6 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-screen bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
-      {/* Header */}
       <header className="flex-none p-4 border-b border-border bg-white/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
         <Link href="/matches">
           <Button variant="ghost" size="icon" data-testid="button-back">
@@ -113,7 +261,7 @@ export default function Chat() {
         {existingMicroDate?.id ? (
           <Link href={`/micro-date/${existingMicroDate.id}`}>
             <Button variant="ghost" size="icon" data-testid="button-resume-micro-date">
-              <Zap className="w-5 h-5 text-primary" />
+              <Zap className="w-5 h-5" />
             </Button>
           </Link>
         ) : (
@@ -153,9 +301,8 @@ export default function Chat() {
         </Button>
       </header>
 
-      {/* Trial Banner */}
       {!isTrialExpired ? (
-        <div className="bg-primary/5 p-2 text-center text-xs font-medium text-primary border-b border-primary/10 flex items-center justify-center gap-2">
+        <div className="bg-muted/50 p-2 text-center text-xs font-medium text-muted-foreground border-b border-border flex items-center justify-center gap-2">
           <Clock className="w-3 h-3" />
           Trial active until {new Date(profile.trialEndsAt).toLocaleDateString()}
         </div>
@@ -166,7 +313,6 @@ export default function Chat() {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/5">
         {loadingMessages ? (
           <div className="flex justify-center p-4">
@@ -175,7 +321,7 @@ export default function Chat() {
         ) : messages?.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
             <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mb-4">
-              <Send className="w-8 h-8 text-primary/50" />
+              <Send className="w-8 h-8 text-muted-foreground" />
             </div>
             <p className="font-medium">Say hello to {partnerProfile.displayName}!</p>
           </div>
@@ -207,7 +353,12 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input Area */}
+      <ConversationCoach
+        matchId={matchId}
+        messages={messages || []}
+        onUseSuggestion={(text) => setInputValue(text)}
+      />
+
       <div className="flex-none p-4 bg-background border-t border-border">
         {error && (
            <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex flex-col items-center gap-2 text-center animate-in slide-in-from-bottom-2">

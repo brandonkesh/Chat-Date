@@ -144,6 +144,14 @@ Preferred communication style: Simple, everyday language.
   - Block & Report combined option in ReportDialog
   - Block check on message sending (403 if blocked)
   - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
+- **AI Conversation Coach**: Real-time AI coaching during chats
+  - Collapsible coach panel in Chat page, triggered by "AI Coach" button
+  - Analyzes recent messages and partner's profile to give personalized tips
+  - Shows conversation tone indicator (great/good/needs work)
+  - Provides 3 actionable suggestions and a ready-to-send message suggestion
+  - Click suggested message to auto-fill input
+  - Uses OpenAI (gpt-5-mini) via Replit AI Integrations
+  - API: POST `/api/chat/coach` with matchId and recentMessages
 - **AI Profile Optimizer**: AI-powered profile feedback and optimization
   - Uses OpenAI (gpt-5-mini) via Replit AI Integrations to analyze user profiles
   - Returns overall score (0-100), per-category scores, and actionable suggestions
