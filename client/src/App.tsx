@@ -29,6 +29,7 @@ import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
 import EmailVerification from "@/pages/EmailVerification";
 import MicroDate from "@/pages/MicroDate";
 import AppLock from "@/pages/AppLock";
+import ProfileOptimizer from "@/pages/ProfileOptimizer";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -182,6 +183,10 @@ function Router() {
 
         <Route path="/micro-date/:id">
           <ProtectedRoute component={MicroDate} />
+        </Route>
+
+        <Route path="/profile/optimizer">
+          <ProtectedRoute component={ProfileOptimizer} />
         </Route>
         
         <Route component={NotFound} />

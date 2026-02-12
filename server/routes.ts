@@ -435,6 +435,124 @@ export async function registerRoutes(
     res.json(profiles.map(sanitizeProfile));
   });
 
+  // === AI PROFILE FEEDBACK & OPTIMIZER ===
+  app.get("/api/profiles/ai-feedback", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    const profileData: Record<string, any> = {};
+    if (profile.displayName) profileData.displayName = profile.displayName;
+    if (profile.bio) profileData.bio = profile.bio;
+    if (profile.age) profileData.age = profile.age;
+    if (profile.gender) profileData.gender = profile.gender;
+    if (profile.interestedIn) profileData.interestedIn = profile.interestedIn;
+    if (profile.photoUrl) profileData.hasPhoto = true; else profileData.hasPhoto = false;
+    if (profile.interests && profile.interests.length > 0) profileData.interests = profile.interests;
+    if (profile.jobTitle) profileData.jobTitle = profile.jobTitle;
+    if (profile.company) profileData.company = profile.company;
+    if (profile.education) profileData.education = profile.education;
+    if (profile.religion) profileData.religion = profile.religion;
+    if (profile.relationshipGoal) profileData.relationshipGoal = profile.relationshipGoal;
+    if (profile.drinking) profileData.drinking = profile.drinking;
+    if (profile.smoking) profileData.smoking = profile.smoking;
+    if (profile.exercise) profileData.exercise = profile.exercise;
+    if (profile.diet) profileData.diet = profile.diet;
+    if (profile.pets) profileData.pets = profile.pets;
+    if (profile.kids) profileData.kids = profile.kids;
+    if (profile.languages && profile.languages.length > 0) profileData.languages = profile.languages;
+    if (profile.orientation) profileData.orientation = profile.orientation;
+    if (profile.locationName) profileData.locationName = profile.locationName;
+    if (profile.isVerified) profileData.isVerified = true;
+    if (profile.voiceIntroUrl) profileData.hasVoiceIntro = true;
+    if (profile.familyPlans) profileData.familyPlans = profile.familyPlans;
+    if (profile.livingSituation) profileData.livingSituation = profile.livingSituation;
+    if (profile.politicalViews) profileData.politicalViews = profile.politicalViews;
+    if (profile.astrologicalSign) profileData.astrologicalSign = profile.astrologicalSign;
+    if (profile.ethnicity) profileData.ethnicity = profile.ethnicity;
+
+    try {
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert dating profile consultant. Analyze the user's dating profile and return a JSON object with this exact structure:
+{
+  "overallScore": <number 0-100>,
+  "summary": "<2-3 sentence overall assessment>",
+  "categories": [
+    {
+      "name": "<category name>",
+      "score": <number 0-100>,
+      "icon": "<one of: photo, bio, interests, lifestyle, details, verification>",
+      "feedback": "<1-2 sentence feedback>",
+      "suggestions": ["<actionable suggestion 1>", "<actionable suggestion 2>"]
+    }
+  ],
+  "topTips": ["<most important tip 1>", "<most important tip 2>", "<most important tip 3>"]
+}
+
+Categories to evaluate:
+1. "Photos" (icon: photo) - Whether they have a profile photo
+2. "Bio & About" (icon: bio) - Quality and completeness of bio text
+3. "Interests & Hobbies" (icon: interests) - Whether they've listed interests
+4. "Lifestyle Details" (icon: lifestyle) - Drinking, smoking, exercise, diet preferences
+5. "Profile Completeness" (icon: details) - Job, education, location, relationship goals, languages
+6. "Trust & Verification" (icon: verification) - Photo verification, voice intro
+
+Be encouraging but honest. Give specific, actionable suggestions. Score fairly based on what's filled vs. what's missing. A profile with all fields filled gets closer to 100. Missing photo is a major penalty. Missing bio is a significant penalty.`
+          },
+          {
+            role: "user",
+            content: `Here is my dating profile data:\n${JSON.stringify(profileData, null, 2)}`
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 2048,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let feedback: any;
+      try {
+        feedback = JSON.parse(content);
+      } catch {
+        return res.status(500).json({ message: "Invalid AI response format" });
+      }
+
+      const result = {
+        overallScore: typeof feedback.overallScore === "number" ? Math.max(0, Math.min(100, feedback.overallScore)) : 50,
+        summary: typeof feedback.summary === "string" ? feedback.summary : "We analyzed your profile. Check the categories below for details.",
+        categories: Array.isArray(feedback.categories)
+          ? feedback.categories.map((c: any) => ({
+              name: typeof c.name === "string" ? c.name : "Unknown",
+              score: typeof c.score === "number" ? Math.max(0, Math.min(100, c.score)) : 50,
+              icon: typeof c.icon === "string" ? c.icon : "details",
+              feedback: typeof c.feedback === "string" ? c.feedback : "",
+              suggestions: Array.isArray(c.suggestions) ? c.suggestions.filter((s: any) => typeof s === "string") : [],
+            }))
+          : [],
+        topTips: Array.isArray(feedback.topTips) ? feedback.topTips.filter((t: any) => typeof t === "string") : [],
+      };
+      res.json(result);
+    } catch (error: any) {
+      console.error("AI profile feedback error:", error);
+      res.status(500).json({ message: "Failed to generate profile feedback" });
+    }
+  });
+
   app.get("/api/profiles/matchmaking", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const results = await storage.getMatchmakingProfiles(userId);

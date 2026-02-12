@@ -144,6 +144,12 @@ Preferred communication style: Simple, everyday language.
   - Block & Report combined option in ReportDialog
   - Block check on message sending (403 if blocked)
   - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
+- **AI Profile Optimizer**: AI-powered profile feedback and optimization
+  - Uses OpenAI (gpt-5-mini) via Replit AI Integrations to analyze user profiles
+  - Returns overall score (0-100), per-category scores, and actionable suggestions
+  - Categories: Photos, Bio & About, Interests, Lifestyle, Profile Completeness, Trust & Verification
+  - Accessible from Preferences page via prominent card link
+  - Route: `/profile/optimizer`, API: GET `/api/profiles/ai-feedback`
 - **App Lock Password**: Password protection and recovery for the app
   - Users can set/change/remove a password in Preferences
   - App Lock screen shown when opening app if password is set

@@ -269,6 +269,23 @@ export default function Preferences() {
         </div>
       </div>
 
+      <Link href="/profile/optimizer" className="block">
+        <Card className="hover-elevate" data-testid="card-profile-optimizer">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium">AI Profile Optimizer</h3>
+                <p className="text-sm text-muted-foreground">Get AI-powered tips to improve your profile</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
+
       <Card data-testid="card-age-verification">
         <CardHeader>
           <div className="flex items-center gap-2">
