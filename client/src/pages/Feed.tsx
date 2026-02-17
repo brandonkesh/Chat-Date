@@ -45,7 +45,7 @@ export default function Feed() {
           toast({
             title: "It's a Match!",
             description: `You and ${currentProfile.displayName} liked each other!`,
-            className: "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-none",
+            className: "bg-gradient-to-r from-primary to-accent text-white border-none",
             duration: 5000,
           });
         }
@@ -79,7 +79,7 @@ export default function Feed() {
       {/* Verification Banner - shown for unverified users */}
       {myProfile && !myProfile.isVerified && myProfile.verificationStatus !== 'pending' && (
         <Link href="/verification" className="w-full mb-4 block" data-testid="link-verification-banner">
-          <Card className="p-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-verification-banner">
+          <Card className="p-3 bg-gradient-to-r from-primary to-blue-600 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-verification-banner">
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <ShieldCheck className="w-5 h-5" />

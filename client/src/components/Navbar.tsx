@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Info, MessageSquare } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -32,9 +32,9 @@ export function Navbar() {
       <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
         
         {/* Logo - Hidden on mobile, shown on desktop */}
-        <Link href="/feed" className="hidden md:flex items-center gap-2 font-display font-bold text-2xl text-primary hover:opacity-80 transition-opacity">
-          <Heart className="fill-current w-6 h-6" />
-          <span>Crush</span>
+        <Link href="/feed" className="hidden md:flex items-center gap-2 font-display font-bold text-2xl hover:opacity-80 transition-opacity">
+          <Flame className="fill-current w-6 h-6 text-accent" />
+          <span className="text-primary">Crush</span>
         </Link>
 
         {/* Mobile & Desktop Nav Items */}

@@ -29,7 +29,7 @@ const tiers: TierInfo[] = [
     icon: Heart,
     price: 4.99,
     color: "text-blue-500",
-    bgGradient: "from-blue-400 to-blue-600",
+    bgGradient: "from-blue-400 to-blue-500",
     features: [
       "10 daily super likes",
       "See who viewed you",
@@ -42,8 +42,8 @@ const tiers: TierInfo[] = [
     name: "Pro",
     icon: Crown,
     price: 9.99,
-    color: "text-amber-500",
-    bgGradient: "from-amber-400 to-orange-500",
+    color: "text-orange-500",
+    bgGradient: "from-orange-400 to-orange-600",
     popular: true,
     features: [
       "Unlimited super likes",
@@ -59,8 +59,8 @@ const tiers: TierInfo[] = [
     name: "Elite",
     icon: Gem,
     price: 19.99,
-    color: "text-purple-500",
-    bgGradient: "from-purple-400 to-pink-500",
+    color: "text-blue-600",
+    bgGradient: "from-blue-600 to-orange-500",
     features: [
       "All Pro features",
       "Profile boost weekly",
@@ -191,7 +191,7 @@ export default function Premium() {
     <div className="min-h-screen bg-secondary/30 pb-24 md:pt-20">
       <div className="max-w-4xl mx-auto p-4">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Crown className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-display font-bold mb-2" data-testid="premium-title">Crush Premium</h1>

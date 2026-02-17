@@ -825,8 +825,8 @@ export default function Preferences() {
       <Card data-testid="card-appearance">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-pink-500" />
+            <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-accent" />
             </div>
             <div>
               <CardTitle className="text-lg">Looks</CardTitle>
@@ -967,8 +967,8 @@ export default function Preferences() {
       <Card data-testid="card-family">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
-              <Home className="w-4 h-4 text-pink-500 dark:text-pink-400" />
+            <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
+              <Home className="w-4 h-4 text-accent" />
             </div>
             <div>
               <CardTitle className="text-lg">Family</CardTitle>
@@ -1010,8 +1010,8 @@ export default function Preferences() {
       <Card data-testid="card-identity">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center">
-              <Globe className="w-4 h-4 text-violet-500" />
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Globe className="w-4 h-4 text-primary" />
             </div>
             <div>
               <CardTitle className="text-lg">Background & Identity</CardTitle>

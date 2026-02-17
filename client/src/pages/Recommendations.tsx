@@ -39,7 +39,7 @@ function DailyMatchCard() {
   return (
     <section data-testid="section-daily-match">
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-blue-500 flex items-center justify-center">
           <Calendar className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -109,7 +109,7 @@ function ProfilePreviewCard({ profile, onLike }: { profile: Profile; onLike: () 
           toast({
             title: "It's a Match!",
             description: `You and ${profile.displayName} liked each other!`,
-            className: "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-none",
+            className: "bg-gradient-to-r from-primary to-accent text-white border-none",
             duration: 5000,
           });
         }
@@ -226,7 +226,7 @@ function MatchmakingCard({ result, onAction }: { result: MatchmakingResult; onAc
           toast({
             title: "It's a Match!",
             description: `You and ${profile.displayName} liked each other!`,
-            className: "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-none",
+            className: "bg-gradient-to-r from-primary to-accent text-white border-none",
             duration: 5000,
           });
         }
@@ -312,7 +312,7 @@ function MatchmakingSection() {
   return (
     <section data-testid="section-matchmaking">
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-accent to-orange-500 flex items-center justify-center">
           <HeartHandshake className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -382,7 +382,7 @@ export default function Recommendations() {
 
       <section data-testid="section-crush-picks">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center">
             <Star className="w-5 h-5 text-white fill-current" />
           </div>
           <div>
@@ -411,7 +411,7 @@ export default function Recommendations() {
 
       <section data-testid="section-recommended">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-violet-500 to-purple-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-primary flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
