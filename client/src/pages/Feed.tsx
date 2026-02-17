@@ -100,7 +100,7 @@ export default function Feed() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="w-11 h-11 rounded-full bg-white/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate relative"
+            className="w-11 h-11 rounded-full bg-card/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate relative"
             data-testid="button-video-chat-home"
           >
             <Video className={`w-5 h-5 ${myProfile?.membershipTier === 'elite' ? 'text-primary' : 'text-muted-foreground'}`} />

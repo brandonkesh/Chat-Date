@@ -236,7 +236,7 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-screen bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
-      <header className="flex-none p-4 border-b border-border bg-white/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
+      <header className="flex-none p-4 border-b border-border bg-card/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
         <Link href="/matches">
           <Button variant="ghost" size="icon" data-testid="button-back">
             <ChevronLeft className="w-6 h-6" />
@@ -340,7 +340,7 @@ export default function Chat() {
                     max-w-[75%] px-4 py-2 rounded-2xl text-sm leading-relaxed shadow-sm
                     ${isMe 
                       ? "bg-primary text-primary-foreground rounded-tr-none" 
-                      : "bg-white dark:bg-zinc-800 text-foreground rounded-tl-none border border-border"
+                      : "bg-card dark:bg-zinc-800 text-foreground rounded-tl-none border border-border"
                     }
                   `}
                 >

@@ -234,7 +234,7 @@ export default function TwoFactorSetup() {
                   <p>Open your authenticator app and scan the code below.</p>
                 </div>
 
-                <div className="bg-white p-4 rounded-md" data-testid="img-2fa-qr-code">
+                <div className="bg-card p-4 rounded-md" data-testid="img-2fa-qr-code">
                   <img
                     src={setupMutation.data.qrCode}
                     alt="QR Code for authenticator app"

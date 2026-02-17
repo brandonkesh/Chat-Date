@@ -91,7 +91,7 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
       onDragEnd={handleDragEnd}
       animate={exitX !== null ? { x: exitX, opacity: 0 } : { x: 0, opacity: 1 }}
       transition={{ duration: 0.2 }}
-      className="absolute top-0 w-full h-full max-w-sm cursor-grab active:cursor-grabbing rounded-3xl overflow-hidden shadow-2xl bg-white dark:bg-gray-900 border-4 border-white dark:border-gray-800"
+      className="absolute top-0 w-full h-full max-w-sm cursor-grab active:cursor-grabbing rounded-3xl overflow-hidden shadow-2xl bg-card border-4 border-border"
     >
       {/* "NOPE" Overlay */}
       <motion.div 
@@ -124,7 +124,7 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
       </div>
 
       {/* Content */}
-      <div className="h-[25%] p-6 flex flex-col justify-center bg-white dark:bg-gray-900 relative">
+      <div className="h-[25%] p-6 flex flex-col justify-center bg-card relative">
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-3xl font-display font-bold text-foreground">
             {profile.displayName}

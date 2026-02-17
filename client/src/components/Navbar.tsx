@@ -28,7 +28,7 @@ export function Navbar() {
   const avatarUrl = profile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.displayName || 'user'}`;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-border md:top-0 md:bottom-auto md:border-t-0 md:border-b safe-area-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/90 dark:bg-black/90 backdrop-blur-md border-t border-border md:top-0 md:bottom-auto md:border-t-0 md:border-b safe-area-bottom">
       <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
         
         {/* Logo - Hidden on mobile, shown on desktop */}

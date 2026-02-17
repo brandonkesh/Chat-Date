@@ -8,22 +8,22 @@
   --font-body: 'DM Sans', sans-serif;
   --font-display: 'Outfit', sans-serif;
 
-  --background: 210 33% 99%;
+  --background: 220 10% 93%;
   --foreground: 215 30% 15%;
 
-  --card: 0 0% 100%;
+  --card: 220 10% 97%;
   --card-foreground: 215 30% 15%;
-  --popover: 0 0% 100%;
+  --popover: 220 10% 97%;
   --popover-foreground: 215 30% 15%;
 
   --primary: 217 91% 55%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 215 25% 94%;
+  --secondary: 215 12% 88%;
   --secondary-foreground: 215 40% 30%;
 
-  --muted: 215 15% 96%;
-  --muted-foreground: 215 12% 50%;
+  --muted: 215 10% 90%;
+  --muted-foreground: 215 12% 45%;
 
   --accent: 24 95% 56%;
   --accent-foreground: 0 0% 100%;
@@ -31,8 +31,8 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 215 18% 91%;
-  --input: 215 18% 91%;
+  --border: 215 12% 85%;
+  --input: 215 12% 85%;
   --ring: 217 91% 55%;
 
   --radius: 1rem;
@@ -43,13 +43,13 @@
   --chart-4: 25 95% 72%;
   --chart-5: 217 55% 72%;
 
-  --sidebar: 215 30% 97%;
+  --sidebar: 220 10% 95%;
   --sidebar-foreground: 215 30% 15%;
-  --sidebar-border: 215 18% 91%;
+  --sidebar-border: 215 12% 85%;
   --sidebar-ring: 217 91% 55%;
   --sidebar-primary: 217 91% 55%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 215 25% 93%;
+  --sidebar-accent: 215 12% 89%;
   --sidebar-accent-foreground: 215 30% 15%;
 }
 
@@ -115,7 +115,7 @@
   }
   
   .glass-panel {
-    @apply bg-white/80 dark:bg-black/40 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-xl;
+    @apply bg-gray-100/80 dark:bg-black/40 backdrop-blur-xl border border-gray-200/40 dark:border-white/10 shadow-xl;
   }
   
   .safe-area-bottom {

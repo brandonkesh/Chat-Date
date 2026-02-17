@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 - **Primary Colors**: White, Blue, Orange
 - **Primary (Blue)**: `hsl(217, 91%, 55%)` - Main actions, buttons, navigation active states, brand text
 - **Accent (Orange)**: `hsl(24, 95%, 56%)` - Secondary emphasis, flame logo icon, highlights, CTAs
-- **Background**: Clean white in light mode, deep navy-gray in dark mode
+- **Background**: Light grey in light mode, deep navy-gray in dark mode
 - **Logo**: Flame icon (orange) + "Crush" text (blue)
 - **Gradients**: Blue-to-orange for premium/special elements
 - **Semantic colors**: Green for verified/success, amber for warnings, red for errors (kept as-is)
