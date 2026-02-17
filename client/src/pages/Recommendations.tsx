@@ -18,7 +18,7 @@ interface MatchmakingResult {
 }
 
 interface DailyMatchResponse {
-  id: number;
+  id: number | null;
   user1Id: string;
   user2Id: string;
   isDailyMatch: boolean;
@@ -83,17 +83,65 @@ function DailyMatchCard() {
             </div>
 
             <div className="flex gap-3">
-              <Link href={`/chat/${dailyMatch.id}`} className="flex-1">
-                <Button className="w-full h-12 rounded-xl text-lg font-semibold gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                  <Heart className="w-5 h-5 fill-current" />
-                  Start Chatting
-                </Button>
-              </Link>
+              {dailyMatch.id ? (
+                <Link href={`/chat/${dailyMatch.id}`} className="flex-1">
+                  <Button className="w-full rounded-xl text-lg font-semibold gap-2" data-testid="button-daily-chat">
+                    <Heart className="w-5 h-5 fill-current" />
+                    Start Chatting
+                  </Button>
+                </Link>
+              ) : (
+                <DailyMatchActions userId={dailyMatch.user2Id} profileId={profile.id} />
+              )}
             </div>
           </div>
         </div>
       </Card>
     </section>
+  );
+}
+
+function DailyMatchActions({ userId, profileId }: { userId: string; profileId: number }) {
+  const { mutate: swipe, isPending } = useSwipe();
+  const { toast } = useToast();
+
+  const handleLike = () => {
+    swipe({ swipedId: userId, liked: true }, {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: ["/api/matches/daily"] });
+        if (data.match) {
+          toast({
+            title: "It's a Match!",
+            description: "You matched with your daily pick!",
+            className: "bg-gradient-to-r from-primary to-accent text-white border-none",
+            duration: 5000,
+          });
+        } else {
+          toast({ title: "Liked!", description: "They'll see your interest." });
+        }
+      },
+    });
+  };
+
+  const handlePass = () => {
+    swipe({ swipedId: userId, liked: false }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/matches/daily"] });
+      },
+    });
+  };
+
+  return (
+    <div className="flex gap-3 flex-1">
+      <Button variant="outline" onClick={handlePass} disabled={isPending} className="rounded-xl gap-2" data-testid="button-daily-pass">
+        <X className="w-5 h-5" />
+        Pass
+      </Button>
+      <Button onClick={handleLike} disabled={isPending} className="flex-1 rounded-xl text-lg font-semibold gap-2" data-testid="button-daily-like">
+        <Heart className="w-5 h-5 fill-current" />
+        Like
+      </Button>
+    </div>
   );
 }
 

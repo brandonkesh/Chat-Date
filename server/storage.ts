@@ -469,9 +469,9 @@ export class DatabaseStorage implements IStorage {
       .from(matches)
       .where(and(
         or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)),
-        eq(matches.isDailyMatch, true),
-        desc(matches.createdAt)
+        eq(matches.isDailyMatch, true)
       ))
+      .orderBy(desc(matches.createdAt))
       .limit(1);
 
     if (!dailyMatch) return undefined;

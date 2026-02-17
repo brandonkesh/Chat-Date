@@ -6,7 +6,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
-import { matches, profiles, users } from "@shared/schema";
+import { matches, profiles, users, swipes } from "@shared/schema";
 import { eq, or, and, ne, notInArray } from "drizzle-orm";
 import { stripeService } from "./stripeService";
 import { stripeStorage } from "./stripeStorage";
@@ -668,18 +668,16 @@ Guidelines:
       let dailyMatch = await storage.getDailyMatch(userId);
       
       if (!dailyMatch) {
-        // Find a highly compatible profile that isn't already matched/swiped
         const recommendations = await storage.getRecommendedProfiles(userId);
         if (recommendations.length > 0) {
           const target = recommendations[0];
-          const matchId = await storage.createMatch(userId, target.userId, true);
           dailyMatch = {
-            id: matchId,
+            id: null,
             user1Id: userId,
             user2Id: target.userId,
             isDailyMatch: true,
             createdAt: new Date(),
-            partnerProfile: target
+            partnerProfile: sanitizeProfile(target)
           };
         }
       }
@@ -713,25 +711,10 @@ Guidelines:
         [m.user1Id, m.user2Id].filter(id => id !== userId)
       );
 
-      // Get potential matches based on preferences
-      let potentialMatchesQuery = db
-        .select()
-        .from(profiles)
-        .where(ne(profiles.userId, userId));
-      
-      if (matchedUserIds.length > 0) {
-        potentialMatchesQuery = db
-          .select()
-          .from(profiles)
-          .where(
-            and(
-              ne(profiles.userId, userId),
-              notInArray(profiles.userId, matchedUserIds)
-            )
-          );
-      }
-      
-      const potentialMatches = await potentialMatchesQuery.limit(20);
+      const allPotential = await storage.getPotentialMatches(userId);
+      const potentialMatches = allPotential
+        .filter(p => !matchedUserIds.includes(p.userId))
+        .slice(0, 20);
 
       if (potentialMatches.length === 0) {
         return res.json({ matches: [], analysis: "No potential matches found yet. Keep swiping!" });
@@ -795,11 +778,10 @@ Guidelines:
 
       const aiResult = JSON.parse(response.choices[0]?.message?.content || '{"topMatches":[],"overallAnalysis":"Unable to analyze"}');
 
-      // Enrich AI results with full profile data
       const enrichedMatches = aiResult.topMatches?.map((match: any) => {
         const profile = potentialMatches.find(p => p.id === match.candidateId);
         return {
-          profile,
+          profile: sanitizeProfile(profile),
           compatibilityScore: match.compatibilityScore,
           reason: match.reason
         };
