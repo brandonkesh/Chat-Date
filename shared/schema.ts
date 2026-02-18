@@ -73,6 +73,8 @@ export const profiles = pgTable("profiles", {
   astrologicalSign: text("astrological_sign"), // 'aries', 'taurus', 'gemini', etc.
   // Voice intro
   voiceIntroUrl: text("voice_intro_url"),
+  // Intro video
+  introVideoUrl: text("intro_video_url"),
   // App lock password
   passwordHash: text("password_hash"),
   backupCodes: text("backup_codes").array(),
