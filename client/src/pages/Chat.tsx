@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -175,8 +175,23 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const { mutate: unmatchUser, isPending: unmatching } = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/matches/${matchId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/matches"] });
+      toast({ title: "Conversation ended", description: "You've unmatched this person." });
+      setLocation("/matches");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not end conversation. Please try again.", variant: "destructive" });
+    },
+  });
   
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -296,12 +311,60 @@ export default function Chat() {
         <Button
           variant="ghost"
           size="icon"
+          onClick={() => setShowUnmatchConfirm(true)}
+          disabled={unmatching}
+          title="End conversation"
+          data-testid="button-unmatch"
+        >
+          <UserX className="w-5 h-5" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setReportOpen(true)}
           data-testid="button-report-user"
         >
           <Flag className="w-5 h-5" />
         </Button>
       </header>
+
+      {showUnmatchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setShowUnmatchConfirm(false)} data-testid="modal-unmatch-confirm">
+          <div className="bg-card rounded-lg p-6 max-w-sm mx-4 space-y-4 shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <UserX className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">End Conversation?</h3>
+                <p className="text-sm text-muted-foreground">
+                  This will unmatch you from {partnerProfile.displayName} and delete all messages. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowUnmatchConfirm(false)}
+                disabled={unmatching}
+                data-testid="button-cancel-unmatch"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => unmatchUser()}
+                disabled={unmatching}
+                data-testid="button-confirm-unmatch"
+              >
+                {unmatching ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                End Conversation
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isTrialExpired ? (
         <div className="bg-muted/50 p-2 text-center text-xs font-medium text-muted-foreground border-b border-border flex items-center justify-center gap-2">

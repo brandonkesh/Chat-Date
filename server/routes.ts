@@ -1086,6 +1086,22 @@ Guidelines:
     res.json({ match, partnerProfile });
   });
 
+  // === UNMATCH / END CONVERSATION ===
+  app.delete("/api/matches/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const matchId = Number(req.params.id);
+    try {
+      const deleted = await storage.deleteMatch(matchId, userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Match not found" });
+      }
+      res.json({ message: "Conversation ended successfully" });
+    } catch (err) {
+      console.error("Unmatch error:", err);
+      res.status(500).json({ message: "Failed to end conversation" });
+    }
+  });
+
   // === MESSAGES ===
   app.get(api.messages.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

@@ -52,6 +52,7 @@ export interface IStorage {
   checkMatch(user1Id: string, user2Id: string): Promise<boolean>;
   createMatch(user1Id: string, user2Id: string, isDailyMatch?: boolean): Promise<number>;
   getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
+  deleteMatch(matchId: number, userId: string): Promise<boolean>;
   
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
@@ -541,6 +542,22 @@ export class DatabaseStorage implements IStorage {
     // In actual usage we'd need userId to know who the partner is, 
     // but the getMatches logic above handles it correctly by iterating.
     return undefined;
+  }
+
+  async deleteMatch(matchId: number, userId: string): Promise<boolean> {
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match) return false;
+    if (match.user1Id !== userId && match.user2Id !== userId) return false;
+    await db.transaction(async (tx) => {
+      const relatedMicroDates = await tx.select().from(microDates).where(eq(microDates.matchId, matchId));
+      for (const md of relatedMicroDates) {
+        await tx.delete(microDateResponses).where(eq(microDateResponses.microDateId, md.id));
+      }
+      await tx.delete(microDates).where(eq(microDates.matchId, matchId));
+      await tx.delete(messages).where(eq(messages.matchId, matchId));
+      await tx.delete(matches).where(eq(matches.id, matchId));
+    });
+    return true;
   }
 
   async getMessages(matchId: number): Promise<Message[]> {
