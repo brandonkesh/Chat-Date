@@ -2,223 +2,58 @@
 
 ## Overview
 
-Crush is a modern dating application built with a React frontend and Express backend. It features a Tinder-style swipe interface for discovering potential matches, real-time messaging between matched users, and a 30-day free trial system for premium chat features. The app uses Replit Auth for authentication and PostgreSQL for data persistence.
+Crush is a modern dating application designed to connect users through a Tinder-style swipe interface, real-time messaging, and compatibility-based matchmaking. It aims to offer a rich, interactive dating experience with features like AI-powered conversation coaching and profile optimization, micro-dates, and a tiered premium subscription model. The project leverages Replit Auth for secure authentication and focuses on a user-friendly interface with robust backend services.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-### Design / Color Scheme
-- **Primary Colors**: White, Blue, Orange
-- **Primary (Blue)**: `hsl(217, 91%, 55%)` - Main actions, buttons, navigation active states, brand text
-- **Accent (Orange)**: `hsl(24, 95%, 56%)` - Secondary emphasis, flame logo icon, highlights, CTAs
-- **Background**: Light grey in light mode, deep navy-gray in dark mode
-- **Logo**: Flame icon (orange) + "Crush" text (blue)
-- **Gradients**: Blue-to-orange for premium/special elements
-- **Semantic colors**: Green for verified/success, amber for warnings, red for errors (kept as-is)
-- **Premium tiers**: Basic (blue), Pro (orange), Elite (blue-to-orange gradient)
-
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 - **Framework**: React 18 with TypeScript
-- **Routing**: Wouter for lightweight client-side routing
-- **State Management**: TanStack React Query for server state management and caching
-- **Styling**: Tailwind CSS with shadcn/ui component library (New York style variant)
-- **Animations**: Framer Motion for swipe gestures and page transitions
-- **Build Tool**: Vite with path aliases (`@/` for client src, `@shared/` for shared code)
+- **Routing**: Wouter
+- **State Management**: TanStack React Query
+- **Styling**: Tailwind CSS with shadcn/ui (New York style)
+- **Animations**: Framer Motion for gestures and transitions
+- **Build Tool**: Vite with path aliases (`@/`, `@shared/`)
+- **UI/UX**: Consistent use of primary blue and accent orange; flame logo; light/dark mode; semantic colors for status; gradients for premium elements.
 
-### Backend Architecture
+### Backend
 - **Framework**: Express.js with TypeScript
-- **API Design**: RESTful API with typed route definitions in `shared/routes.ts`
-- **Validation**: Zod schemas for request/response validation with drizzle-zod integration
-- **Session Management**: Express-session with PostgreSQL session store (connect-pg-simple)
+- **API Design**: RESTful API with typed route definitions (shared between client/server)
+- **Validation**: Zod schemas with drizzle-zod integration
+- **Session Management**: Express-session with PostgreSQL store
+- **Authentication**: Replit Auth via OpenID Connect with PostgreSQL-backed sessions.
+- **Trial System**: 30-day free trial for premium chat features, managed by `trialEndsAt` timestamp on profiles.
+- **Matchmaking**: Multi-dimensional scoring based on various profile attributes (interests, lifestyle, goals, etc.), including zip code proximity.
+- **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching and profile optimization.
+- **Micro-Dates**: Real-time interactive 5-minute virtual dates with activity catalog and polling for responses.
+- **User Blocking**: Bidirectional user blocking with API enforcement.
+- **App Lock**: Optional password protection for the app with server-side enforcement and recovery.
 
 ### Data Storage
-- **Database**: PostgreSQL with Drizzle ORM
-- **Schema Location**: `shared/schema.ts` contains all table definitions
-- **Key Tables**:
-  - `users` - Core user accounts (managed by Replit Auth)
-  - `sessions` - Session storage for authentication
-  - `profiles` - Dating profile information with trial expiry tracking
-  - `swipes` - User swipe actions (like/pass)
-  - `matches` - Mutual likes between users
-  - `messages` - Chat messages between matched users
-
-### Authentication
-- **Provider**: Replit Auth via OpenID Connect
-- **Implementation**: Located in `server/replit_integrations/auth/`
-- **Session Storage**: PostgreSQL-backed sessions with 7-day TTL
-- **Protected Routes**: `isAuthenticated` middleware guards API endpoints
+- **Database**: PostgreSQL with Drizzle ORM.
+- **Schema**: Defined in `shared/schema.ts`, including tables for users, profiles, swipes, matches, messages, sessions, and micro-dates.
 
 ### Key Design Patterns
-- **Shared Types**: Schema types and route definitions shared between client/server via `@shared/` alias
-- **Monorepo Structure**: Client code in `client/`, server code in `server/`, shared types in `shared/`
-- **Trial System**: Profiles include `trialEndsAt` timestamp; 402 status indicates trial expiry on message send
+- **Shared Types**: Centralized schema and route definitions for client-server consistency.
+- **Monorepo Structure**: `client/`, `server/`, and `shared/` directories.
 
 ## External Dependencies
 
 ### Database
-- PostgreSQL database via `DATABASE_URL` environment variable
-- Drizzle ORM for database operations with drizzle-kit for migrations
+- PostgreSQL (via `DATABASE_URL`)
+- Drizzle ORM / drizzle-kit
 
 ### Authentication
-- Replit Auth (OpenID Connect) requiring `ISSUER_URL`, `REPL_ID`, and `SESSION_SECRET` environment variables
+- Replit Auth (OpenID Connect)
 
 ### Object Storage
-- **Provider**: Replit Object Storage (Google Cloud Storage backed)
-- **Implementation**: Located in `server/replit_integrations/object_storage/`
-- **Photo Uploads**: Users can upload profile photos via presigned URLs
-- **Routes**: `/api/uploads/request-url` (authenticated) and `/objects/uploads/:id` (serving)
-- **Limits**: 5MB max file size, image types only (JPEG, PNG, GIF, WebP)
+- Replit Object Storage (for profile photos, voice notes, voice intros, verification photos)
 
 ### Third-Party Services
-- **Dicebear API**: Fallback avatar generation for users without profile photos
-- **Google Fonts**: DM Sans (body) and Outfit (display) font families
-
-### Stripe Payment Integration
-- **Provider**: Stripe via Replit Connector (`stripe-replit-sync`)
-- **Implementation**: Located in `server/stripeClient.ts`, `server/stripeService.ts`, `server/stripeStorage.ts`
-- **Webhook Handling**: `server/webhookHandlers.ts` processes subscription events
-- **Database Schema**: Stripe data synced to `stripe.*` schema (products, prices, subscriptions, customers)
-- **Membership Tiers**: Three paid tiers with different feature sets:
-  - **Basic** ($4.99/month): 10 daily super likes, see who viewed you, basic filters, ad-free
-  - **Pro** ($9.99/month): Unlimited super likes, see who likes you, priority matching, advanced filters, read receipts
-  - **Elite** ($19.99/month): All Pro features + profile boost, incognito mode, VIP badge, priority support, exclusive events
-- **Profile Fields**: `stripeCustomerId`, `stripeSubscriptionId`, `stripePriceId`, `isPremium`, `membershipTier` track subscription status
-- **Checkout Flow**: `/api/checkout` creates Stripe Checkout session, `/api/customer-portal` for subscription management
-- **Tier Detection**: Webhook handler determines tier from product metadata or name matching
-
-### Key NPM Packages
-- `@tanstack/react-query` - Server state management
-- `framer-motion` - Swipe animations and transitions
-- `date-fns` - Date formatting and trial countdown calculations
-- `drizzle-orm` / `drizzle-zod` - Database ORM and schema validation
-- `openid-client` / `passport` - Authentication flow
-- `shadcn/ui` components via Radix UI primitives
-- `stripe` / `stripe-replit-sync` - Payment processing and data sync
-
-## Recent Changes
-
-### February 18, 2026
-- **Voice Notes in Chat**: Users can record and send voice notes in chat messages
-  - New schema fields on messages: `voiceNoteUrl`, `voiceNoteDuration`
-  - VoiceNoteRecorder component: record up to 60s, preview, discard, upload and send
-  - VoiceNotePlayer component: inline playback with progress bar in message bubbles
-  - Mic button appears in chat input when text field is empty
-  - Upload endpoint: POST `/api/uploads/voice-note` (authenticated, uses Object Storage)
-  - Messages with voice notes sent with content "Voice note" and voiceNoteUrl/voiceNoteDuration
-  - Component file: `client/src/components/VoiceNote.tsx`
-
-### February 6, 2026
-- **Background & Identity Feature**: Added comprehensive identity fields to user profiles
-  - New schema fields: `languages` (array), `orientation`, `ethnicity`, `politicalViews`, `astrologicalSign`
-  - Edit Profile: "Background & Identity" section with language tags, orientation, ethnicity, politics, and zodiac sign selectors
-  - Preferences: Expanded "Background & Identity" card showing all identity fields (languages, orientation, ethnicity, religion, politics, education, employment, zodiac sign) with summary view
-  - Verification status integrated into the same card
-- **Video Chat Icon**: Added video chat quick action button to Feed/Home page top-right corner
-- **Lifestyle Preferences**: Added Lifestyle card to Preferences page
-  - New `marijuana` schema field added to profiles
-  - Preferences: "Lifestyle" card showing alcohol, smoking, marijuana, and diet with icons and "Edit Lifestyle" link
-  - EditProfile: Marijuana dropdown added to Lifestyle section
-- **About Us & FAQ**: Added informational content
-  - New About Us page (`/about`) with mission, how it works, and values sections
-  - About Us and FAQ quick-link cards added to Help & Support page
-- **Family Preferences**: Added Family card to Preferences page
-  - Displays pets, has kids, and wants kids fields with icons
-  - "Edit Family" button links to Edit Profile
-- **Voice Intro**: Users can record a short voice introduction (up to 30 seconds)
-  - New `voiceIntroUrl` field in profiles schema
-  - VoiceIntro component with record/play/save/delete functionality
-  - Uses MediaRecorder API and Replit Object Storage for audio files
-  - Available on Edit Profile and Preferences pages
-  - VoiceIntroPlayer shows inline on profile cards in Feed for playback
-  - API endpoints: POST `/api/uploads/voice-intro`, PUT `/api/profiles/voice-intro`
-
-### January 29, 2026
-- **Recommendations & Crush Picks**: Added personalized profile discovery features
-  - "For You" tab in navigation with Sparkles icon
-  - **Crush Picks**: Featured profiles prioritizing verified and premium users
-  - **Recommended for You**: Profiles with shared interests based on user's profile
-  - Profile cards with like/pass actions, badges for verified/premium status
-  - API endpoints: `/api/profiles/recommended`, `/api/profiles/crush-picks`
-- **Profile Verification**: Added photo verification system for profile authenticity
-  - Users take a selfie matching a random pose to verify their identity
-  - Verification page with camera capture and pose guidance
-  - Auto-approval system with polling for status updates
-  - Verified badge displayed on profile cards and profile pages
-  - Verification prompts on Feed and Edit Profile pages for unverified users
-  - Profile fields: `isVerified`, `verificationPhotoUrl`, `verificationStatus`
-
-### February 11, 2026
-- **Matchmaking Feature**: Comprehensive compatibility-based matchmaking system
-  - Multi-dimensional scoring: interests (25pts), lifestyle (20pts), relationship goals (15pts), religion (10pts), family plans (10pts), education (5pts), pets (5pts), languages (5pts), profile quality (5pts)
-  - Only scores categories where both users have data (avoids penalizing incomplete profiles)
-  - "Best Matches" section on For You page with compatibility percentage and match reasons
-  - Each match card shows colored compatibility badge (green 80%+, blue 60%+, amber 40%+)
-  - Match reason badges explain why each profile was recommended
-  - Like/pass actions directly on matchmaking cards
-  - API endpoint: GET `/api/profiles/matchmaking`
-- **User Blocking**: Block/unblock users with bidirectional filtering
-  - Blocked Users card on Preferences page with unblock functionality
-  - Block & Report combined option in ReportDialog
-  - Block check on message sending (403 if blocked)
-  - API endpoints: POST/DELETE/GET `/api/blocks`, GET `/api/blocks/check/:userId`
-- **AI Conversation Coach**: Real-time AI coaching during chats
-  - Collapsible coach panel in Chat page, triggered by "AI Coach" button
-  - Analyzes recent messages and partner's profile to give personalized tips
-  - Shows conversation tone indicator (great/good/needs work)
-  - Provides 3 actionable suggestions and a ready-to-send message suggestion
-  - Click suggested message to auto-fill input
-  - Uses OpenAI (gpt-5-mini) via Replit AI Integrations
-  - API: POST `/api/chat/coach` with matchId and recentMessages
-- **AI Profile Optimizer**: AI-powered profile feedback and optimization
-  - Uses OpenAI (gpt-5-mini) via Replit AI Integrations to analyze user profiles
-  - Returns overall score (0-100), per-category scores, and actionable suggestions
-  - Categories: Photos, Bio & About, Interests, Lifestyle, Profile Completeness, Trust & Verification
-  - Accessible from Preferences page via prominent card link
-  - Route: `/profile/optimizer`, API: GET `/api/profiles/ai-feedback`
-- **App Lock Password**: Password protection and recovery for the app
-  - Users can set/change/remove a password in Preferences
-  - App Lock screen shown when opening app if password is set
-  - Password recovery via one-time backup codes (6 codes generated on setup)
-  - Server-side enforcement: sensitive API routes return 423 when locked
-  - Schema fields: `passwordHash`, `backupCodes` on profiles
-  - API endpoints: POST `/api/password/set`, `/change`, `/remove`, `/verify`, `/recover`, GET `/status`
-  - Exempt routes: password, 2FA, auth, profiles/me endpoints bypass lock check
-- **Micro-Date Feature**: Built-in 5-minute virtual dates between matched users
-  - Activity catalog: icebreakers, would-you-rather, this-or-that, rapid-fire, hot takes, word association
-  - 10 randomized activities per session from different categories
-  - Real-time polling for partner responses (3s interval during active dates)
-  - 5-minute countdown timer with visual progress bar
-  - Response reveal: see partner's answer after both respond, auto-advance after 2.5s
-  - Completion recap showing all answers side-by-side with match highlights
-  - Zap button in Chat header to invite match to micro-date
-  - Pending/active/completed/declined session states
-  - Schema: `micro_dates` table (sessions), `micro_date_responses` table (per-activity answers)
-  - API endpoints: POST `/api/micro-dates/invite`, POST `/:id/accept`, POST `/:id/decline`, GET `/:id`, POST `/:id/respond`, POST `/:id/complete`, GET `/match/:matchId`
-  - Block check prevents micro-dates with blocked users
-  - Route: `/micro-date/:id`
-
-### January 28, 2026
-- **Multiple Membership Tiers**: Expanded from single premium to three-tier subscription system
-  - Basic ($4.99), Pro ($9.99), Elite ($19.99) monthly plans
-  - Each tier has unique features and benefits
-  - Premium page displays all tiers with feature comparisons
-  - Webhook handler determines tier from Stripe product metadata
-- **Profile Schema Updates**: Added `membershipTier`, `stripePriceId` fields for tier tracking
-- **Hobbies & Interests**: Users can add personal interests to their profiles
-  - Tag-style input on onboarding and edit profile pages
-  - Interests displayed as badges on profile cards
-- **Stripe Premium Subscription**: Added full Stripe payment integration
-  - Checkout flow redirects to Stripe-hosted payment page
-  - Webhook handlers update user premium status and tier on subscription events
-  - Premium users bypass free trial restrictions for messaging
-  - Customer portal for subscription management
-
-### January 27, 2026
-- **Photo Upload**: Added profile photo upload with Replit Object Storage
-- **Inbox Tab**: Added conversation list showing matches with messages
-- **Premium Tab**: Added subscription page with feature list and pricing
-- **Bottom Navigation**: 5 tabs - Discover, Matches, Inbox, Premium, Profile
-- **Edit Profile Fix**: Split into parent/child components for proper form pre-filling
+- **Dicebear API**: Fallback avatar generation.
+- **Google Fonts**: DM Sans, Outfit.
+- **Stripe**: Via Replit Connector (`stripe-replit-sync`) for tiered subscription management (Basic, Pro, Elite), checkout, and customer portal.
+- **OpenAI**: For AI Conversation Coach and AI Profile Optimizer.

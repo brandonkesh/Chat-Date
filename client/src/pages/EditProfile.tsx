@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf, AlertCircle, CalendarDays } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette, Dumbbell, Utensils, Dog, Baby, Church, GraduationCap, Briefcase, Heart, Home, Users, Globe, Compass, Palette, Vote, Star, Languages, Leaf, AlertCircle, CalendarDays, MapPin } from "lucide-react";
 import { differenceInYears } from "date-fns";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { VoiceIntro } from "@/components/VoiceIntro";
@@ -70,6 +70,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       ethnicity: profile.ethnicity || "",
       politicalViews: profile.politicalViews || "",
       astrologicalSign: profile.astrologicalSign || "",
+      zipCode: profile.zipCode || "",
     },
   });
 
@@ -282,6 +283,33 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                           <SelectItem value="everyone">Everyone</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="zipCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Zip Code
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., 90210" 
+                          className="h-12 rounded-xl"
+                          data-testid="input-zip-code"
+                          maxLength={10}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Used to find matches near you
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}

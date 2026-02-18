@@ -736,6 +736,25 @@ export default function Preferences() {
               {locationName ? "Update" : "Get Location"}
             </Button>
           </div>
+          <div className="flex items-center justify-between gap-4 pt-2 border-t">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground">Zip Code</span>
+              </div>
+              <p className="text-sm font-medium mt-1" data-testid="text-zip-code">
+                {profile?.zipCode || "Not set"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                People in your zip code are prioritized in matchmaking
+              </p>
+            </div>
+            <Link href="/profile/edit">
+              <Button variant="outline" data-testid="button-edit-zip-code">
+                {profile?.zipCode ? "Change" : "Add"}
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
 

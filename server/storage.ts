@@ -175,20 +175,36 @@ export class DatabaseStorage implements IStorage {
     const blockedIds = await this.getBlockedUserIds(userId);
     const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
 
+    let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
-      return await db
+      potentialProfiles = await db
         .select()
         .from(profiles)
         .where(and(
           notInArray(profiles.userId, excludeIds),
           eq(profiles.gender, myProfile.interestedIn)
         ));
+    } else {
+      potentialProfiles = await db
+        .select()
+        .from(profiles)
+        .where(notInArray(profiles.userId, excludeIds));
     }
-    
-    return await db
-      .select()
-      .from(profiles)
-      .where(notInArray(profiles.userId, excludeIds));
+
+    if (myProfile.zipCode) {
+      const sameZip: Profile[] = [];
+      const otherZip: Profile[] = [];
+      for (const p of potentialProfiles) {
+        if (p.zipCode === myProfile.zipCode) {
+          sameZip.push(p);
+        } else {
+          otherZip.push(p);
+        }
+      }
+      return [...sameZip, ...otherZip];
+    }
+
+    return potentialProfiles;
   }
 
   async getRecommendedProfiles(userId: string): Promise<Profile[]> {
@@ -220,15 +236,17 @@ export class DatabaseStorage implements IStorage {
         .where(notInArray(profiles.userId, excludeIds));
     }
 
-    // Score and sort by matching interests
     const myInterests = myProfile.interests || [];
     const scored = potentialProfiles.map(profile => {
       const theirInterests = profile.interests || [];
       const commonInterests = myInterests.filter(i => theirInterests.includes(i));
-      return { profile, score: commonInterests.length };
+      let score = commonInterests.length;
+      if (myProfile.zipCode && profile.zipCode && myProfile.zipCode === profile.zipCode) {
+        score += 5;
+      }
+      return { profile, score };
     });
 
-    // Sort by score descending, take top 10 with at least 1 shared interest
     return scored
       .filter(s => s.score > 0)
       .sort((a, b) => b.score - a.score)
@@ -265,15 +283,15 @@ export class DatabaseStorage implements IStorage {
         .where(notInArray(profiles.userId, excludeIds));
     }
 
-    // Crush picks: prioritize verified users and premium members
     const scored = potentialProfiles.map(profile => {
       let score = 0;
+      if (myProfile.zipCode && profile.zipCode && myProfile.zipCode === profile.zipCode) score += 4;
       if (profile.isVerified) score += 3;
       if (profile.isPremium) score += 2;
       if (profile.membershipTier === 'elite') score += 2;
       else if (profile.membershipTier === 'pro') score += 1;
-      if (profile.photoUrl) score += 1; // Has a photo
-      if (profile.bio && profile.bio.length > 20) score += 1; // Has a bio
+      if (profile.photoUrl) score += 1;
+      if (profile.bio && profile.bio.length > 20) score += 1;
       return { profile, score };
     });
 
@@ -318,6 +336,14 @@ export class DatabaseStorage implements IStorage {
       let totalScore = 0;
       let maxScore = 0;
       const reasons: string[] = [];
+
+      if (myProfile.zipCode && candidate.zipCode) {
+        maxScore += 15;
+        if (myProfile.zipCode === candidate.zipCode) {
+          totalScore += 15;
+          reasons.unshift("In your area");
+        }
+      }
 
       const myInterests = myProfile.interests || [];
       const theirInterests = candidate.interests || [];
