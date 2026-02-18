@@ -100,6 +100,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### February 18, 2026
+- **Voice Notes in Chat**: Users can record and send voice notes in chat messages
+  - New schema fields on messages: `voiceNoteUrl`, `voiceNoteDuration`
+  - VoiceNoteRecorder component: record up to 60s, preview, discard, upload and send
+  - VoiceNotePlayer component: inline playback with progress bar in message bubbles
+  - Mic button appears in chat input when text field is empty
+  - Upload endpoint: POST `/api/uploads/voice-note` (authenticated, uses Object Storage)
+  - Messages with voice notes sent with content "Voice note" and voiceNoteUrl/voiceNoteDuration
+  - Component file: `client/src/components/VoiceNote.tsx`
+
 ### February 6, 2026
 - **Background & Identity Feature**: Added comprehensive identity fields to user profiles
   - New schema fields: `languages` (array), `orientation`, `ethnicity`, `politicalViews`, `astrologicalSign`

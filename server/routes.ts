@@ -974,6 +974,20 @@ Guidelines:
     }
   });
 
+  // === VOICE NOTE UPLOAD (for chat messages) ===
+  app.post("/api/uploads/voice-note", isAuthenticated, async (req: any, res) => {
+    try {
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      res.json({ uploadURL, objectPath });
+    } catch (error) {
+      console.error("Error generating voice note upload URL:", error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
   // === SWIPES ===
   app.post(api.swipes.create.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
@@ -1093,6 +1107,8 @@ Guidelines:
         matchId,
         senderId: userId,
         content: input.content,
+        voiceNoteUrl: input.voiceNoteUrl || null,
+        voiceNoteDuration: input.voiceNoteDuration || null,
       });
       res.status(201).json(msg);
     } catch (err) {

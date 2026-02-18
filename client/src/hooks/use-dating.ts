@@ -160,12 +160,13 @@ export function useSendMessage(matchId: number) {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (data: string | { content: string; voiceNoteUrl?: string; voiceNoteDuration?: number }) => {
+      const body = typeof data === "string" ? { content: data } : data;
       const url = buildUrl(api.messages.create.path, { id: matchId });
       const res = await fetch(url, {
         method: api.messages.create.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(body),
         credentials: "include",
       });
 

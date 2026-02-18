@@ -5,10 +5,11 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
+import { VoiceNoteRecorder, VoiceNotePlayer } from "@/components/VoiceNote";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -173,6 +174,7 @@ export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
@@ -344,7 +346,15 @@ export default function Chat() {
                     }
                   `}
                 >
-                  {msg.content}
+                  {msg.voiceNoteUrl ? (
+                    <VoiceNotePlayer
+                      url={msg.voiceNoteUrl.startsWith("http") ? msg.voiceNoteUrl : `/objects/${msg.voiceNoteUrl}`}
+                      duration={msg.voiceNoteDuration}
+                      isMe={isMe}
+                    />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </motion.div>
             );
@@ -371,24 +381,60 @@ export default function Chat() {
            </div>
         )}
 
-        <form onSubmit={handleSend} className="flex gap-2">
-          <Input 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder={isTrialExpired ? "Subscription required to chat..." : "Type a message..."}
-            className="flex-1"
-            disabled={sending || isTrialExpired}
-            data-testid="input-message"
+        {isRecordingVoice ? (
+          <VoiceNoteRecorder
+            onSend={(voiceNoteUrl, duration) => {
+              setError(null);
+              sendMessage(
+                { content: "Voice note", voiceNoteUrl, voiceNoteDuration: duration },
+                {
+                  onSuccess: () => setIsRecordingVoice(false),
+                  onError: (err) => {
+                    if (err.message.includes("TRIAL_EXPIRED")) {
+                      setError("Your free trial has ended. Please subscribe to continue chatting.");
+                    } else {
+                      setError("Failed to send voice note");
+                    }
+                    setIsRecordingVoice(false);
+                  },
+                }
+              );
+            }}
+            onCancel={() => setIsRecordingVoice(false)}
+            disabled={sending}
           />
-          <Button 
-            type="submit" 
-            size="icon" 
-            disabled={!inputValue.trim() || sending || isTrialExpired}
-            data-testid="button-send"
-          >
-            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </Button>
-        </form>
+        ) : (
+          <form onSubmit={handleSend} className="flex gap-2">
+            <Input 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={isTrialExpired ? "Subscription required to chat..." : "Type a message..."}
+              className="flex-1"
+              disabled={sending || isTrialExpired}
+              data-testid="input-message"
+            />
+            {!inputValue.trim() && !isTrialExpired ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => setIsRecordingVoice(true)}
+                disabled={sending}
+                data-testid="button-start-voice-note"
+              >
+                <Mic className="w-5 h-5" />
+              </Button>
+            ) : null}
+            <Button 
+              type="submit" 
+              size="icon" 
+              disabled={!inputValue.trim() || sending || isTrialExpired}
+              data-testid="button-send"
+            >
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </Button>
+          </form>
+        )}
       </div>
 
       <ReportDialog

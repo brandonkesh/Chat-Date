@@ -115,7 +115,11 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/matches/:id/messages',
-      input: z.object({ content: z.string().min(1) }),
+      input: z.object({ 
+        content: z.string().min(1),
+        voiceNoteUrl: z.string().optional(),
+        voiceNoteDuration: z.number().optional(),
+      }),
       responses: {
         201: z.custom<typeof messages.$inferSelect>(),
         400: errorSchemas.validation,

@@ -134,6 +134,8 @@ export const messages = pgTable("messages", {
   matchId: integer("match_id").notNull().references(() => matches.id),
   senderId: varchar("sender_id").notNull().references(() => users.id),
   content: text("content").notNull(),
+  voiceNoteUrl: text("voice_note_url"),
+  voiceNoteDuration: integer("voice_note_duration"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
