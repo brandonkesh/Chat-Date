@@ -26,6 +26,7 @@ import { ArrowLeft, Loader2, X, Plus, ShieldCheck, ChevronRight, Wine, Cigarette
 import { differenceInYears } from "date-fns";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { VoiceIntro } from "@/components/VoiceIntro";
+import { IntroVideo } from "@/components/IntroVideo";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -160,6 +161,9 @@ function EditProfileForm({ profile }: { profile: Profile }) {
             <CardDescription>Update your dating profile</CardDescription>
             <div className="mt-4">
               <VoiceIntro voiceIntroUrl={profile.voiceIntroUrl} editable />
+              <div className="mt-3">
+                <IntroVideo introVideoUrl={profile.introVideoUrl} editable />
+              </div>
             </div>
           </CardHeader>
           <CardContent>

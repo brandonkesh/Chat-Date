@@ -50,7 +50,7 @@ Preferred communication style: Simple, everyday language.
 - Replit Auth (OpenID Connect)
 
 ### Object Storage
-- Replit Object Storage (for profile photos, voice notes, voice intros, verification photos)
+- Replit Object Storage (for profile photos, voice notes, voice intros, intro videos, verification photos)
 
 ### Third-Party Services
 - **Dicebear API**: Fallback avatar generation.

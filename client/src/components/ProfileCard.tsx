@@ -2,6 +2,7 @@ import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
 import { MapPin, ShieldCheck, Briefcase, GraduationCap, Wine, Dumbbell, Dog, Baby, Church } from "lucide-react";
 import { VoiceIntroPlayer } from "@/components/VoiceIntro";
+import { IntroVideoModal } from "@/components/IntroVideo";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -142,6 +143,9 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
           )}
           {profile.voiceIntroUrl && (
             <VoiceIntroPlayer voiceIntroUrl={profile.voiceIntroUrl} />
+          )}
+          {profile.introVideoUrl && (
+            <IntroVideoModal introVideoUrl={profile.introVideoUrl} />
           )}
         </div>
 
