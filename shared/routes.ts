@@ -79,6 +79,13 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    likesReceived: {
+      method: 'GET' as const,
+      path: '/api/swipes/likes-received',
+      responses: {
+        200: z.array(z.custom<typeof profiles.$inferSelect>()),
+      },
+    },
   },
   matches: {
     list: {

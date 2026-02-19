@@ -1054,6 +1054,12 @@ Guidelines:
     }
   });
 
+  app.get(api.swipes.likesReceived.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const likers = await storage.getLikesReceived(userId);
+    res.json(likers.map(sanitizeProfile));
+  });
+
   // === MATCHES ===
   app.get(api.matches.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

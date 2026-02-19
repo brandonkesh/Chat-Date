@@ -53,6 +53,7 @@ export interface IStorage {
   createMatch(user1Id: string, user2Id: string, isDailyMatch?: boolean): Promise<number>;
   getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
   deleteMatch(matchId: number, userId: string): Promise<boolean>;
+  getLikesReceived(userId: string): Promise<Profile[]>;
   
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
@@ -558,6 +559,41 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(matches).where(eq(matches.id, matchId));
     });
     return true;
+  }
+
+  async getLikesReceived(userId: string): Promise<Profile[]> {
+    const blockedIds = await this.getBlockedUserIds(userId);
+
+    const matchedUserIds = await db
+      .select({ id: matches.user1Id })
+      .from(matches)
+      .where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    const matchedIds = matchedUserIds.map(m => m.id);
+    const matchedUserIds2 = await db
+      .select({ id: matches.user2Id })
+      .from(matches)
+      .where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+    const allMatchedIds = [...new Set([...matchedIds, ...matchedUserIds2.map(m => m.id)])].filter(id => id !== userId);
+
+    const likedSwipes = await db
+      .select()
+      .from(swipes)
+      .where(and(
+        eq(swipes.swipedId, userId),
+        eq(swipes.liked, true)
+      ))
+      .orderBy(desc(swipes.createdAt));
+
+    const excludeIds = [...new Set([...blockedIds, ...allMatchedIds, userId])];
+    const likerProfiles: Profile[] = [];
+
+    for (const swipe of likedSwipes) {
+      if (excludeIds.includes(swipe.swiperId)) continue;
+      const profile = await this.getProfile(swipe.swiperId);
+      if (profile) likerProfiles.push(profile);
+    }
+
+    return likerProfiles;
   }
 
   async getMessages(matchId: number): Promise<Message[]> {

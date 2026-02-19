@@ -13,6 +13,7 @@ import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
 import Feed from "@/pages/Feed";
 import Matches from "@/pages/Matches";
+import LikesYou from "@/pages/LikesYou";
 import Chat from "@/pages/Chat";
 import Inbox from "@/pages/Inbox";
 import Premium from "@/pages/Premium";
@@ -125,6 +126,10 @@ function Router() {
           <ProtectedRoute component={Feed} />
         </Route>
         
+        <Route path="/likes">
+          <ProtectedRoute component={LikesYou} />
+        </Route>
+
         <Route path="/matches">
           <ProtectedRoute component={Matches} />
         </Route>
