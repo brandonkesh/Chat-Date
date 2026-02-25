@@ -27,7 +27,8 @@ Preferred communication style: Simple, everyday language.
 - **Authentication**: Replit Auth via OpenID Connect with PostgreSQL-backed sessions.
 - **Trial System**: 30-day free trial for premium chat features, managed by `trialEndsAt` timestamp on profiles.
 - **Matchmaking**: Multi-dimensional scoring based on various profile attributes (interests, lifestyle, goals, etc.), including zip code proximity.
-- **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching and profile optimization.
+- **AI Scam Detector**: Real-time analysis of chat messages using OpenAI to detect fraudulent behavior and warn users.
+- **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching, profile optimization, and scam detection.
 - **Micro-Dates**: Real-time interactive 5-minute virtual dates with activity catalog and polling for responses.
 - **User Blocking**: Bidirectional user blocking with API enforcement.
 - **App Lock**: Optional password protection for the app with server-side enforcement and recovery.

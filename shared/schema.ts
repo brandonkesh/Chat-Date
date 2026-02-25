@@ -139,6 +139,8 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   voiceNoteUrl: text("voice_note_url"),
   voiceNoteDuration: integer("voice_note_duration"),
+  isScam: boolean("is_scam").default(false),
+  scamAnalysis: text("scam_analysis"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

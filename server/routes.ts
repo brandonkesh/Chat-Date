@@ -1156,12 +1156,47 @@ Guidelines:
 
     try {
       const input = api.messages.create.input.parse(req.body);
+
+      // AI Scam Detection
+      let isScam = false;
+      let scamAnalysis = null;
+      try {
+        const OpenAI = (await import("openai")).default;
+        const openai = new OpenAI({
+          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        });
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-5-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are an AI scam detector for a dating app. Analyze the message content for signs of common scams: requests for money, suspicious external links, crypto investment pitches, or phishing attempts. Return a JSON object: { \"isScam\": boolean, \"analysis\": \"brief reason if scam, else null\" }"
+            },
+            {
+              role: "user",
+              content: input.content
+            }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0]?.message?.content || "{}");
+        isScam = !!result.isScam;
+        scamAnalysis = result.analysis;
+      } catch (err) {
+        console.error("AI Scam Detection Error:", err);
+      }
+
       const msg = await storage.createMessage({
         matchId,
         senderId: userId,
         content: input.content,
         voiceNoteUrl: input.voiceNoteUrl || null,
         voiceNoteDuration: input.voiceNoteDuration || null,
+        isScam,
+        scamAnalysis,
       });
       res.status(201).json(msg);
     } catch (err) {

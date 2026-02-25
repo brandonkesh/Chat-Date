@@ -416,7 +416,21 @@ export default function Chat() {
                       isMe={isMe}
                     />
                   ) : (
-                    msg.content
+                    <>
+                      {msg.content}
+                      {msg.isScam && !isMe && (
+                        <div 
+                          className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded text-[10px] text-destructive flex items-start gap-1.5" 
+                          data-testid={`scam-warning-${msg.id}`}
+                        >
+                          <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-bold uppercase tracking-wider">Potential Scam Detected</p>
+                            <p className="opacity-90">{msg.scamAnalysis}</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </motion.div>
