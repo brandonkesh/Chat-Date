@@ -31,6 +31,7 @@ import EmailVerification from "@/pages/EmailVerification";
 import MicroDate from "@/pages/MicroDate";
 import AppLock from "@/pages/AppLock";
 import ProfileOptimizer from "@/pages/ProfileOptimizer";
+import SavedProfiles from "@/pages/SavedProfiles";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -192,6 +193,10 @@ function Router() {
 
         <Route path="/profile/optimizer">
           <ProtectedRoute component={ProfileOptimizer} />
+        </Route>
+
+        <Route path="/saved">
+          <ProtectedRoute component={SavedProfiles} />
         </Route>
         
         <Route component={NotFound} />

@@ -153,6 +153,12 @@ export function Navbar() {
                   For You
                 </DropdownMenuItem>
               </Link>
+              <Link href="/saved">
+                <DropdownMenuItem data-testid="button-saved-profiles-mobile">
+                  <Bookmark className="w-4 h-4 mr-2" />
+                  Saved Profiles
+                </DropdownMenuItem>
+              </Link>
               <Link href="/ai-matches">
                 <DropdownMenuItem data-testid="button-ai-matches-mobile">
                   <Wand2 className="w-4 h-4 mr-2" />

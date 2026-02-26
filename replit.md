@@ -29,6 +29,7 @@ Preferred communication style: Simple, everyday language.
 - **Matchmaking**: Multi-dimensional scoring based on various profile attributes (interests, lifestyle, goals, etc.), including zip code proximity.
 - **AI Scam Detector**: Real-time analysis of chat messages using OpenAI to detect fraudulent behavior and warn users.
 - **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching, profile optimization, and scam detection.
+- **Profile Management**: Ability to save profiles for later viewing and hide profiles to remove them from the feed permanently.
 - **Micro-Dates**: Real-time interactive 5-minute virtual dates with activity catalog and polling for responses.
 - **User Blocking**: Bidirectional user blocking with API enforcement.
 - **App Lock**: Optional password protection for the app with server-side enforcement and recovery.

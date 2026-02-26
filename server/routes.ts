@@ -1210,6 +1210,35 @@ Guidelines:
     }
   });
 
+  // === SAVED & HIDDEN PROFILES ===
+
+  app.get("/api/profiles/saved", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profiles = await storage.getSavedProfiles(userId);
+    res.json(profiles.map(sanitizeProfile));
+  });
+
+  app.post("/api/profiles/save/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const savedUserId = req.params.id;
+    await storage.saveProfile(userId, savedUserId);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/profiles/save/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const savedUserId = req.params.id;
+    await storage.unsaveProfile(userId, savedUserId);
+    res.json({ success: true });
+  });
+
+  app.post("/api/profiles/hide/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const hiddenUserId = req.params.id;
+    await storage.hideProfile(userId, hiddenUserId);
+    res.json({ success: true });
+  });
+
   // === STRIPE / PAYMENTS ===
   
   // Get Stripe publishable key

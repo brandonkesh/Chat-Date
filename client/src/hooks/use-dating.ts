@@ -86,6 +86,64 @@ export function useCrushPicks() {
 }
 
 // ============================================
+// SAVED & HIDDEN PROFILES HOOKS
+// ============================================
+
+export function useSavedProfiles() {
+  return useQuery({
+    queryKey: ["/api/profiles/saved"],
+    queryFn: async () => {
+      const res = await fetch("/api/profiles/saved", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch saved profiles");
+      return await res.json();
+    },
+  });
+}
+
+export function useSaveProfile() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, save }: { userId: string; save: boolean }) => {
+      const res = await fetch(`/api/profiles/save/${userId}`, {
+        method: save ? "POST" : "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update saved status");
+      return await res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profiles/saved"] });
+      toast({ 
+        title: variables.save ? "Profile saved" : "Profile removed from saved",
+        description: variables.save ? "You can find them in your saved list." : ""
+      });
+    },
+  });
+}
+
+export function useHideProfile() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/profiles/hide/${userId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to hide profile");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.profiles.list.path] });
+      toast({ title: "Profile hidden", description: "You won't see them again." });
+    },
+  });
+}
+
+// ============================================
 // SWIPE HOOKS
 // ============================================
 

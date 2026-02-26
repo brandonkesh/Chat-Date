@@ -7,6 +7,8 @@ import {
   swipes,
   reports,
   blocks,
+  savedProfiles,
+  hiddenProfiles,
   microDates,
   microDateResponses,
   type User,
@@ -23,6 +25,8 @@ import {
   type Block,
   type MicroDate,
   type MicroDateResponse,
+  type SavedProfile,
+  type HiddenProfile,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -84,6 +88,18 @@ export interface IStorage {
   isBlockedEither(userId1: string, userId2: string): Promise<boolean>;
   getBlockedUserIds(userId: string): Promise<string[]>;
   getBlockedUsers(userId: string): Promise<{ block: Block; profile: Profile }[]>;
+
+  // Saved Profiles
+  saveProfile(userId: string, savedUserId: string): Promise<void>;
+  unsaveProfile(userId: string, savedUserId: string): Promise<void>;
+  isSaved(userId: string, savedUserId: string): Promise<boolean>;
+  getSavedProfiles(userId: string): Promise<Profile[]>;
+
+  // Hidden Profiles
+  hideProfile(userId: string, hiddenUserId: string): Promise<void>;
+  unhideProfile(userId: string, hiddenUserId: string): Promise<void>;
+  isHidden(userId: string, hiddenUserId: string): Promise<boolean>;
+  getHiddenUserIds(userId: string): Promise<string[]>;
 
   // Micro Dates
   createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate>;
@@ -175,7 +191,8 @@ export class DatabaseStorage implements IStorage {
     
     const swipedIds = swiped.map(s => s.swipedId);
     const blockedIds = await this.getBlockedUserIds(userId);
-    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
+    const hiddenIds = await this.getHiddenUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, ...hiddenIds, userId])];
 
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
@@ -220,7 +237,8 @@ export class DatabaseStorage implements IStorage {
     
     const swipedIds = swiped.map(s => s.swipedId);
     const blockedIds = await this.getBlockedUserIds(userId);
-    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
+    const hiddenIds = await this.getHiddenUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, ...hiddenIds, userId])];
 
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
@@ -267,7 +285,8 @@ export class DatabaseStorage implements IStorage {
     
     const swipedIds = swiped.map(s => s.swipedId);
     const blockedIds = await this.getBlockedUserIds(userId);
-    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
+    const hiddenIds = await this.getHiddenUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, ...hiddenIds, userId])];
 
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {
@@ -316,7 +335,8 @@ export class DatabaseStorage implements IStorage {
     
     const swipedIds = swiped.map(s => s.swipedId);
     const blockedIds = await this.getBlockedUserIds(userId);
-    const excludeIds = [...new Set([...swipedIds, ...blockedIds, userId])];
+    const hiddenIds = await this.getHiddenUserIds(userId);
+    const excludeIds = [...new Set([...swipedIds, ...blockedIds, ...hiddenIds, userId])];
 
     let potentialProfiles: Profile[];
     if (myProfile.interestedIn !== 'everyone') {

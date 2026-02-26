@@ -190,6 +190,30 @@ export const blocks = pgTable("blocks", {
 
 export type Block = typeof blocks.$inferSelect;
 
+// === SAVED PROFILES ===
+export const savedProfiles = pgTable("saved_profiles", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  savedUserId: varchar("saved_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSavedProfileSchema = createInsertSchema(savedProfiles).omit({ id: true, createdAt: true });
+export type InsertSavedProfile = z.infer<typeof insertSavedProfileSchema>;
+export type SavedProfile = typeof savedProfiles.$inferSelect;
+
+// === HIDDEN PROFILES ===
+export const hiddenProfiles = pgTable("hidden_profiles", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  hiddenUserId: varchar("hidden_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertHiddenProfileSchema = createInsertSchema(hiddenProfiles).omit({ id: true, createdAt: true });
+export type InsertHiddenProfile = z.infer<typeof insertHiddenProfileSchema>;
+export type HiddenProfile = typeof hiddenProfiles.$inferSelect;
+
 // === MICRO DATES ===
 export type MicroDateStatus = 'pending' | 'active' | 'completed' | 'expired' | 'declined';
 

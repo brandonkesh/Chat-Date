@@ -1,7 +1,7 @@
-import { useFeed, useSwipe, useMyProfile } from "@/hooks/use-dating";
+import { useFeed, useSwipe, useMyProfile, useHideProfile, useSaveProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, Crown } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, Crown, EyeOff, Bookmark } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -16,6 +16,8 @@ export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
   const { data: myProfile } = useMyProfile();
   const { mutate: swipe } = useSwipe();
+  const { mutate: hideProfile } = useHideProfile();
+  const { mutate: saveProfile } = useSaveProfile();
   const { toast } = useToast();
   
   const [reportOpen, setReportOpen] = useState(false);
@@ -51,6 +53,19 @@ export default function Feed() {
         }
       }
     });
+  };
+
+  const handleHide = () => {
+    if (stack.length === 0) return;
+    const currentProfile = stack[0];
+    setStack(prev => prev.slice(1));
+    hideProfile(currentProfile.userId);
+  };
+
+  const handleSave = () => {
+    if (stack.length === 0) return;
+    const currentProfile = stack[0];
+    saveProfile({ userId: currentProfile.userId, save: true });
   };
 
   if (isLoading) {
@@ -169,11 +184,31 @@ export default function Feed() {
 
           <Button 
             size="icon"
+            variant="outline"
+            className="text-blue-500"
+            onClick={handleSave}
+            data-testid="button-save-profile"
+          >
+            <Bookmark className="w-5 h-5 fill-current" />
+          </Button>
+
+          <Button 
+            size="icon"
             className="bg-green-500 text-white"
             onClick={() => handleSwipe("right")}
             data-testid="button-swipe-right"
           >
             <Heart className="w-6 h-6 fill-current" />
+          </Button>
+
+          <Button
+            size="icon"
+            variant="outline"
+            className="text-muted-foreground"
+            onClick={handleHide}
+            data-testid="button-hide-profile"
+          >
+            <EyeOff className="w-5 h-5" />
           </Button>
 
           <Button
