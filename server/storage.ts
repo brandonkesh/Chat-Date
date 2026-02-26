@@ -697,6 +697,14 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async getHiddenUserIds(userId: string): Promise<string[]> {
+    const hidden = await db
+      .select({ hiddenUserId: hiddenProfiles.hiddenUserId })
+      .from(hiddenProfiles)
+      .where(eq(hiddenProfiles.userId, userId));
+    return hidden.map(h => h.hiddenUserId);
+  }
+
   async createReport(reporterId: string, report: InsertReport): Promise<Report> {
     const [created] = await db
       .insert(reports)
