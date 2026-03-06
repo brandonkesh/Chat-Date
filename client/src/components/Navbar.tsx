@@ -86,6 +86,13 @@ export function Navbar() {
                   {profile?.displayName}
                 </div>
                 <DropdownMenuSeparator />
+                <Link href="/ai-advisor">
+                  <DropdownMenuItem data-testid="button-ai-advisor">
+                    <Mic className="w-4 h-4 mr-2" />
+                    AI Advisor
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
                 <Link href="/profile/edit">
                   <DropdownMenuItem data-testid="button-edit-profile">
                     <Pencil className="w-4 h-4 mr-2" />
@@ -102,12 +109,6 @@ export function Navbar() {
                   <DropdownMenuItem data-testid="button-ai-matches">
                     <Wand2 className="w-4 h-4 mr-2" />
                     AI Matches
-                  </DropdownMenuItem>
-                </Link>
-                <Link href="/ai-advisor">
-                  <DropdownMenuItem data-testid="button-ai-advisor">
-                    <Mic className="w-4 h-4 mr-2" />
-                    AI Advisor
                   </DropdownMenuItem>
                 </Link>
                 <Link href="/help">
@@ -141,6 +142,13 @@ export function Navbar() {
                 {profile?.displayName}
               </div>
               <DropdownMenuSeparator />
+              <Link href="/ai-advisor">
+                <DropdownMenuItem data-testid="button-ai-advisor-mobile">
+                  <Mic className="w-4 h-4 mr-2" />
+                  AI Advisor
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuSeparator />
               <Link href="/profile/edit">
                 <DropdownMenuItem data-testid="button-edit-profile-mobile">
                   <Pencil className="w-4 h-4 mr-2" />
@@ -169,12 +177,6 @@ export function Navbar() {
                 <DropdownMenuItem data-testid="button-ai-matches-mobile">
                   <Wand2 className="w-4 h-4 mr-2" />
                   AI Matches
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/ai-advisor">
-                <DropdownMenuItem data-testid="button-ai-advisor-mobile">
-                  <Mic className="w-4 h-4 mr-2" />
-                  AI Advisor
                 </DropdownMenuItem>
               </Link>
               <Link href="/help">
