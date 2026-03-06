@@ -1,7 +1,7 @@
 import { useFeed, useSwipe, useMyProfile, useHideProfile, useSaveProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, Crown, EyeOff, Bookmark } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, Crown, EyeOff, Bookmark, Mic, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -91,6 +91,22 @@ export default function Feed() {
   return (
     <div className="h-[calc(100vh-64px)] w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
       
+      {/* AI Advisor Banner - shown at top */}
+      <Link href="/ai-advisor" className="w-full mb-3 block" data-testid="link-ai-advisor-banner">
+        <Card className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-ai-advisor-banner">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <Mic className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">AI Dating Advisor</p>
+              <p className="text-xs text-white/80 truncate">Chat or talk for date ideas & advice</p>
+            </div>
+            <Sparkles className="w-5 h-5 flex-shrink-0" />
+          </div>
+        </Card>
+      </Link>
+
       {/* Verification Banner - shown for unverified users */}
       {myProfile && !myProfile.isVerified && myProfile.verificationStatus !== 'pending' && (
         <Link href="/verification" className="w-full mb-4 block" data-testid="link-verification-banner">
