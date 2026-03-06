@@ -1540,7 +1540,26 @@ Guidelines:
   // === AI DATING ADVISOR ===
   app.post("/api/ai-advisor/chat", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const { text, audio, history, generateAudio } = req.body;
+    const { text, audio, history, generateAudio, voice, language } = req.body;
+
+    const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
+    const selectedVoice = validVoices.includes(voice) ? voice as typeof validVoices[number] : "nova";
+
+    const languageMap: Record<string, string> = {
+      english: "English",
+      spanish: "Spanish",
+      french: "French",
+      german: "German",
+      italian: "Italian",
+      portuguese: "Portuguese",
+      japanese: "Japanese",
+      korean: "Korean",
+      chinese: "Chinese (Mandarin)",
+      arabic: "Arabic",
+      hindi: "Hindi",
+      russian: "Russian",
+    };
+    const selectedLanguage = languageMap[language] || "English";
 
     if (!text && !audio) {
       return res.status(400).json({ message: "Please provide text or audio input." });
@@ -1560,6 +1579,10 @@ Guidelines:
       }
 
       const profile = await storage.getProfile(userId);
+
+      const languageInstruction = selectedLanguage !== "English"
+        ? `\n\nIMPORTANT: You MUST respond entirely in ${selectedLanguage}. All your text output must be in ${selectedLanguage}.`
+        : "";
 
       const conversationMessages: any[] = [
         {
@@ -1585,7 +1608,7 @@ Topics you can help with:
 - Building confidence
 - Red flags to watch for
 - Long-distance relationship tips
-- When/how to ask someone out`
+- When/how to ask someone out${languageInstruction}`
         },
       ];
 
@@ -1619,7 +1642,7 @@ Topics you can help with:
       let audioBase64: string | undefined;
       if (generateAudio) {
         try {
-          const audioBuffer = await textToSpeech(responseText, "nova", "mp3");
+          const audioBuffer = await textToSpeech(responseText, selectedVoice, "mp3");
           if (audioBuffer.length > 0) {
             audioBase64 = audioBuffer.toString("base64");
           }

@@ -2,12 +2,19 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User, Lightbulb } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User, Lightbulb, Settings2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -15,6 +22,30 @@ interface Message {
   content: string;
   audioUrl?: string;
 }
+
+const VOICES = [
+  { id: "nova", label: "Nova", gender: "Female", lang: "English" },
+  { id: "shimmer", label: "Shimmer", gender: "Female", lang: "English" },
+  { id: "alloy", label: "Alloy", gender: "Neutral", lang: "English" },
+  { id: "echo", label: "Echo", gender: "Male", lang: "English" },
+  { id: "onyx", label: "Onyx", gender: "Male", lang: "English" },
+  { id: "fable", label: "Fable", gender: "Male", lang: "English (British)" },
+];
+
+const LANGUAGES = [
+  { id: "english", label: "English" },
+  { id: "spanish", label: "Spanish" },
+  { id: "french", label: "French" },
+  { id: "german", label: "German" },
+  { id: "italian", label: "Italian" },
+  { id: "portuguese", label: "Portuguese" },
+  { id: "japanese", label: "Japanese" },
+  { id: "korean", label: "Korean" },
+  { id: "chinese", label: "Chinese (Mandarin)" },
+  { id: "arabic", label: "Arabic" },
+  { id: "hindi", label: "Hindi" },
+  { id: "russian", label: "Russian" },
+];
 
 const SUGGESTED_TOPICS = [
   "What are some creative first date ideas?",
@@ -34,11 +65,16 @@ export default function AIAdvisor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [selectedVoice, setSelectedVoice] = useState("nova");
+  const [selectedLanguage, setSelectedLanguage] = useState("english");
+  const [showSettings, setShowSettings] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const currentVoice = VOICES.find(v => v.id === selectedVoice);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -117,6 +153,8 @@ export default function AIAdvisor() {
       const body: Record<string, any> = {
         history: conversationHistory,
         generateAudio: audioEnabled,
+        voice: selectedVoice,
+        language: selectedLanguage,
       };
 
       if (audioBase64) {
@@ -148,7 +186,7 @@ export default function AIAdvisor() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, messages, audioEnabled, playAudio, toast]);
+  }, [isProcessing, messages, audioEnabled, selectedVoice, selectedLanguage, playAudio, toast]);
 
   const handleTextSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -224,11 +262,19 @@ export default function AIAdvisor() {
             <div>
               <h1 className="text-lg font-bold" data-testid="text-page-title">AI Dating Advisor</h1>
               <p className="text-xs text-muted-foreground">
-                {isProcessing ? "Thinking..." : isSpeaking ? "Speaking..." : "Ask me anything about dating"}
+                {isProcessing ? "Thinking..." : isSpeaking ? "Speaking..." : `${currentVoice?.label} · ${LANGUAGES.find(l => l.id === selectedLanguage)?.label}`}
               </p>
             </div>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSettings(!showSettings)}
+              data-testid="button-settings"
+            >
+              <Settings2 className="w-5 h-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -242,6 +288,52 @@ export default function AIAdvisor() {
             </Button>
           </div>
         </div>
+
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden mb-4"
+            >
+              <Card className="p-4 border-border/50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block" data-testid="label-voice">Voice</label>
+                    <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                      <SelectTrigger data-testid="select-voice">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VOICES.map(v => (
+                          <SelectItem key={v.id} value={v.id} data-testid={`option-voice-${v.id}`}>
+                            {v.label} ({v.gender}) — {v.lang}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block" data-testid="label-language">Response Language</label>
+                    <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                      <SelectTrigger data-testid="select-language">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGES.map(l => (
+                          <SelectItem key={l.id} value={l.id} data-testid={`option-lang-${l.id}`}>
+                            {l.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <Card className="border-border/50 overflow-hidden">
           <div
