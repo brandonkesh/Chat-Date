@@ -2,19 +2,23 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User, Lightbulb, Settings2 } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User, Lightbulb, ChevronDown, Globe, AudioLines } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 
 interface Message {
   id: string;
@@ -67,7 +71,7 @@ export default function AIAdvisor() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [selectedVoice, setSelectedVoice] = useState("nova");
   const [selectedLanguage, setSelectedLanguage] = useState("english");
-  const [showSettings, setShowSettings] = useState(false);
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -267,14 +271,54 @@ export default function AIAdvisor() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowSettings(!showSettings)}
-              data-testid="button-settings"
-            >
-              <Settings2 className="w-5 h-5" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" data-testid="button-settings-dropdown">
+                  <AudioLines className="w-3.5 h-3.5" />
+                  {currentVoice?.label}
+                  <span className="text-muted-foreground">·</span>
+                  <Globe className="w-3.5 h-3.5" />
+                  {LANGUAGES.find(l => l.id === selectedLanguage)?.label}
+                  <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <AudioLines className="w-4 h-4" />
+                  Voice
+                </DropdownMenuLabel>
+                {VOICES.map(v => (
+                  <DropdownMenuItem
+                    key={v.id}
+                    onClick={() => setSelectedVoice(v.id)}
+                    className={selectedVoice === v.id ? "bg-accent" : ""}
+                    data-testid={`option-voice-${v.id}`}
+                  >
+                    <span className="flex-1">{v.label}</span>
+                    <span className="text-xs text-muted-foreground">{v.gender} · {v.lang}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger data-testid="submenu-language">
+                    <Globe className="w-4 h-4 mr-2" />
+                    Language: {LANGUAGES.find(l => l.id === selectedLanguage)?.label}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                    {LANGUAGES.map(l => (
+                      <DropdownMenuItem
+                        key={l.id}
+                        onClick={() => setSelectedLanguage(l.id)}
+                        className={selectedLanguage === l.id ? "bg-accent" : ""}
+                        data-testid={`option-lang-${l.id}`}
+                      >
+                        {l.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
@@ -288,52 +332,6 @@ export default function AIAdvisor() {
             </Button>
           </div>
         </div>
-
-        <AnimatePresence>
-          {showSettings && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden mb-4"
-            >
-              <Card className="p-4 border-border/50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block" data-testid="label-voice">Voice</label>
-                    <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                      <SelectTrigger data-testid="select-voice">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VOICES.map(v => (
-                          <SelectItem key={v.id} value={v.id} data-testid={`option-voice-${v.id}`}>
-                            {v.label} ({v.gender}) — {v.lang}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block" data-testid="label-language">Response Language</label>
-                    <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                      <SelectTrigger data-testid="select-language">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LANGUAGES.map(l => (
-                          <SelectItem key={l.id} value={l.id} data-testid={`option-lang-${l.id}`}>
-                            {l.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <Card className="border-border/50 overflow-hidden">
           <div
