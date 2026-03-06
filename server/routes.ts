@@ -12,6 +12,7 @@ import { stripeService } from "./stripeService";
 import { stripeStorage } from "./stripeStorage";
 import { getStripePublishableKey } from "./stripeClient";
 import { WebSocketServer, WebSocket } from "ws";
+import { ensureCompatibleFormat, speechToText, textToSpeech } from "./replit_integrations/audio/client";
 import crypto from "crypto";
 import { openai } from "./replit_integrations/image/client";
 import { generateSecret, generateURI, verifySync } from "otplib";
@@ -1534,6 +1535,108 @@ Guidelines:
       inviterProfile: sanitizeProfile(inviterProfile),
       inviteeProfile: sanitizeProfile(inviteeProfile),
     });
+  });
+
+  // === AI DATING ADVISOR ===
+  app.post("/api/ai-advisor/chat", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { text, audio, history, generateAudio } = req.body;
+
+    if (!text && !audio) {
+      return res.status(400).json({ message: "Please provide text or audio input." });
+    }
+
+    try {
+      let userText = text;
+
+      if (audio && !text) {
+        const audioBuffer = Buffer.from(audio, "base64");
+        const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
+        userText = await speechToText(compatibleBuffer, format);
+      }
+
+      if (!userText || !userText.trim()) {
+        return res.status(400).json({ message: "Could not understand the audio. Please try again." });
+      }
+
+      const profile = await storage.getProfile(userId);
+
+      const conversationMessages: any[] = [
+        {
+          role: "system",
+          content: `You are a warm, supportive AI dating advisor named "Crush AI". You help users with dating advice, conversation tips, first date ideas, profile optimization, relationship guidance, and handling tricky dating situations.
+
+Your personality:
+- Friendly, encouraging, and non-judgmental
+- Give practical, actionable advice
+- Use a conversational tone (not too formal)
+- Be concise — keep responses under 150 words unless the user asks for detail
+- When relevant, personalize advice based on what you know about the user
+
+${profile ? `About the user: Their name is ${profile.displayName}, they are ${profile.age} years old, ${profile.gender}, interested in ${profile.interestedIn}.${profile.bio ? ` Their bio: "${profile.bio}"` : ""}${profile.interests?.length ? ` Their interests: ${profile.interests.join(", ")}` : ""}${profile.relationshipGoal ? ` Looking for: ${profile.relationshipGoal}` : ""}` : ""}
+
+Topics you can help with:
+- First date ideas and planning
+- Opening messages and conversation starters
+- Profile tips (photos, bio, etc.)
+- How to keep conversations interesting
+- Reading signals and body language
+- Handling rejection or ghosting
+- Building confidence
+- Red flags to watch for
+- Long-distance relationship tips
+- When/how to ask someone out`
+        },
+      ];
+
+      if (Array.isArray(history)) {
+        for (const msg of history.slice(-20)) {
+          if (msg.role === "user" || msg.role === "assistant") {
+            conversationMessages.push({
+              role: msg.role,
+              content: msg.content,
+            });
+          }
+        }
+      }
+
+      conversationMessages.push({ role: "user", content: userText });
+
+      const OpenAI = (await import("openai")).default;
+      const aiClient = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const chatResponse = await aiClient.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: conversationMessages,
+        max_completion_tokens: 1024,
+      });
+
+      const responseText = chatResponse.choices[0]?.message?.content || "Sorry, I couldn't generate a response. Please try again.";
+
+      let audioBase64: string | undefined;
+      if (generateAudio) {
+        try {
+          const audioBuffer = await textToSpeech(responseText, "nova", "mp3");
+          if (audioBuffer.length > 0) {
+            audioBase64 = audioBuffer.toString("base64");
+          }
+        } catch (ttsErr) {
+          console.error("TTS error (non-fatal):", ttsErr);
+        }
+      }
+
+      res.json({
+        text: responseText,
+        userTranscript: audio ? userText : undefined,
+        audio: audioBase64,
+      });
+    } catch (err: any) {
+      console.error("AI Advisor error:", err);
+      res.status(500).json({ message: "Failed to process your request. Please try again." });
+    }
   });
 
   // === VIDEO CALL TOKEN (for WebSocket auth) ===

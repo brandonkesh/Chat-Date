@@ -32,6 +32,7 @@ import MicroDate from "@/pages/MicroDate";
 import AppLock from "@/pages/AppLock";
 import ProfileOptimizer from "@/pages/ProfileOptimizer";
 import SavedProfiles from "@/pages/SavedProfiles";
+import AIAdvisor from "@/pages/AIAdvisor";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -197,6 +198,10 @@ function Router() {
 
         <Route path="/saved">
           <ProtectedRoute component={SavedProfiles} />
+        </Route>
+
+        <Route path="/ai-advisor">
+          <ProtectedRoute component={AIAdvisor} />
         </Route>
         
         <Route component={NotFound} />

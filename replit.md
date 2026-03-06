@@ -28,7 +28,8 @@ Preferred communication style: Simple, everyday language.
 - **Trial System**: 30-day free trial for premium chat features, managed by `trialEndsAt` timestamp on profiles.
 - **Matchmaking**: Multi-dimensional scoring based on various profile attributes (interests, lifestyle, goals, etc.), including zip code proximity.
 - **AI Scam Detector**: Real-time analysis of chat messages using OpenAI to detect fraudulent behavior and warn users.
-- **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching, profile optimization, and scam detection.
+- **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching, profile optimization, scam detection, and AI Dating Advisor (voice + text chat).
+- **AI Dating Advisor**: Interactive voice/text chat with an AI for dating ideas, advice, and tips. Supports speech-to-text input and text-to-speech responses via OpenAI audio models. Route: `/ai-advisor`, API: `POST /api/ai-advisor/chat`.
 - **Profile Management**: Ability to save profiles for later viewing and hide profiles to remove them from the feed permanently.
 - **Micro-Dates**: Real-time interactive 5-minute virtual dates with activity catalog and polling for responses.
 - **User Blocking**: Bidirectional user blocking with API enforcement.

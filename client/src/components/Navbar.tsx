@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -104,6 +104,12 @@ export function Navbar() {
                     AI Matches
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/ai-advisor">
+                  <DropdownMenuItem data-testid="button-ai-advisor">
+                    <Mic className="w-4 h-4 mr-2" />
+                    AI Advisor
+                  </DropdownMenuItem>
+                </Link>
                 <Link href="/help">
                   <DropdownMenuItem data-testid="button-help">
                     <HelpCircle className="w-4 h-4 mr-2" />
@@ -163,6 +169,12 @@ export function Navbar() {
                 <DropdownMenuItem data-testid="button-ai-matches-mobile">
                   <Wand2 className="w-4 h-4 mr-2" />
                   AI Matches
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/ai-advisor">
+                <DropdownMenuItem data-testid="button-ai-advisor-mobile">
+                  <Mic className="w-4 h-4 mr-2" />
+                  AI Advisor
                 </DropdownMenuItem>
               </Link>
               <Link href="/help">
