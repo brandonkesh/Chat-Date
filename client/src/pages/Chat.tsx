@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -176,6 +176,7 @@ export default function Chat() {
   const [reportOpen, setReportOpen] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<{ callerName: string; callerPhoto: string | null } | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -220,6 +221,45 @@ export default function Chat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!matchId || matchId <= 0) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/video-call/active/${matchId}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active) {
+            setIncomingCall({ callerName: data.callerName, callerPhoto: data.callerPhoto });
+          } else {
+            setIncomingCall(null);
+          }
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [matchId]);
+
+  const handleStartVideoCall = async () => {
+    try {
+      await apiRequest("POST", "/api/video-call/invite", { matchId });
+      setLocation(`/video-call/${matchId}?role=caller`);
+    } catch {
+      toast({ title: "Could not start video call", variant: "destructive" });
+    }
+  };
+
+  const handleAcceptCall = () => {
+    setIncomingCall(null);
+    setLocation(`/video-call/${matchId}`);
+  };
+
+  const handleDeclineCall = async () => {
+    setIncomingCall(null);
+    try {
+      await apiRequest("POST", "/api/video-call/decline", { matchId });
+    } catch {}
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,11 +334,9 @@ export default function Chat() {
         )}
 
         {profile?.membershipTier === 'elite' ? (
-          <Link href={`/video/${matchId}`}>
-            <Button variant="ghost" size="icon" data-testid="button-video-call">
-              <Video className="w-5 h-5" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={handleStartVideoCall} data-testid="button-video-call">
+            <Video className="w-5 h-5" />
+          </Button>
         ) : (
           <Link href="/premium">
             <Button variant="ghost" size="icon" className="relative" data-testid="button-video-call-locked">
@@ -328,6 +366,61 @@ export default function Chat() {
           <Flag className="w-5 h-5" />
         </Button>
       </header>
+
+      {incomingCall && (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+            data-testid="modal-incoming-call"
+          >
+            <div className="flex flex-col items-center gap-6">
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <img
+                  src={incomingCall.callerPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${incomingCall.callerName}`}
+                  alt={incomingCall.callerName}
+                  className="w-28 h-28 rounded-full object-cover border-4 border-green-500/40"
+                  data-testid="img-incoming-caller"
+                />
+              </motion.div>
+              <div className="text-center">
+                <h3 className="text-white text-xl font-semibold" data-testid="text-incoming-caller-name">{incomingCall.callerName}</h3>
+                <p className="text-white/60 text-sm mt-1">Incoming Video Call...</p>
+              </div>
+              <div className="flex items-center gap-8">
+                <div className="flex flex-col items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="w-16 h-16 rounded-full"
+                    onClick={handleDeclineCall}
+                    data-testid="button-decline-call"
+                  >
+                    <PhoneOff className="w-7 h-7" />
+                  </Button>
+                  <span className="text-white/60 text-xs">Decline</span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <Button
+                    size="icon"
+                    className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                    onClick={handleAcceptCall}
+                    data-testid="button-accept-call"
+                  >
+                    <Phone className="w-7 h-7" />
+                  </Button>
+                  <span className="text-white/60 text-xs">Accept</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      )}
 
       {showUnmatchConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setShowUnmatchConfirm(false)} data-testid="modal-unmatch-confirm">

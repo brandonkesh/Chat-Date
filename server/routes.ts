@@ -1662,11 +1662,121 @@ Topics you can help with:
     }
   });
 
+  // === VIDEO CALL INVITATIONS ===
+  const activeCallInvites = new Map<number, { callerId: string; callerName: string; callerPhoto: string | null; createdAt: Date }>();
+
+  app.post("/api/video-call/invite", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { matchId } = req.body;
+
+    if (!matchId) {
+      return res.status(400).json({ error: "Match ID required" });
+    }
+
+    const userProfile = await storage.getProfile(userId);
+    if (!userProfile || userProfile.membershipTier !== 'elite') {
+      return res.status(403).json({ error: "Video chat is an Elite feature." });
+    }
+
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized for this call" });
+    }
+
+    activeCallInvites.set(matchId, {
+      callerId: userId,
+      callerName: userProfile.displayName,
+      callerPhoto: userProfile.photoUrl,
+      createdAt: new Date(),
+    });
+
+    setTimeout(() => {
+      const invite = activeCallInvites.get(matchId);
+      if (invite && invite.callerId === userId) {
+        activeCallInvites.delete(matchId);
+      }
+    }, 60000);
+
+    res.json({ success: true });
+  });
+
+  app.get("/api/video-call/active/:matchId", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const matchId = parseInt(req.params.matchId);
+
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const invite = activeCallInvites.get(matchId);
+    if (!invite || invite.callerId === userId) {
+      return res.json({ active: false });
+    }
+
+    if (new Date().getTime() - invite.createdAt.getTime() > 60000) {
+      activeCallInvites.delete(matchId);
+      return res.json({ active: false });
+    }
+
+    res.json({
+      active: true,
+      callerName: invite.callerName,
+      callerPhoto: invite.callerPhoto,
+    });
+  });
+
+  app.post("/api/video-call/decline", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { matchId } = req.body;
+    if (!matchId) {
+      return res.status(400).json({ error: "Match ID required" });
+    }
+
+    const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const invite = activeCallInvites.get(matchId);
+    if (invite && invite.callerId !== userId) {
+      activeCallInvites.delete(matchId);
+    }
+    res.json({ success: true });
+  });
+
+  app.get("/api/video-call/invite-status/:matchId", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const matchId = parseInt(req.params.matchId);
+
+    const invite = activeCallInvites.get(matchId);
+    if (!invite || invite.callerId !== userId) {
+      return res.json({ status: "gone" });
+    }
+
+    if (new Date().getTime() - invite.createdAt.getTime() > 60000) {
+      activeCallInvites.delete(matchId);
+      return res.json({ status: "expired" });
+    }
+
+    res.json({ status: "pending" });
+  });
+
+  app.post("/api/video-call/cancel", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { matchId } = req.body;
+    if (matchId) {
+      const invite = activeCallInvites.get(matchId);
+      if (invite && invite.callerId === userId) {
+        activeCallInvites.delete(matchId);
+      }
+    }
+    res.json({ success: true });
+  });
+
   // === VIDEO CALL TOKEN (for WebSocket auth) ===
-  // Store temporary video call tokens: token -> { oderId, matchId, expiresAt }
   const videoCallTokens = new Map<string, { userId: string; matchId: number; expiresAt: Date }>();
   
-  // Generate video call token (validates match membership)
   app.post("/api/video-call/token", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { matchId } = req.body;
@@ -1769,8 +1879,11 @@ Topics you can help with:
             }
             
             room.set(oderId, ws);
+
+            if (room.size === 2) {
+              activeCallInvites.delete(parseInt(roomId));
+            }
             
-            // Notify other user in room that someone joined
             room.forEach((socket, oderId) => {
               if (oderId !== currentUserId && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({ type: 'user-joined', userId: currentUserId }));
@@ -1797,9 +1910,20 @@ Topics you can help with:
             }
             break;
             
-          case 'leave':
-            // User leaving the call
+          case 'call-declined':
             if (currentRoom && callRooms.has(currentRoom)) {
+              activeCallInvites.delete(parseInt(currentRoom));
+              callRooms.get(currentRoom)!.forEach((socket, oderId) => {
+                if (oderId !== currentUserId && socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify({ type: 'call-declined', userId: currentUserId }));
+                }
+              });
+            }
+            break;
+
+          case 'leave':
+            if (currentRoom && callRooms.has(currentRoom)) {
+              activeCallInvites.delete(parseInt(currentRoom));
               callRooms.get(currentRoom)!.delete(currentUserId!);
               callRooms.get(currentRoom)!.forEach((socket) => {
                 if (socket.readyState === WebSocket.OPEN) {

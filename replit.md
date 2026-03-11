@@ -31,6 +31,7 @@ Preferred communication style: Simple, everyday language.
 - **AI Integration**: OpenAI (gpt-5-mini) for conversation coaching, profile optimization, scam detection, and AI Dating Advisor (voice + text chat).
 - **AI Dating Advisor**: Interactive voice/text chat with an AI for dating ideas, advice, and tips. Supports speech-to-text input and text-to-speech responses via OpenAI audio models. Route: `/ai-advisor`, API: `POST /api/ai-advisor/chat`.
 - **Profile Management**: Ability to save profiles for later viewing and hide profiles to remove them from the feed permanently.
+- **Video Calling**: WebRTC-based peer-to-peer video calls between matched users (Elite-only). Uses WebSocket signaling server at `/ws` for offer/answer/ICE exchange. Call invitation system with polling-based detection. Routes: `/video-call/:id`, APIs: `POST /api/video-call/invite`, `GET /api/video-call/active/:matchId`, `GET /api/video-call/invite-status/:matchId`, `POST /api/video-call/decline`, `POST /api/video-call/cancel`, `POST /api/video-call/token`.
 - **Micro-Dates**: Real-time interactive 5-minute virtual dates with activity catalog and polling for responses.
 - **User Blocking**: Bidirectional user blocking with API enforcement.
 - **App Lock**: Optional password protection for the app with server-side enforcement and recovery.
