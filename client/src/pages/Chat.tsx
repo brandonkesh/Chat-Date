@@ -297,7 +297,7 @@ export default function Chat() {
 
   const handleAcceptCall = () => {
     setIncomingCall(null);
-    setLocation(`/video-call/${matchId}`);
+    setLocation(`/video-call/${matchId}?accepted=true`);
   };
 
   const handleDeclineCall = async () => {

@@ -23,12 +23,13 @@ export default function VideoCall() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isInitiator = searchParams.get("role") === "caller";
+  const isAccepted = searchParams.get("accepted") === "true";
 
   const { data: profile } = useMyProfile();
   const { data: matchData, isLoading } = useMatch(matchId);
 
   const [callPhase, setCallPhase] = useState<"ringing" | "incoming" | "connecting" | "active" | "ended" | "declined">(
-    isInitiator ? "ringing" : "incoming"
+    isInitiator ? "ringing" : (isAccepted ? "connecting" : "incoming")
   );
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -291,7 +292,7 @@ export default function VideoCall() {
 
   useEffect(() => {
     if (!profile || !matchId) return;
-    if (!isInitiator) return;
+    if (!isInitiator && !isAccepted) return;
 
     connectToSignalingServer();
 
@@ -322,7 +323,7 @@ export default function VideoCall() {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [profile, matchId, isInitiator, connectToSignalingServer, toast, navigate]);
+  }, [profile, matchId, isInitiator, isAccepted, connectToSignalingServer, toast, navigate]);
 
   useEffect(() => {
     return () => {
