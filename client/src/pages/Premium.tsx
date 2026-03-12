@@ -47,6 +47,7 @@ const tiers: TierInfo[] = [
       { text: "Basic search filters", icon: Filter },
       { text: "Ad-free experience", icon: Shield },
       { text: "Save profiles for later", icon: Bookmark },
+      { text: "AI chat advisor", icon: Sparkles },
     ],
     limits: [
       { label: "Daily likes", value: "Unlimited" },
@@ -72,7 +73,7 @@ const tiers: TierInfo[] = [
       { text: "Advanced filters (age, distance, lifestyle)", icon: Filter },
       { text: "Read receipts on messages", icon: Bell },
       { text: "Voice & video calls", icon: Video },
-      { text: "AI conversation coach", icon: Sparkles },
+      { text: "AI chat advisor", icon: Sparkles },
       { text: "Ad-free experience", icon: Shield },
     ],
     limits: [
@@ -93,6 +94,7 @@ const tiers: TierInfo[] = [
     bestFor: "Serious daters who want every advantage",
     features: [
       { text: "Everything in Pro", icon: Check, highlight: true },
+      { text: "AI chat advisor", icon: Sparkles, highlight: true },
       { text: "Weekly profile boost", icon: Rocket, highlight: true },
       { text: "Incognito mode — browse privately", icon: Lock, highlight: true },
       { text: "VIP badge on your profile", icon: UserCheck, highlight: true },
