@@ -27,12 +27,13 @@ export default function VideoCall() {
   const { data: profile } = useMyProfile();
   const { data: matchData, isLoading } = useMatch(matchId);
 
-  const [callPhase, setCallPhase] = useState<"ringing" | "connecting" | "active" | "ended" | "declined">(
-    isInitiator ? "ringing" : "connecting"
+  const [callPhase, setCallPhase] = useState<"ringing" | "incoming" | "connecting" | "active" | "ended" | "declined">(
+    isInitiator ? "ringing" : "incoming"
   );
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [incomingCallerInfo, setIncomingCallerInfo] = useState<{ callerName: string; callerPhoto: string | null } | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -42,6 +43,7 @@ export default function VideoCall() {
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ringTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const callPhaseRef = useRef(callPhase);
+  const abortedRef = useRef(false);
 
   const setupMediaStream = useCallback(async () => {
     try {
@@ -152,137 +154,159 @@ export default function VideoCall() {
     return () => clearInterval(interval);
   }, [isInitiator, matchId, callPhase, navigate, toast]);
 
-  useEffect(() => {
-    if (!profile || !matchId) return;
+  const connectToSignalingServer = useCallback(async () => {
+    const stream = await setupMediaStream();
+    if (!stream || abortedRef.current) {
+      if (stream && abortedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      return;
+    }
 
-    let mounted = true;
+    let callToken: string;
+    try {
+      const tokenResponse = await fetch('/api/video-call/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ matchId })
+      });
 
-    const initCall = async () => {
-      const stream = await setupMediaStream();
-      if (!stream || !mounted) return;
-
-      let callToken: string;
-      try {
-        const tokenResponse = await fetch('/api/video-call/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ matchId })
-        });
-
-        if (!tokenResponse.ok) {
-          const errData = await tokenResponse.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to get video call token');
-        }
-
-        const tokenData = await tokenResponse.json();
-        callToken = tokenData.token;
-      } catch (error: any) {
-        toast({
-          title: "Connection Error",
-          description: error.message || "Could not authorize video call.",
-          variant: "destructive",
-        });
+      if (abortedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
         return;
       }
 
-      const pc = createPeerConnection(stream);
+      if (!tokenResponse.ok) {
+        const errData = await tokenResponse.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to get video call token');
+      }
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      const tokenData = await tokenResponse.json();
+      callToken = tokenData.token;
+    } catch (error: any) {
+      stream.getTracks().forEach(track => track.stop());
+      toast({
+        title: "Connection Error",
+        description: error.message || "Could not authorize video call.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
-          type: 'join',
-          matchId: matchId.toString(),
-          token: callToken
-        }));
-      };
+    if (abortedRef.current) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
 
-      ws.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
+    const pc = createPeerConnection(stream);
 
-        switch (message.type) {
-          case 'user-joined':
-            setCallPhase("connecting");
-            await startCall();
-            break;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
 
-          case 'offer':
-            if (pc.signalingState !== 'stable') return;
-            await pc.setRemoteDescription(new RTCSessionDescription(message.offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({
-              type: 'answer',
-              answer: answer
-            }));
-            break;
+    ws.onopen = () => {
+      if (callPhaseRef.current !== "ringing") {
+        setCallPhase("connecting");
+      }
+      ws.send(JSON.stringify({
+        type: 'join',
+        matchId: matchId.toString(),
+        token: callToken
+      }));
+    };
 
-          case 'answer':
-            if (pc.signalingState === 'have-local-offer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(message.answer));
-            }
-            break;
+    ws.onmessage = async (event) => {
+      const message = JSON.parse(event.data);
 
-          case 'ice-candidate':
-            if (message.candidate) {
-              await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
-            }
-            break;
+      switch (message.type) {
+        case 'incoming-call':
+          setIncomingCallerInfo({
+            callerName: message.callerName,
+            callerPhoto: message.callerPhoto,
+          });
+          break;
 
-          case 'call-declined':
-            setCallPhase("declined");
-            toast({
-              title: "Call Declined",
-              description: "Your match declined the video call.",
-            });
-            setTimeout(() => navigate(`/chat/${matchId}`), 2000);
-            break;
+        case 'user-joined':
+          setCallPhase("connecting");
+          await startCall();
+          break;
 
-          case 'user-left':
-            setCallPhase("ended");
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = null;
-            }
-            break;
-        }
-      };
+        case 'offer':
+          if (pc.signalingState !== 'stable') return;
+          await pc.setRemoteDescription(new RTCSessionDescription(message.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify({
+            type: 'answer',
+            answer: answer
+          }));
+          break;
 
-      ws.onclose = () => {
-        if (callPhase !== "ended" && callPhase !== "declined") {
-          setCallPhase("ended");
-        }
-      };
-
-      ws.onerror = () => {
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect to video call server.",
-          variant: "destructive",
-        });
-      };
-
-      if (isInitiator) {
-        ringTimeoutRef.current = setTimeout(() => {
-          if (mounted && callPhaseRef.current === "ringing") {
-            setCallPhase("ended");
-            toast({
-              title: "No Answer",
-              description: "Your match didn't pick up.",
-            });
-            setTimeout(() => navigate(`/chat/${matchId}`), 2000);
+        case 'answer':
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(message.answer));
           }
-        }, 60000);
+          break;
+
+        case 'ice-candidate':
+          if (message.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+          }
+          break;
+
+        case 'call-declined':
+          setCallPhase("declined");
+          toast({
+            title: "Call Declined",
+            description: "Your match declined the video call.",
+          });
+          setTimeout(() => navigate(`/chat/${matchId}`), 2000);
+          break;
+
+        case 'user-left':
+          setCallPhase("ended");
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = null;
+          }
+          break;
       }
     };
 
-    initCall();
+    ws.onclose = () => {
+      if (callPhaseRef.current !== "ended" && callPhaseRef.current !== "declined") {
+        setCallPhase("ended");
+      }
+    };
+
+    ws.onerror = () => {
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to video call server.",
+        variant: "destructive",
+      });
+    };
+  }, [matchId, setupMediaStream, createPeerConnection, startCall, toast, navigate]);
+
+  useEffect(() => {
+    if (!profile || !matchId) return;
+    if (!isInitiator) return;
+
+    connectToSignalingServer();
+
+    ringTimeoutRef.current = setTimeout(() => {
+      if (callPhaseRef.current === "ringing") {
+        setCallPhase("ended");
+        toast({
+          title: "No Answer",
+          description: "Your match didn't pick up.",
+        });
+        setTimeout(() => navigate(`/chat/${matchId}`), 2000);
+      }
+    }, 60000);
 
     return () => {
-      mounted = false;
       if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
       if (callTimerRef.current) clearInterval(callTimerRef.current);
       if (wsRef.current) {
@@ -298,7 +322,42 @@ export default function VideoCall() {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [profile, matchId, setupMediaStream, createPeerConnection, startCall, toast]);
+  }, [profile, matchId, isInitiator, connectToSignalingServer, toast, navigate]);
+
+  useEffect(() => {
+    return () => {
+      abortedRef.current = true;
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+      if (wsRef.current) {
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'leave' }));
+        } catch {}
+        wsRef.current.close();
+      }
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const acceptIncomingCall = useCallback(() => {
+    setCallPhase("connecting");
+    connectToSignalingServer();
+  }, [connectToSignalingServer]);
+
+  const declineIncomingCall = useCallback(() => {
+    setCallPhase("declined");
+    apiRequest("POST", "/api/video-call/decline", { matchId }).catch(() => {});
+    if (wsRef.current) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'call-declined' }));
+      } catch {}
+    }
+    setTimeout(() => navigate(`/chat/${matchId}`), 1500);
+  }, [matchId, navigate]);
 
   const toggleMute = () => {
     if (localStreamRef.current) {
@@ -323,6 +382,9 @@ export default function VideoCall() {
   const endCall = () => {
     if (isInitiator && callPhase === "ringing") {
       apiRequest("POST", "/api/video-call/cancel", { matchId }).catch(() => {});
+    }
+    if (!isInitiator && callPhase === "incoming") {
+      apiRequest("POST", "/api/video-call/decline", { matchId }).catch(() => {});
     }
     if (wsRef.current) {
       try {
@@ -405,6 +467,11 @@ export default function VideoCall() {
               <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
               Calling...
             </>
+          ) : callPhase === "incoming" ? (
+            <>
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              Incoming Call
+            </>
           ) : callPhase === "connecting" ? (
             <>
               <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -465,6 +532,56 @@ export default function VideoCall() {
                   <PhoneOff className="w-7 h-7" />
                 </Button>
                 <p className="text-white/40 text-xs mt-3">Tap to cancel</p>
+              </motion.div>
+            )}
+
+            {callPhase === "incoming" && (
+              <motion.div
+                className="flex flex-col items-center"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="relative mb-6"
+                >
+                  <div className="absolute inset-0 rounded-full bg-green-500/20 scale-150 animate-pulse" />
+                  <img
+                    src={incomingCallerInfo?.callerPhoto || partnerAvatar}
+                    alt={incomingCallerInfo?.callerName || partnerProfile.displayName}
+                    className="w-32 h-32 rounded-full object-cover border-4 border-green-500/40 relative z-10"
+                  />
+                </motion.div>
+                <h2 className="text-white text-2xl font-semibold mb-2" data-testid="text-incoming-caller-name">
+                  {incomingCallerInfo?.callerName || partnerProfile.displayName}
+                </h2>
+                <p className="text-white/60 text-sm mb-8">Incoming Video Call...</p>
+                <div className="flex items-center gap-8">
+                  <div className="flex flex-col items-center gap-2">
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="w-16 h-16 rounded-full"
+                      onClick={declineIncomingCall}
+                      data-testid="button-decline-incoming"
+                    >
+                      <PhoneOff className="w-7 h-7" />
+                    </Button>
+                    <span className="text-white/60 text-xs">Decline</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <Button
+                      size="icon"
+                      className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                      onClick={acceptIncomingCall}
+                      data-testid="button-accept-incoming"
+                    >
+                      <Phone className="w-7 h-7" />
+                    </Button>
+                    <span className="text-white/60 text-xs">Accept</span>
+                  </div>
+                </div>
               </motion.div>
             )}
 

@@ -1690,6 +1690,9 @@ Topics you can help with:
       createdAt: new Date(),
     });
 
+    const targetUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    broadcastCallNotification(targetUserId, matchId, userProfile.displayName, userProfile.photoUrl);
+
     setTimeout(() => {
       const invite = activeCallInvites.get(matchId);
       if (invite && invite.callerId === userId) {
@@ -1814,10 +1817,86 @@ Topics you can help with:
     res.json({ token });
   });
 
+  // === CALL NOTIFICATION WebSocket ===
+  const notifyTokens = new Map<string, { userId: string; expiresAt: Date }>();
+  const notifyConnections = new Map<string, Set<WebSocket>>();
+
+  app.post("/api/video-call/notify-token", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const token = crypto.randomUUID();
+    notifyTokens.set(token, { userId, expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+    res.json({ token });
+  });
+
+  const notifyWss = new WebSocketServer({ server: httpServer, path: '/ws/notifications' });
+
+  notifyWss.on('connection', (ws: WebSocket) => {
+    let userId: string | null = null;
+
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth') {
+          const td = notifyTokens.get(msg.token);
+          if (td && td.expiresAt > new Date()) {
+            userId = td.userId;
+            notifyTokens.delete(msg.token);
+            if (!notifyConnections.has(userId)) {
+              notifyConnections.set(userId, new Set());
+            }
+            notifyConnections.get(userId)!.add(ws);
+            ws.send(JSON.stringify({ type: 'authenticated' }));
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
+            ws.close();
+          }
+        } else if (msg.type === 'decline-call' && userId && msg.matchId) {
+          const match = await storage.getMatch(msg.matchId);
+          if (match && (match.user1Id === userId || match.user2Id === userId)) {
+            activeCallInvites.delete(msg.matchId);
+            const roomId = msg.matchId.toString();
+            if (callRooms.has(roomId)) {
+              callRooms.get(roomId)!.forEach((socket) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(JSON.stringify({ type: 'call-declined', userId }));
+                }
+              });
+            }
+          }
+        }
+      } catch {}
+    });
+
+    ws.on('close', () => {
+      if (userId && notifyConnections.has(userId)) {
+        notifyConnections.get(userId)!.delete(ws);
+        if (notifyConnections.get(userId)!.size === 0) {
+          notifyConnections.delete(userId);
+        }
+      }
+    });
+  });
+
+  function broadcastCallNotification(targetUserId: string, matchId: number, callerName: string, callerPhoto: string | null) {
+    const sockets = notifyConnections.get(targetUserId);
+    if (sockets) {
+      const payload = JSON.stringify({
+        type: 'incoming-call',
+        matchId,
+        callerName,
+        callerPhoto,
+      });
+      sockets.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(payload);
+        }
+      });
+    }
+  }
+
   // === VIDEO CALL SIGNALING (WebSocket) ===
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
-  // Track connected users: matchId -> { userId: WebSocket }
   const callRooms = new Map<string, Map<string, WebSocket>>();
   
   wss.on('connection', (ws: WebSocket) => {
@@ -1883,9 +1962,16 @@ Topics you can help with:
             if (room.size === 2) {
               activeCallInvites.delete(parseInt(roomId));
             }
-            
+
+            const callerProfile = await storage.getProfile(currentUserId!);
             room.forEach((socket, oderId) => {
               if (oderId !== currentUserId && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                  type: 'incoming-call',
+                  userId: currentUserId,
+                  callerName: callerProfile?.displayName || 'Someone',
+                  callerPhoto: callerProfile?.photoUrl || null,
+                }));
                 socket.send(JSON.stringify({ type: 'user-joined', userId: currentUserId }));
               }
             });

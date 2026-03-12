@@ -56,6 +56,7 @@ export interface IStorage {
   checkMatch(user1Id: string, user2Id: string): Promise<boolean>;
   createMatch(user1Id: string, user2Id: string, isDailyMatch?: boolean): Promise<number>;
   getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
+  getMatch(matchId: number): Promise<typeof matches.$inferSelect | undefined>;
   deleteMatch(matchId: number, userId: string): Promise<boolean>;
   getLikesReceived(userId: string): Promise<Profile[]>;
   
@@ -556,13 +557,9 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getMatch(matchId: number): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined> {
+  async getMatch(matchId: number): Promise<typeof matches.$inferSelect | undefined> {
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
-    if (!match) return undefined;
-    
-    // In actual usage we'd need userId to know who the partner is, 
-    // but the getMatches logic above handles it correctly by iterating.
-    return undefined;
+    return match || undefined;
   }
 
   async deleteMatch(matchId: number, userId: string): Promise<boolean> {

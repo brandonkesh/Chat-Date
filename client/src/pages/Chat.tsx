@@ -222,9 +222,47 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const notifyWsRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
-    if (!matchId || matchId <= 0) return;
-    const interval = setInterval(async () => {
+    if (!matchId || matchId <= 0 || !profile) return;
+
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+
+    const connectNotifyWs = async () => {
+      try {
+        const tokenRes = await fetch('/api/video-call/notify-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+        if (!tokenRes.ok || cancelled) return;
+        const { token } = await tokenRes.json();
+        if (cancelled) return;
+
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws/notifications`);
+        notifyWsRef.current = ws;
+
+        ws.onopen = () => {
+          ws?.send(JSON.stringify({ type: 'auth', token }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'incoming-call' && msg.matchId === matchId) {
+              setIncomingCall({ callerName: msg.callerName, callerPhoto: msg.callerPhoto });
+            }
+          } catch {}
+        };
+      } catch {}
+    };
+
+    connectNotifyWs();
+
+    const pollInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/video-call/active/${matchId}`, { credentials: "include" });
         if (res.ok) {
@@ -236,9 +274,17 @@ export default function Chat() {
           }
         }
       } catch {}
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [matchId]);
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+      if (ws) {
+        ws.close();
+        notifyWsRef.current = null;
+      }
+    };
+  }, [matchId, profile]);
 
   const handleStartVideoCall = async () => {
     try {
@@ -256,6 +302,9 @@ export default function Chat() {
 
   const handleDeclineCall = async () => {
     setIncomingCall(null);
+    if (notifyWsRef.current?.readyState === WebSocket.OPEN) {
+      notifyWsRef.current.send(JSON.stringify({ type: 'decline-call', matchId }));
+    }
     try {
       await apiRequest("POST", "/api/video-call/decline", { matchId });
     } catch {}
