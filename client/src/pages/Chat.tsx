@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -593,9 +593,11 @@ export default function Chat() {
            <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex flex-col items-center gap-2 text-center animate-in slide-in-from-bottom-2">
              <p>{error}</p>
              {error.includes("subscribe") && (
-               <Button size="sm" variant="destructive" className="w-full">
-                 Upgrade to Premium ($9.99/mo)
-               </Button>
+               <Link href="/premium" className="w-full">
+                 <Button size="sm" variant="destructive" className="w-full">
+                   Upgrade to Premium
+                 </Button>
+               </Link>
              )}
            </div>
         )}
