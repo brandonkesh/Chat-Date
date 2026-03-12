@@ -289,7 +289,7 @@ export default function Chat() {
   const handleStartVideoCall = async () => {
     try {
       await apiRequest("POST", "/api/video-call/invite", { matchId });
-      setLocation(`/video-call/${matchId}?role=caller`);
+      setLocation(`/video-call/${matchId}?initiator=true`);
     } catch {
       toast({ title: "Could not start video call", variant: "destructive" });
     }

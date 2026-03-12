@@ -1664,6 +1664,7 @@ Topics you can help with:
 
   // === VIDEO CALL INVITATIONS ===
   const activeCallInvites = new Map<number, { callerId: string; callerName: string; callerPhoto: string | null; createdAt: Date }>();
+  const declinedCallInvites = new Set<number>();
 
   app.post("/api/video-call/invite", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
@@ -1744,6 +1745,8 @@ Topics you can help with:
     const invite = activeCallInvites.get(matchId);
     if (invite && invite.callerId !== userId) {
       activeCallInvites.delete(matchId);
+      declinedCallInvites.add(matchId);
+      setTimeout(() => declinedCallInvites.delete(matchId), 120000);
     }
     res.json({ success: true });
   });
@@ -1751,6 +1754,10 @@ Topics you can help with:
   app.get("/api/video-call/invite-status/:matchId", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const matchId = parseInt(req.params.matchId);
+
+    if (declinedCallInvites.has(matchId)) {
+      return res.json({ status: "declined" });
+    }
 
     const invite = activeCallInvites.get(matchId);
     if (!invite || invite.callerId !== userId) {
@@ -1854,6 +1861,8 @@ Topics you can help with:
           const match = await storage.getMatch(msg.matchId);
           if (match && (match.user1Id === userId || match.user2Id === userId)) {
             activeCallInvites.delete(msg.matchId);
+            declinedCallInvites.add(msg.matchId);
+            setTimeout(() => declinedCallInvites.delete(msg.matchId), 120000);
             const roomId = msg.matchId.toString();
             if (callRooms.has(roomId)) {
               callRooms.get(roomId)!.forEach((socket) => {

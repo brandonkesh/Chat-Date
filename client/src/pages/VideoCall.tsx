@@ -22,7 +22,7 @@ export default function VideoCall() {
   const { toast } = useToast();
 
   const searchParams = new URLSearchParams(window.location.search);
-  const isInitiator = searchParams.get("role") === "caller";
+  const isInitiator = searchParams.get("initiator") === "true";
   const isAccepted = searchParams.get("accepted") === "true";
 
   const { data: profile } = useMyProfile();
@@ -144,7 +144,7 @@ export default function VideoCall() {
         const res = await fetch(`/api/video-call/invite-status/${matchId}`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
-          if (data.status === "gone" && callPhaseRef.current === "ringing") {
+          if (data.status === "declined" && callPhaseRef.current === "ringing") {
             setCallPhase("declined");
             toast({ title: "Call Declined", description: "Your match declined the video call." });
             setTimeout(() => navigate(`/chat/${matchId}`), 2000);
