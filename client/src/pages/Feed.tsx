@@ -127,19 +127,24 @@ export default function Feed() {
 
       {/* Quick Actions - Fixed at top right */}
       <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
-        <Link href={myProfile?.isPremium ? "/matches" : "/premium"} data-testid="link-video-chat">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="w-11 h-11 rounded-full bg-card/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate relative"
-            data-testid="button-video-chat-home"
-          >
-            <Video className={`w-5 h-5 ${myProfile?.isPremium ? 'text-primary' : 'text-muted-foreground'}`} />
-            {!myProfile?.isPremium && (
-              <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
-            )}
-          </Button>
-        </Link>
+        {(() => {
+          const canVideo = myProfile?.membershipTier === 'pro' || myProfile?.membershipTier === 'elite';
+          return (
+            <Link href={canVideo ? "/matches" : "/premium"} data-testid="link-video-chat">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="w-11 h-11 rounded-full bg-card/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate relative"
+                data-testid="button-video-chat-home"
+              >
+                <Video className={`w-5 h-5 ${canVideo ? 'text-primary' : 'text-muted-foreground'}`} />
+                {!canVideo && (
+                  <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
+                )}
+              </Button>
+            </Link>
+          );
+        })()}
         <Link href="/profile/edit" data-testid="link-edit-profile">
           <div className="relative group cursor-pointer">
             <Avatar className="w-11 h-11 border-2 border-primary/20 shadow-md">

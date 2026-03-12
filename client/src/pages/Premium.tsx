@@ -46,7 +46,6 @@ const tiers: TierInfo[] = [
       { text: "See who viewed your profile", icon: Eye },
       { text: "Basic search filters", icon: Filter },
       { text: "Ad-free experience", icon: Shield },
-      { text: "Voice & video calls", icon: Video },
       { text: "Save profiles for later", icon: Bookmark },
     ],
     limits: [

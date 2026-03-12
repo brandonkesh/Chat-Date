@@ -416,15 +416,17 @@ export default function VideoCall() {
     );
   }
 
-  if (!profile?.isPremium) {
+  const canVideoCall = profile?.membershipTier === 'pro' || profile?.membershipTier === 'elite';
+
+  if (!canVideoCall) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-black text-white gap-4 p-6 text-center">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-2">
           <Video className="w-10 h-10 text-white" />
         </div>
-        <p className="text-xl font-bold">Video Calls for Subscribers</p>
+        <p className="text-xl font-bold">Video Calls — Pro & Elite</p>
         <p className="text-white/60 text-sm max-w-xs">
-          Upgrade to any paid plan to unlock video calls with your matches.
+          Upgrade to Pro or Elite to unlock video calls with your matches.
         </p>
         <Link href="/premium">
           <Button className="mt-2" data-testid="button-upgrade-premium">View Plans</Button>

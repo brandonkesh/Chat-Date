@@ -382,7 +382,7 @@ export default function Chat() {
           </Button>
         )}
 
-        {profile?.isPremium ? (
+        {profile?.membershipTier === 'pro' || profile?.membershipTier === 'elite' ? (
           <Button variant="ghost" size="icon" onClick={handleStartVideoCall} data-testid="button-video-call">
             <Video className="w-5 h-5" />
           </Button>

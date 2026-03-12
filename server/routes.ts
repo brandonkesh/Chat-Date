@@ -1678,8 +1678,8 @@ Topics you can help with:
     if (!userProfile) {
       return res.status(403).json({ error: "Profile not found." });
     }
-    if (!userProfile.isPremium) {
-      return res.status(403).json({ error: "Video calls are available for paid subscribers only. Please upgrade to a plan." });
+    if (userProfile.membershipTier !== 'pro' && userProfile.membershipTier !== 'elite') {
+      return res.status(403).json({ error: "Video calls are available on Pro and Elite plans. Please upgrade." });
     }
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
@@ -1802,8 +1802,8 @@ Topics you can help with:
     if (!userProfile) {
       return res.status(403).json({ error: "Profile not found." });
     }
-    if (!userProfile.isPremium) {
-      return res.status(403).json({ error: "Video calls are available for paid subscribers only. Please upgrade to a plan." });
+    if (userProfile.membershipTier !== 'pro' && userProfile.membershipTier !== 'elite') {
+      return res.status(403).json({ error: "Video calls are available on Pro and Elite plans. Please upgrade." });
     }
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
