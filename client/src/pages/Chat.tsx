@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Crown, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -382,18 +382,9 @@ export default function Chat() {
           </Button>
         )}
 
-        {profile?.membershipTier === 'elite' ? (
-          <Button variant="ghost" size="icon" onClick={handleStartVideoCall} data-testid="button-video-call">
-            <Video className="w-5 h-5" />
-          </Button>
-        ) : (
-          <Link href="/premium">
-            <Button variant="ghost" size="icon" className="relative" data-testid="button-video-call-locked">
-              <Video className="w-5 h-5 text-muted-foreground" />
-              <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
-            </Button>
-          </Link>
-        )}
+        <Button variant="ghost" size="icon" onClick={handleStartVideoCall} data-testid="button-video-call">
+          <Video className="w-5 h-5" />
+        </Button>
 
         <Button
           variant="ghost"

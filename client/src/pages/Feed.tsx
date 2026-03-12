@@ -1,7 +1,7 @@
 import { useFeed, useSwipe, useMyProfile, useHideProfile, useSaveProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, Crown, EyeOff, Bookmark, Mic, Sparkles } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, EyeOff, Bookmark, Mic, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -127,17 +127,14 @@ export default function Feed() {
 
       {/* Quick Actions - Fixed at top right */}
       <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
-        <Link href={myProfile?.membershipTier === 'elite' ? "/matches" : "/premium"} data-testid="link-video-chat">
+        <Link href="/matches" data-testid="link-video-chat">
           <Button 
             variant="ghost" 
             size="icon" 
             className="w-11 h-11 rounded-full bg-card/80 dark:bg-black/80 backdrop-blur-md shadow-md border border-border hover-elevate relative"
             data-testid="button-video-chat-home"
           >
-            <Video className={`w-5 h-5 ${myProfile?.membershipTier === 'elite' ? 'text-primary' : 'text-muted-foreground'}`} />
-            {myProfile?.membershipTier !== 'elite' && (
-              <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
-            )}
+            <Video className="w-5 h-5 text-primary" />
           </Button>
         </Link>
         <Link href="/profile/edit" data-testid="link-edit-profile">

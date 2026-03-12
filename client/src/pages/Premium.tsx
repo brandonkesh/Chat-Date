@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Crown, Heart, MessageCircle, Sparkles, Zap, Loader2, ExternalLink, Star, Gem } from "lucide-react";
+import { Check, Crown, Heart, MessageCircle, Sparkles, Zap, Loader2, ExternalLink, Star, Gem, Video, Shield, Eye, Filter, Bell, Mic, Bookmark, UserCheck, Rocket, Lock, Gift } from "lucide-react";
 import { useMyProfile } from "@/hooks/use-dating";
 import { differenceInDays } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -11,6 +11,12 @@ import { useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { MembershipTier } from "@shared/schema";
 
+interface FeatureItem {
+  text: string;
+  icon: typeof Check;
+  highlight?: boolean;
+}
+
 interface TierInfo {
   id: MembershipTier;
   name: string;
@@ -18,7 +24,10 @@ interface TierInfo {
   price: number;
   color: string;
   bgGradient: string;
-  features: string[];
+  tagline: string;
+  bestFor: string;
+  features: FeatureItem[];
+  limits: { label: string; value: string }[];
   popular?: boolean;
 }
 
@@ -30,11 +39,21 @@ const tiers: TierInfo[] = [
     price: 4.99,
     color: "text-blue-500",
     bgGradient: "from-blue-400 to-blue-500",
+    tagline: "Start meeting people",
+    bestFor: "Casual daters just getting started",
     features: [
-      "10 daily super likes",
-      "See who viewed you",
-      "Basic filters",
-      "Ad-free experience",
+      { text: "10 super likes per day", icon: Heart },
+      { text: "See who viewed your profile", icon: Eye },
+      { text: "Basic search filters", icon: Filter },
+      { text: "Ad-free experience", icon: Shield },
+      { text: "Voice & video calls", icon: Video },
+      { text: "Save profiles for later", icon: Bookmark },
+    ],
+    limits: [
+      { label: "Daily likes", value: "Unlimited" },
+      { label: "Super likes / day", value: "10" },
+      { label: "Profile boosts / month", value: "1" },
+      { label: "Message history", value: "30 days" },
     ],
   },
   {
@@ -45,13 +64,23 @@ const tiers: TierInfo[] = [
     color: "text-orange-500",
     bgGradient: "from-orange-400 to-orange-600",
     popular: true,
+    tagline: "Maximize your matches",
+    bestFor: "Active daters who want better results",
     features: [
-      "Unlimited super likes",
-      "See who likes you",
-      "Priority matching",
-      "Advanced filters",
-      "Read receipts",
-      "Ad-free experience",
+      { text: "Unlimited super likes", icon: Heart, highlight: true },
+      { text: "See everyone who likes you", icon: Eye, highlight: true },
+      { text: "Priority matching algorithm", icon: Rocket, highlight: true },
+      { text: "Advanced filters (age, distance, lifestyle)", icon: Filter },
+      { text: "Read receipts on messages", icon: Bell },
+      { text: "Voice & video calls", icon: Video },
+      { text: "AI conversation coach", icon: Sparkles },
+      { text: "Ad-free experience", icon: Shield },
+    ],
+    limits: [
+      { label: "Daily likes", value: "Unlimited" },
+      { label: "Super likes / day", value: "Unlimited" },
+      { label: "Profile boosts / month", value: "3" },
+      { label: "Message history", value: "Unlimited" },
     ],
   },
   {
@@ -61,13 +90,23 @@ const tiers: TierInfo[] = [
     price: 19.99,
     color: "text-blue-600",
     bgGradient: "from-blue-600 to-orange-500",
+    tagline: "The complete experience",
+    bestFor: "Serious daters who want every advantage",
     features: [
-      "All Pro features",
-      "Profile boost weekly",
-      "Incognito mode",
-      "VIP badge on profile",
-      "Priority support",
-      "Exclusive events access",
+      { text: "Everything in Pro", icon: Check, highlight: true },
+      { text: "Weekly profile boost", icon: Rocket, highlight: true },
+      { text: "Incognito mode — browse privately", icon: Lock, highlight: true },
+      { text: "VIP badge on your profile", icon: UserCheck, highlight: true },
+      { text: "AI profile optimizer", icon: Sparkles },
+      { text: "Voice & video calls", icon: Video },
+      { text: "Priority customer support", icon: Shield },
+      { text: "Exclusive member events", icon: Gift },
+    ],
+    limits: [
+      { label: "Daily likes", value: "Unlimited" },
+      { label: "Super likes / day", value: "Unlimited" },
+      { label: "Profile boosts / month", value: "4 (weekly)" },
+      { label: "Message history", value: "Unlimited" },
     ],
   },
 ];
@@ -271,27 +310,41 @@ export default function Premium() {
                   )}
                   
                   <CardHeader className="text-center pb-2 pt-6">
-                    <div className={`w-14 h-14 mx-auto mb-3 rounded-full bg-gradient-to-br ${tier.bgGradient} flex items-center justify-center`}>
+                    <div className={`w-14 h-14 mx-auto mb-3 rounded-full bg-gradient-to-br ${tier.bgGradient} flex items-center justify-center shadow-lg`}>
                       <Icon className="w-7 h-7 text-white" />
                     </div>
                     <CardTitle className="text-xl">{tier.name}</CardTitle>
-                    <div className="flex items-baseline justify-center gap-1 mt-2">
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">{tier.tagline}</p>
+                    <div className="flex items-baseline justify-center gap-1 mt-3">
                       <span className="text-3xl font-bold">${displayPrice}</span>
                       <span className="text-muted-foreground text-sm">/month</span>
                     </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">Best for: {tier.bestFor}</p>
                   </CardHeader>
                   
                   <CardContent className="pb-6">
-                    <ul className="space-y-2.5 mb-6">
-                      {tier.features.map((feature, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <div className={`w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                            <Check className="w-2.5 h-2.5 text-green-500" />
-                          </div>
-                          <span className="text-sm">{feature}</span>
-                        </li>
-                      ))}
+                    <ul className="space-y-2 mb-5">
+                      {tier.features.map((feature, index) => {
+                        const FeatIcon = feature.icon;
+                        return (
+                          <li key={index} className={`flex items-start gap-2 ${feature.highlight ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${feature.highlight ? 'bg-primary/10' : 'bg-green-500/10'}`}>
+                              <FeatIcon className={`w-2.5 h-2.5 ${feature.highlight ? 'text-primary' : 'text-green-500'}`} />
+                            </div>
+                            <span className="text-sm leading-tight">{feature.text}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
+
+                    <div className="rounded-lg bg-muted/50 border border-border p-3 mb-5 space-y-1.5">
+                      {tier.limits.map((limit, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{limit.label}</span>
+                          <span className="font-semibold text-foreground">{limit.value}</span>
+                        </div>
+                      ))}
+                    </div>
 
                     <Button 
                       className={`w-full rounded-full font-semibold ${
