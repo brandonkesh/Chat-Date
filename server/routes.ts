@@ -1675,8 +1675,8 @@ Topics you can help with:
     }
 
     const userProfile = await storage.getProfile(userId);
-    if (!userProfile || userProfile.membershipTier !== 'elite') {
-      return res.status(403).json({ error: "Video chat is an Elite feature." });
+    if (!userProfile) {
+      return res.status(403).json({ error: "Profile not found." });
     }
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
@@ -1796,8 +1796,8 @@ Topics you can help with:
     }
     
     const userProfile = await storage.getProfile(userId);
-    if (!userProfile || userProfile.membershipTier !== 'elite') {
-      return res.status(403).json({ error: "Video chat is an Elite feature. Upgrade to Elite to access video calls." });
+    if (!userProfile) {
+      return res.status(403).json({ error: "Profile not found." });
     }
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));

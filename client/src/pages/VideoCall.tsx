@@ -416,18 +416,6 @@ export default function VideoCall() {
     );
   }
 
-  if (profile?.membershipTier !== 'elite') {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-black text-white gap-4">
-        <p className="text-lg font-semibold">Video Chat is an Elite Feature</p>
-        <p className="text-white/60 text-sm text-center max-w-xs">Upgrade to Elite to unlock video calls with your matches.</p>
-        <Link href="/premium">
-          <Button variant="secondary" data-testid="button-upgrade-elite">Upgrade to Elite</Button>
-        </Link>
-      </div>
-    );
-  }
-
   if (!matchData) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-black text-white">
