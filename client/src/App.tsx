@@ -30,7 +30,7 @@ import TwoFactorChallenge from "@/pages/TwoFactorChallenge";
 import EmailVerification from "@/pages/EmailVerification";
 import MicroDate from "@/pages/MicroDate";
 import AppLock from "@/pages/AppLock";
-import ProfileOptimizer from "@/pages/ProfileOptimizer";
+import { Redirect } from "wouter";
 import SavedProfiles from "@/pages/SavedProfiles";
 import AIAdvisor from "@/pages/AIAdvisor";
 import NotFound from "@/pages/not-found";
@@ -193,7 +193,7 @@ function Router() {
         </Route>
 
         <Route path="/profile/optimizer">
-          <ProtectedRoute component={ProfileOptimizer} />
+          <Redirect to="/ai-advisor" />
         </Route>
 
         <Route path="/saved">

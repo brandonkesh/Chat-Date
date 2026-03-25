@@ -269,7 +269,7 @@ export default function Preferences() {
         </div>
       </div>
 
-      <Link href="/profile/optimizer" className="block">
+      <Link href="/ai-advisor" className="block">
         <Card className="hover-elevate" data-testid="card-profile-optimizer">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
