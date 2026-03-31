@@ -8,10 +8,11 @@ import {
   ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User,
   Lightbulb, ChevronDown, Globe, AudioLines, ChevronRight, RefreshCw, AlertCircle,
   Camera, FileText, Heart, Dumbbell, ClipboardList, ShieldCheck, TrendingUp,
+  Upload, ImageIcon, X, CheckCircle2, ScanSearch, Users,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -264,6 +265,250 @@ function ProfileOptimizerTab() {
   );
 }
 
+/* ─── Photo Match tab ─── */
+interface PhotoMatchResult {
+  detectedInterests: string[];
+  description: string;
+  confidence: string;
+  matches: Array<{
+    id: number;
+    displayName: string;
+    age: number;
+    photoUrl?: string;
+    bio?: string;
+    interests?: string[];
+    matchScore: number;
+    sharedInterests: string[];
+  }>;
+}
+
+function PhotoMatchTab() {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string>("image/jpeg");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<PhotoMatchResult | null>(null);
+
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    setMimeType(file.type);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setPreview(dataUrl);
+      setImageBase64(dataUrl.split(",")[1]);
+      setResult(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleAnalyze = async () => {
+    if (!imageBase64) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await apiRequest("POST", "/api/ai/photo-match", { imageBase64, mimeType });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Analysis failed");
+      setResult(data);
+    } catch (err: any) {
+      toast({ title: "Analysis failed", description: err.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleClear = () => {
+    setPreview(null);
+    setImageBase64(null);
+    setResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confidenceColor = {
+    high: "text-green-500",
+    medium: "text-amber-500",
+    low: "text-red-500",
+  }[result?.confidence ?? "medium"] ?? "text-amber-500";
+
+  return (
+    <div className="space-y-4 pb-4">
+      {/* Upload area */}
+      <Card>
+        <CardContent className="p-4">
+          {!preview ? (
+            <div
+              className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              data-testid="dropzone-photo"
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+                  <ImageIcon className="w-7 h-7 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Upload a photo from your camera roll</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    AI will scan it for interests and find people who share them
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" className="gap-2" data-testid="button-choose-photo">
+                  <Upload className="w-4 h-4" />
+                  Choose Photo
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                data-testid="input-file-photo"
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative rounded-xl overflow-hidden aspect-video bg-black">
+                <img src={preview} alt="Selected" className="w-full h-full object-contain" data-testid="img-preview" />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full opacity-80"
+                  onClick={handleClear}
+                  data-testid="button-clear-photo"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <Button
+                className="w-full gap-2"
+                onClick={handleAnalyze}
+                disabled={isAnalyzing}
+                data-testid="button-analyze-photo"
+              >
+                {isAnalyzing ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Scanning for interests...</>
+                ) : (
+                  <><ScanSearch className="w-4 h-4" /> Find Matches by Interests</>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Results */}
+      <AnimatePresence>
+        {result && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {/* Detected interests */}
+            <Card data-testid="card-detected-interests">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <CardTitle className="text-base">Interests Detected</CardTitle>
+                  <span className={`text-xs ml-auto font-medium ${confidenceColor}`}>
+                    {result.confidence} confidence
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground" data-testid="text-photo-description">
+                  {result.description}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {result.detectedInterests.map((interest, i) => (
+                    <Badge key={i} variant="secondary" className="capitalize" data-testid={`badge-interest-${i}`}>
+                      {interest}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Matched profiles */}
+            <Card data-testid="card-photo-matches">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  <CardTitle className="text-base">
+                    {result.matches.length > 0
+                      ? `${result.matches.length} People with Similar Interests`
+                      : "No Matches Found"}
+                  </CardTitle>
+                </div>
+                {result.matches.length === 0 && (
+                  <CardDescription>
+                    No profiles with matching interests yet. Encourage more people to join!
+                  </CardDescription>
+                )}
+              </CardHeader>
+              {result.matches.length > 0 && (
+                <CardContent className="space-y-3">
+                  {result.matches.map((match) => (
+                    <Link key={match.id} href={`/profile/${match.id}`}>
+                      <div
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+                        data-testid={`card-photo-match-${match.id}`}
+                      >
+                        <Avatar className="w-12 h-12 shrink-0">
+                          <AvatarImage src={match.photoUrl} />
+                          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 font-semibold">
+                            {match.displayName?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm truncate">{match.displayName}</p>
+                            {match.age && <span className="text-xs text-muted-foreground shrink-0">{match.age}</span>}
+                          </div>
+                          {match.sharedInterests.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {match.sharedInterests.slice(0, 3).map((interest, i) => (
+                                <Badge key={i} variant="outline" className="text-xs px-1.5 py-0 h-auto capitalize">
+                                  {interest}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-xs font-semibold text-primary">{match.matchScore} shared</div>
+                          <div className="text-xs text-muted-foreground">
+                            {match.matchScore === 1 ? "interest" : "interests"}
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </CardContent>
+              )}
+            </Card>
+
+            {/* Try another photo */}
+            <Button variant="outline" className="w-full gap-2" onClick={handleClear} data-testid="button-try-another">
+              <Camera className="w-4 h-4" />
+              Try Another Photo
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ─── Main page ─── */
 export default function AIAdvisor() {
   const [, setLocation] = useLocation();
@@ -429,11 +674,15 @@ export default function AIAdvisor() {
           <TabsList className="w-full mb-4" data-testid="tabs-ai-tools">
             <TabsTrigger value="advisor" className="flex-1" data-testid="tab-advisor">
               <Bot className="w-4 h-4 mr-1.5" />
-              Dating Advisor
+              Advisor
             </TabsTrigger>
             <TabsTrigger value="profile" className="flex-1" data-testid="tab-profile">
               <TrendingUp className="w-4 h-4 mr-1.5" />
-              Profile Optimizer
+              Optimizer
+            </TabsTrigger>
+            <TabsTrigger value="photo" className="flex-1" data-testid="tab-photo-match">
+              <ScanSearch className="w-4 h-4 mr-1.5" />
+              Photo Match
             </TabsTrigger>
           </TabsList>
 
@@ -572,6 +821,11 @@ export default function AIAdvisor() {
           {/* ── Profile Optimizer tab ── */}
           <TabsContent value="profile">
             <ProfileOptimizerTab />
+          </TabsContent>
+
+          {/* ── Photo Match tab ── */}
+          <TabsContent value="photo">
+            <PhotoMatchTab />
           </TabsContent>
         </Tabs>
       </div>

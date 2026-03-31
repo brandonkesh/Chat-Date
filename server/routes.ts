@@ -1662,6 +1662,101 @@ Topics you can help with:
     }
   });
 
+  // === AI PHOTO MATCH ===
+  app.post("/api/ai/photo-match", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { imageBase64, mimeType } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ message: "Image data is required." });
+    }
+
+    try {
+      const OpenAI = (await import("openai")).default;
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Use vision model to detect interests from the photo
+      const visionResponse = await client.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Analyze this photo and identify any interests, hobbies, activities, or lifestyle clues visible.
+Return ONLY a JSON object with these fields:
+- "detectedInterests": array of 3-8 concise interest keywords (e.g. "hiking", "cooking", "travel", "fitness", "music", "photography", "yoga", "art", "gaming", "surfing")
+- "description": a friendly 1-2 sentence summary of what the photo reveals about the person's interests
+- "confidence": "high", "medium", or "low" based on how clearly interests are visible
+Focus on dating-relevant hobbies: sports, arts, food, travel, music, nature, fitness, tech, etc.
+Return ONLY valid JSON — no markdown, no code blocks.`
+            },
+            {
+              type: "image_url",
+              image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` }
+            }
+          ]
+        }],
+        max_completion_tokens: 500,
+      });
+
+      const content = visionResponse.choices[0]?.message?.content || "{}";
+      let analysis: { detectedInterests?: string[]; description?: string; confidence?: string } = {};
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+      } catch {
+        analysis = {};
+      }
+
+      const detectedInterests: string[] = Array.isArray(analysis.detectedInterests)
+        ? analysis.detectedInterests.slice(0, 8)
+        : [];
+
+      // Find profiles with overlapping interests (exclude self)
+      const allProfiles = await db.select().from(profiles).where(ne(profiles.userId, userId)).limit(300);
+
+      const scoredProfiles = allProfiles
+        .filter(p => p.interests && p.interests.length > 0)
+        .map(p => {
+          const profileInterests = (p.interests || []).map((i: string) => i.toLowerCase());
+          const detectedLower = detectedInterests.map(i => i.toLowerCase());
+          let score = 0;
+          const shared: string[] = [];
+          for (const detected of detectedLower) {
+            for (const pi of profileInterests) {
+              if (pi.includes(detected) || detected.includes(pi)) {
+                score++;
+                if (!shared.includes(p.interests![profileInterests.indexOf(pi)])) {
+                  shared.push(p.interests![profileInterests.indexOf(pi)]);
+                }
+                break;
+              }
+            }
+          }
+          return { profile: p, score, sharedInterests: shared };
+        })
+        .filter(sp => sp.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12)
+        .map(sp => ({
+          ...sanitizeProfile(sp.profile),
+          matchScore: sp.score,
+          sharedInterests: sp.sharedInterests,
+        }));
+
+      res.json({
+        detectedInterests,
+        description: analysis.description || "Interests detected from your photo.",
+        confidence: analysis.confidence || "medium",
+        matches: scoredProfiles,
+      });
+    } catch (err: any) {
+      console.error("Photo match error:", err);
+      res.status(500).json({ message: "Failed to analyze photo. Please try again." });
+    }
+  });
+
   // === VIDEO CALL INVITATIONS ===
   const activeCallInvites = new Map<number, { callerId: string; callerName: string; callerPhoto: string | null; createdAt: Date }>();
   const declinedCallInvites = new Set<number>();
