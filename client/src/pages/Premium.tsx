@@ -74,6 +74,7 @@ const tiers: TierInfo[] = [
       { text: "Read receipts on messages", icon: Bell },
       { text: "Voice & video calls", icon: Video },
       { text: "AI chat advisor", icon: Sparkles },
+      { text: "AI photo match", icon: Sparkles, highlight: true },
       { text: "Ad-free experience", icon: Shield },
     ],
     limits: [
@@ -95,6 +96,7 @@ const tiers: TierInfo[] = [
     features: [
       { text: "Everything in Pro", icon: Check, highlight: true },
       { text: "AI chat advisor", icon: Sparkles, highlight: true },
+      { text: "AI photo match", icon: Sparkles, highlight: true },
       { text: "Weekly profile boost", icon: Rocket, highlight: true },
       { text: "Incognito mode — browse privately", icon: Lock, highlight: true },
       { text: "VIP badge on your profile", icon: UserCheck, highlight: true },

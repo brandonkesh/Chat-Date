@@ -8,7 +8,7 @@ import {
   ArrowLeft, Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Loader2, Bot, User,
   Lightbulb, ChevronDown, Globe, AudioLines, ChevronRight, RefreshCw, AlertCircle,
   Camera, FileText, Heart, Dumbbell, ClipboardList, ShieldCheck, TrendingUp,
-  Upload, ImageIcon, X, CheckCircle2, ScanSearch, Users,
+  Upload, ImageIcon, X, CheckCircle2, ScanSearch, Users, Crown,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -291,6 +291,9 @@ function PhotoMatchTab() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<PhotoMatchResult | null>(null);
 
+  const { data: myProfile } = useQuery<{ membershipTier: string }>({ queryKey: ["/api/profiles/me"] });
+  const canUsePhotoMatch = myProfile?.membershipTier === "pro" || myProfile?.membershipTier === "elite";
+
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith("image/")) {
       toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
@@ -340,6 +343,50 @@ function PhotoMatchTab() {
     medium: "text-amber-500",
     low: "text-red-500",
   }[result?.confidence ?? "medium"] ?? "text-amber-500";
+
+  if (!myProfile) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!canUsePhotoMatch) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-5 py-12 text-center px-4">
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-400/20 to-pink-500/20 flex items-center justify-center">
+          <ScanSearch className="w-10 h-10 text-orange-500" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold">AI Photo Match</h2>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Scan photos from your camera roll and let AI find people who share the same interests and lifestyle — available on Pro and Elite.
+          </p>
+        </div>
+        <div className="w-full max-w-xs space-y-2">
+          <div className="flex items-center gap-2 text-sm text-left px-3 py-2 rounded-lg bg-muted/50">
+            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            <span>AI detects hobbies & activities in photos</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-left px-3 py-2 rounded-lg bg-muted/50">
+            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            <span>Matches you with people who share those interests</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-left px-3 py-2 rounded-lg bg-muted/50">
+            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            <span>Works with any photo — hiking, cooking, travel & more</span>
+          </div>
+        </div>
+        <Link href="/premium">
+          <Button className="gap-2 mt-2" data-testid="button-upgrade-photo-match">
+            <Crown className="w-4 h-4" />
+            Upgrade to Pro or Elite
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-4">

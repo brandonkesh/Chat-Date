@@ -1671,6 +1671,11 @@ Topics you can help with:
       return res.status(400).json({ message: "Image data is required." });
     }
 
+    const userProfile = await storage.getProfile(userId);
+    if (!userProfile || (userProfile.membershipTier !== 'pro' && userProfile.membershipTier !== 'elite')) {
+      return res.status(403).json({ error: "AI Photo Match is available on Pro and Elite plans. Please upgrade." });
+    }
+
     try {
       const OpenAI = (await import("openai")).default;
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
