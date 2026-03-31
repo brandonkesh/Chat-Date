@@ -65,6 +65,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       relationshipGoal: profile.relationshipGoal || "",
       familyPlans: profile.familyPlans || "",
       livingSituation: profile.livingSituation || "",
+      lookingForDescription: profile.lookingForDescription || "",
       // Background & Identity fields
       languages: profile.languages || [],
       orientation: profile.orientation || "",
@@ -692,13 +693,40 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                   </div>
                 </div>
 
-                {/* Family & Relationship Section */}
+                {/* What I'm Looking For Section */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Heart className="w-5 h-5" />
-                    Family & Relationship
+                    What I'm Looking For
                   </h3>
-                  
+
+                  <FormField
+                    control={form.control}
+                    name="lookingForDescription"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <Heart className="w-4 h-4" />
+                          In my own words
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            value={field.value ?? ""}
+                            placeholder="Describe the kind of person or relationship you're looking for... (e.g. Someone adventurous who loves hiking and deep conversations)"
+                            className="rounded-xl resize-none min-h-[100px]"
+                            maxLength={300}
+                            data-testid="textarea-looking-for"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground text-right">
+                          {(field.value ?? "").length}/300
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="relationshipGoal"

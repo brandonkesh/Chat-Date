@@ -65,6 +65,7 @@ export const profiles = pgTable("profiles", {
   relationshipGoal: text("relationship_goal"), // 'casual', 'serious', 'marriage', 'not_sure'
   familyPlans: text("family_plans"), // 'want_kids', 'dont_want_kids', 'have_kids', 'open_to_kids', 'not_sure'
   livingSituation: text("living_situation"), // 'alone', 'with_roommates', 'with_family', 'with_partner'
+  lookingForDescription: text("looking_for_description"), // Free-text: what they're looking for in a partner
   // Background & Identity fields
   languages: text("languages").array(), // Array of languages spoken
   orientation: text("orientation"), // 'straight', 'gay', 'lesbian', 'bisexual', 'pansexual', 'asexual', 'queer', 'other'

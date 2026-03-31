@@ -1,6 +1,6 @@
 import { motion, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { type Profile } from "@shared/schema";
-import { MapPin, ShieldCheck, Briefcase, GraduationCap, Wine, Dumbbell, Dog, Baby, Church } from "lucide-react";
+import { MapPin, ShieldCheck, Briefcase, GraduationCap, Wine, Dumbbell, Dog, Baby, Church, Heart, Users } from "lucide-react";
 import { VoiceIntroPlayer } from "@/components/VoiceIntro";
 import { IntroVideoModal } from "@/components/IntroVideo";
 import { useState } from "react";
@@ -157,6 +157,42 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
         <p className="text-muted-foreground line-clamp-2 leading-relaxed">
           {profile.bio || "No bio yet..."}
         </p>
+
+        {/* What I'm Looking For */}
+        {(profile.relationshipGoal || profile.familyPlans || profile.lookingForDescription) && (
+          <div className="mt-2 space-y-1" data-testid="section-looking-for">
+            <div className="flex items-center gap-1 text-xs font-semibold text-primary/80">
+              <Heart className="w-3 h-3" />
+              <span>Looking for</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {profile.relationshipGoal && (
+                <Badge variant="outline" className="text-xs border-primary/30 text-primary capitalize" data-testid="badge-relationship-goal">
+                  {profile.relationshipGoal === "not_sure" ? "Not sure yet" :
+                   profile.relationshipGoal === "casual" ? "Something casual" :
+                   profile.relationshipGoal === "serious" ? "Serious relationship" :
+                   profile.relationshipGoal === "marriage" ? "Marriage" :
+                   profile.relationshipGoal}
+                </Badge>
+              )}
+              {profile.familyPlans && (
+                <Badge variant="outline" className="text-xs border-muted-foreground/30" data-testid="badge-family-plans">
+                  <Users className="w-2.5 h-2.5 mr-1" />
+                  {profile.familyPlans === "want_kids" ? "Wants kids" :
+                   profile.familyPlans === "dont_want_kids" ? "No kids" :
+                   profile.familyPlans === "have_kids" ? "Has kids" :
+                   profile.familyPlans === "open_to_kids" ? "Open to kids" :
+                   "Not sure about kids"}
+                </Badge>
+              )}
+            </div>
+            {profile.lookingForDescription && (
+              <p className="text-xs text-muted-foreground line-clamp-2 italic" data-testid="text-looking-for-description">
+                "{profile.lookingForDescription}"
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Lifestyle Info */}
         {(profile.jobTitle || profile.education || profile.drinking || profile.exercise || profile.pets || profile.kids || profile.religion) && (
