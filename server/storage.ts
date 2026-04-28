@@ -47,9 +47,8 @@ export interface IStorage {
   getRecommendedProfiles(userId: string): Promise<Profile[]>;
   getCrushPicks(userId: string): Promise<Profile[]>;
   getMatchmakingProfiles(userId: string): Promise<MatchmakingResult[]>;
-  updateStripeCustomer(userId: string, customerId: string): Promise<void>;
-  updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void>;
-  getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined>;
+  updatePaypalSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, planId?: string, subscriberId?: string): Promise<void>;
+  getProfileByPaypalSubscriptionId(subscriptionId: string): Promise<Profile | undefined>;
   
   // Swipes & Matches
   createSwipe(swipe: InsertSwipe): Promise<void>;
@@ -145,27 +144,30 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateStripeCustomer(userId: string, customerId: string): Promise<void> {
-    await db
-      .update(profiles)
-      .set({ stripeCustomerId: customerId })
-      .where(eq(profiles.userId, userId));
-  }
-
-  async updateStripeSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, priceId?: string): Promise<void> {
-    const updates: Record<string, any> = { 
-      stripeSubscriptionId: subscriptionId, 
-      isPremium 
+  async updatePaypalSubscription(
+    userId: string,
+    subscriptionId: string,
+    isPremium: boolean,
+    membershipTier?: MembershipTier,
+    planId?: string,
+    subscriberId?: string,
+  ): Promise<void> {
+    const updates: Record<string, any> = {
+      paypalSubscriptionId: subscriptionId,
+      isPremium,
     };
     if (membershipTier) {
       updates.membershipTier = membershipTier;
     }
-    if (priceId) {
-      updates.stripePriceId = priceId;
+    if (planId) {
+      updates.paypalPlanId = planId;
+    }
+    if (subscriberId) {
+      updates.paypalSubscriberId = subscriberId;
     }
     if (!isPremium) {
       updates.membershipTier = 'free';
-      updates.stripePriceId = null;
+      updates.paypalPlanId = null;
     }
     await db
       .update(profiles)
@@ -173,11 +175,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profiles.userId, userId));
   }
 
-  async getProfileByStripeCustomerId(customerId: string): Promise<Profile | undefined> {
+  async getProfileByPaypalSubscriptionId(subscriptionId: string): Promise<Profile | undefined> {
     const [profile] = await db
       .select()
       .from(profiles)
-      .where(eq(profiles.stripeCustomerId, customerId));
+      .where(eq(profiles.paypalSubscriptionId, subscriptionId));
     return profile;
   }
 

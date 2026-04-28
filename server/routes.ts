@@ -8,9 +8,14 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import { db } from "./db";
 import { matches, profiles, users, swipes } from "@shared/schema";
 import { eq, or, and, ne, notInArray } from "drizzle-orm";
-import { stripeService } from "./stripeService";
-import { stripeStorage } from "./stripeStorage";
-import { getStripePublishableKey } from "./stripeClient";
+import {
+  ensurePaypalPlans,
+  getCachedPlans,
+  getPlanByPlanId,
+  createSubscription as createPaypalSubscription,
+  cancelSubscription as cancelPaypalSubscription,
+} from "./paypalService";
+import { getPaypalClientId, getPaypalEnvironment, getPaypalBase } from "./paypalClient";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureCompatibleFormat, speechToText, textToSpeech } from "./replit_integrations/audio/client";
 import crypto from "crypto";
@@ -1240,60 +1245,59 @@ Guidelines:
     res.json({ success: true });
   });
 
-  // === STRIPE / PAYMENTS ===
-  
-  // Get Stripe publishable key
-  app.get("/api/stripe/publishable-key", async (req, res) => {
+  // === PAYPAL / PAYMENTS ===
+
+  // Get PayPal public client config (used for client SDK if needed)
+  app.get("/api/paypal/config", async (_req, res) => {
     try {
-      const publishableKey = await getStripePublishableKey();
-      res.json({ publishableKey });
+      res.json({
+        clientId: getPaypalClientId(),
+        environment: getPaypalEnvironment(),
+      });
     } catch (error: any) {
-      res.status(500).json({ error: "Failed to get Stripe key" });
+      res.status(500).json({ error: "Failed to get PayPal config" });
     }
   });
 
-  // List products with prices
-  app.get("/api/products", async (req, res) => {
+  // List products with prices (shape kept compatible with old Stripe response)
+  app.get("/api/products", async (_req, res) => {
     try {
-      const rows = await stripeStorage.listProductsWithPrices();
-      
-      const productsMap = new Map();
-      for (const row of rows as any[]) {
-        if (!productsMap.has(row.product_id)) {
-          productsMap.set(row.product_id, {
-            id: row.product_id,
-            name: row.product_name,
-            description: row.product_description,
-            active: row.product_active,
-            metadata: row.product_metadata,
-            prices: []
-          });
-        }
-        if (row.price_id) {
-          productsMap.get(row.product_id).prices.push({
-            id: row.price_id,
-            unit_amount: row.unit_amount,
-            currency: row.currency,
-            recurring: row.recurring,
-            active: row.price_active,
-          });
-        }
+      const plans = getCachedPlans();
+      if (plans.length === 0) {
+        // Lazy seed if startup didn't run yet
+        await ensurePaypalPlans();
       }
-
-      res.json({ data: Array.from(productsMap.values()) });
+      const data = getCachedPlans().map((p) => ({
+        id: p.productId,
+        name: p.name,
+        description: p.description,
+        active: true,
+        metadata: { app: 'crush', tier: p.tier },
+        prices: [
+          {
+            id: p.planId,
+            unit_amount: Math.round(p.amount * 100),
+            currency: p.currency.toLowerCase(),
+            recurring: { interval: 'month' },
+            active: true,
+          },
+        ],
+      }));
+      res.json({ data });
     } catch (error: any) {
+      console.error("Products error:", error);
       res.status(500).json({ error: "Failed to load products" });
     }
   });
 
-  // Create checkout session
+  // Create a PayPal subscription and return approval URL
   app.post("/api/checkout", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const userEmail = req.user.claims.email;
-    const { priceId } = req.body;
+    const { priceId } = req.body; // priceId is the PayPal plan_id
 
     if (!priceId) {
-      return res.status(400).json({ error: "Price ID required" });
+      return res.status(400).json({ error: "Plan ID required" });
     }
 
     try {
@@ -1302,46 +1306,59 @@ Guidelines:
         return res.status(400).json({ error: "Profile required" });
       }
 
-      let customerId = profile.stripeCustomerId;
-      if (!customerId) {
-        const customer = await stripeService.createCustomer(userEmail, userId);
-        await storage.updateStripeCustomer(userId, customer.id);
-        customerId = customer.id;
+      const plan = getPlanByPlanId(priceId);
+      if (!plan) {
+        return res.status(400).json({ error: "Unknown plan" });
       }
 
-      const session = await stripeService.createCheckoutSession(
-        customerId,
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const { subscriptionId, approvalUrl } = await createPaypalSubscription(
         priceId,
-        `${req.protocol}://${req.get('host')}/premium?success=true`,
-        `${req.protocol}://${req.get('host')}/premium?canceled=true`
+        userEmail || `user-${userId}@crush.local`,
+        `${baseUrl}/premium?success=true`,
+        `${baseUrl}/premium?canceled=true`,
+        userId,
       );
 
-      res.json({ url: session.url });
+      // Optimistically store the pending subscription id so webhooks can correlate
+      await storage.updatePaypalSubscription(
+        userId,
+        subscriptionId,
+        false,
+        undefined,
+        priceId,
+      );
+
+      res.json({ url: approvalUrl });
     } catch (error: any) {
       console.error("Checkout error:", error);
-      res.status(500).json({ error: "Failed to create checkout session" });
+      res.status(500).json({ error: "Failed to create subscription" });
     }
   });
 
-  // Create customer portal session
+  // Cancel the current subscription (PayPal has no hosted portal like Stripe)
   app.post("/api/customer-portal", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
 
     try {
       const profile = await storage.getProfile(userId);
-      if (!profile?.stripeCustomerId) {
+      if (!profile?.paypalSubscriptionId) {
         return res.status(400).json({ error: "No subscription found" });
       }
 
-      const session = await stripeService.createCustomerPortalSession(
-        profile.stripeCustomerId,
-        `${req.protocol}://${req.get('host')}/premium`
+      await cancelPaypalSubscription(profile.paypalSubscriptionId);
+      await storage.updatePaypalSubscription(
+        userId,
+        profile.paypalSubscriptionId,
+        false,
       );
 
-      res.json({ url: session.url });
+      // Return the user back to the premium page rather than an external portal
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      res.json({ url: `${baseUrl}/premium?canceled=true`, canceled: true });
     } catch (error: any) {
-      console.error("Portal error:", error);
-      res.status(500).json({ error: "Failed to create portal session" });
+      console.error("Cancel error:", error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
     }
   });
 

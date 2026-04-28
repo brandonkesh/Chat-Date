@@ -2,9 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { runMigrations } from 'stripe-replit-sync';
-import { getStripeSync } from './stripeClient';
-import { WebhookHandlers } from './webhookHandlers';
+import { ensurePaypalPlans } from './paypalService';
+import { PaypalWebhookHandler } from './paypalWebhookHandler';
 
 const app = express();
 const httpServer = createServer(app);
@@ -26,78 +25,50 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-async function initStripe() {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    log('DATABASE_URL not set, skipping Stripe initialization', 'stripe');
+async function initPaypal() {
+  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+    log('PAYPAL_CLIENT_ID/SECRET not set, skipping PayPal initialization', 'paypal');
     return;
   }
 
   try {
-    log('Initializing Stripe schema...', 'stripe');
-    await runMigrations({ 
-      databaseUrl,
-      schema: 'stripe'
-    });
-    log('Stripe schema ready', 'stripe');
-
-    const stripeSync = await getStripeSync();
-
-    try {
-      log('Setting up managed webhook...', 'stripe');
-      const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
-      const result = await stripeSync.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`
+    log('Ensuring PayPal products & plans exist...', 'paypal');
+    const plans = await ensurePaypalPlans();
+    log(`PayPal plans ready: ${plans.map((p) => `${p.tier}=$${p.amount}`).join(', ')}`, 'paypal');
+    if (!process.env.PAYPAL_WEBHOOK_ID) {
+      log(
+        'PAYPAL_WEBHOOK_ID not set — webhook signature verification disabled. Set it in production.',
+        'paypal',
       );
-      if (result?.webhook?.url) {
-        log(`Webhook configured: ${result.webhook.url}`, 'stripe');
-      } else {
-        log('Webhook created but URL not returned', 'stripe');
-      }
-    } catch (webhookError: any) {
-      log(`Webhook setup warning: ${webhookError.message}`, 'stripe');
     }
-
-    log('Syncing Stripe data...', 'stripe');
-    stripeSync.syncBackfill()
-      .then(() => {
-        log('Stripe data synced', 'stripe');
-      })
-      .catch((err: Error) => {
-        log(`Error syncing Stripe data: ${err.message}`, 'stripe');
-      });
   } catch (error: any) {
-    log(`Failed to initialize Stripe: ${error.message}`, 'stripe');
+    log(`Failed to initialize PayPal: ${error.message}`, 'paypal');
   }
 }
 
 (async () => {
-  await initStripe();
+  await initPaypal();
 
   app.post(
-    '/api/stripe/webhook',
+    '/api/paypal/webhook',
     express.raw({ type: 'application/json' }),
     async (req, res) => {
-      const signature = req.headers['stripe-signature'];
-
-      if (!signature) {
-        return res.status(400).json({ error: 'Missing stripe-signature' });
-      }
-
       try {
-        const sig = Array.isArray(signature) ? signature[0] : signature;
-
         if (!Buffer.isBuffer(req.body)) {
-          log('STRIPE WEBHOOK ERROR: req.body is not a Buffer', 'stripe');
+          log('PAYPAL WEBHOOK ERROR: req.body is not a Buffer', 'paypal');
           return res.status(500).json({ error: 'Webhook processing error' });
         }
 
-        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.headers)) {
+          if (typeof v === 'string') headers[k.toLowerCase()] = v;
+          else if (Array.isArray(v)) headers[k.toLowerCase()] = v[0];
+        }
 
+        await PaypalWebhookHandler.processWebhook(req.body.toString('utf8'), headers);
         res.status(200).json({ received: true });
       } catch (error: any) {
-        log(`Webhook error: ${error.message}`, 'stripe');
+        log(`Webhook error: ${error.message}`, 'paypal');
         res.status(400).json({ error: 'Webhook processing error' });
       }
     }

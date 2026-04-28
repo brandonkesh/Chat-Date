@@ -177,17 +177,25 @@ export default function Premium() {
   const portalMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', '/api/customer-portal');
-      return await response.json() as { url: string };
+      return await response.json() as { url: string; canceled?: boolean };
     },
     onSuccess: (data) => {
-      if (data.url) {
+      if (data.canceled) {
+        toast({
+          title: "Subscription canceled",
+          description: "Your premium access has been removed.",
+        });
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } else if (data.url) {
         window.location.href = data.url;
       }
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to open billing portal.",
+        description: "Failed to cancel subscription. Please try again.",
         variant: "destructive",
       });
     },
@@ -262,7 +270,7 @@ export default function Premium() {
                 ) : (
                   <ExternalLink className="w-4 h-4 mr-2" />
                 )}
-                Manage Subscription
+                Cancel Subscription
               </Button>
             </CardContent>
           </Card>

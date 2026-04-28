@@ -26,9 +26,9 @@ export const profiles = pgTable("profiles", {
   photoUrl: text("photo_url"),
   interests: text("interests").array(), // Array of hobbies/interests
   trialEndsAt: timestamp("trial_ends_at").notNull(), // When the free month ends
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
-  stripePriceId: text("stripe_price_id"), // Track which price they subscribed to
+  paypalSubscriberId: text("paypal_subscriber_id"), // PayPal payer/subscriber id
+  paypalSubscriptionId: text("paypal_subscription_id"),
+  paypalPlanId: text("paypal_plan_id"), // Track which PayPal plan they subscribed to
   isPremium: boolean("is_premium").default(false),
   membershipTier: text("membership_tier").default("free"), // 'free', 'basic', 'pro', 'elite'
   // Verification fields
@@ -92,8 +92,9 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true, 
   userId: true,
   trialEndsAt: true,
-  stripeCustomerId: true,
-  stripeSubscriptionId: true,
+  paypalSubscriberId: true,
+  paypalSubscriptionId: true,
+  paypalPlanId: true,
   isPremium: true,
   isVerified: true,
   verificationPhotoUrl: true,
