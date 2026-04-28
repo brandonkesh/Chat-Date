@@ -4,10 +4,10 @@ import { log } from './index';
 import { getPlanByPlanId } from './paypalService';
 import type { MembershipTier } from '@shared/schema';
 
-function tierFromPlanId(planId?: string): MembershipTier {
-  if (!planId) return 'basic';
+function tierFromPlanId(planId?: string): MembershipTier | null {
+  if (!planId) return null;
   const plan = getPlanByPlanId(planId);
-  return plan?.tier || 'basic';
+  return plan?.tier ?? null;
 }
 
 async function verifyWebhookSignature(
@@ -16,8 +16,15 @@ async function verifyWebhookSignature(
 ): Promise<boolean> {
   const webhookId = process.env.PAYPAL_WEBHOOK_ID;
   if (!webhookId) {
+    if (process.env.NODE_ENV === 'production') {
+      log(
+        'PAYPAL_WEBHOOK_ID not set in production — REJECTING webhook (security)',
+        'paypal',
+      );
+      return false;
+    }
     log(
-      'PAYPAL_WEBHOOK_ID not set — skipping signature verification (NOT SAFE FOR PRODUCTION)',
+      'PAYPAL_WEBHOOK_ID not set — skipping signature verification (development only)',
       'paypal',
     );
     return true;
@@ -43,6 +50,19 @@ async function verifyWebhookSignature(
   }
 }
 
+const processedEventIds = new Set<string>();
+const MAX_DEDUPE_CACHE = 1000;
+
+function markEventProcessed(id: string): boolean {
+  if (processedEventIds.has(id)) return false;
+  processedEventIds.add(id);
+  if (processedEventIds.size > MAX_DEDUPE_CACHE) {
+    const first = processedEventIds.values().next().value;
+    if (first) processedEventIds.delete(first);
+  }
+  return true;
+}
+
 export class PaypalWebhookHandler {
   static async processWebhook(
     rawBody: string,
@@ -54,6 +74,10 @@ export class PaypalWebhookHandler {
     }
 
     const event = JSON.parse(rawBody);
+    if (event?.id && !markEventProcessed(event.id)) {
+      log(`Skipping duplicate webhook event ${event.id}`, 'paypal');
+      return;
+    }
     await PaypalWebhookHandler.handleEvent(event);
   }
 
@@ -80,7 +104,21 @@ export class PaypalWebhookHandler {
         }
 
         const isActive = status === 'ACTIVE';
-        const tier = isActive ? tierFromPlanId(planId) : 'free';
+        let tier: MembershipTier | undefined;
+        if (isActive) {
+          const resolvedTier = tierFromPlanId(planId);
+          if (!resolvedTier) {
+            log(
+              `Unknown plan_id ${planId} for subscription ${subscriptionId} — leaving tier unchanged`,
+              'paypal',
+            );
+            tier = undefined;
+          } else {
+            tier = resolvedTier;
+          }
+        } else {
+          tier = 'free';
+        }
 
         await storage.updatePaypalSubscription(
           userId,

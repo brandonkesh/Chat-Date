@@ -296,9 +296,9 @@ export default function Premium() {
             {tiers.map((tier) => {
               const Icon = tier.icon;
               const isCurrentTier = currentTier === tier.id;
-              const stripePrice = findPriceForTier(tier.id);
-              const displayPrice = stripePrice 
-                ? (stripePrice.unit_amount / 100).toFixed(2)
+              const livePrice = findPriceForTier(tier.id);
+              const displayPrice = livePrice 
+                ? (livePrice.unit_amount / 100).toFixed(2)
                 : tier.price.toFixed(2);
 
               return (

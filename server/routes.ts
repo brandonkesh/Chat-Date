@@ -1259,7 +1259,7 @@ Guidelines:
     }
   });
 
-  // List products with prices (shape kept compatible with old Stripe response)
+  // List products with prices (shape: {data:[{id,name,prices:[{id,unit_amount,recurring}]}]})
   app.get("/api/products", async (_req, res) => {
     try {
       const plans = getCachedPlans();
@@ -1311,6 +1311,12 @@ Guidelines:
         return res.status(400).json({ error: "Unknown plan" });
       }
 
+      if (profile.isPremium && profile.paypalSubscriptionId) {
+        return res.status(400).json({
+          error: "You already have an active subscription. Please cancel it before subscribing to another plan.",
+        });
+      }
+
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const { subscriptionId, approvalUrl } = await createPaypalSubscription(
         priceId,
@@ -1336,25 +1342,41 @@ Guidelines:
     }
   });
 
-  // Cancel the current subscription (PayPal has no hosted portal like Stripe)
+  // Cancel the current subscription
   app.post("/api/customer-portal", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     try {
       const profile = await storage.getProfile(userId);
-      if (!profile?.paypalSubscriptionId) {
-        return res.status(400).json({ error: "No subscription found" });
+
+      if (!profile?.paypalSubscriptionId || !profile.isPremium) {
+        // Idempotent: already canceled or never subscribed — clear local state and return success
+        if (profile?.paypalSubscriptionId) {
+          await storage.updatePaypalSubscription(userId, profile.paypalSubscriptionId, false);
+        }
+        return res.json({
+          url: `${baseUrl}/premium?canceled=true`,
+          canceled: true,
+          alreadyCanceled: true,
+        });
       }
 
-      await cancelPaypalSubscription(profile.paypalSubscriptionId);
+      try {
+        await cancelPaypalSubscription(profile.paypalSubscriptionId);
+      } catch (cancelErr: any) {
+        // If PayPal says the subscription is already inactive/canceled, treat as success
+        const msg = String(cancelErr?.message || '');
+        const alreadyDone = /SUBSCRIPTION_STATUS_INVALID|already|cancelled|RESOURCE_NOT_FOUND/i.test(msg);
+        if (!alreadyDone) throw cancelErr;
+      }
+
       await storage.updatePaypalSubscription(
         userId,
         profile.paypalSubscriptionId,
         false,
       );
 
-      // Return the user back to the premium page rather than an external portal
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
       res.json({ url: `${baseUrl}/premium?canceled=true`, canceled: true });
     } catch (error: any) {
       console.error("Cancel error:", error);

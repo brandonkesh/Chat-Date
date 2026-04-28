@@ -24,7 +24,7 @@ const allowlist = [
   "passport",
   "passport-local",
   "pg",
-  "stripe",
+  "@paypal/paypal-server-sdk",
   "uuid",
   "ws",
   "xlsx",

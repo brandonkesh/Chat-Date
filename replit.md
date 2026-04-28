@@ -59,5 +59,5 @@ Preferred communication style: Simple, everyday language.
 ### Third-Party Services
 - **Dicebear API**: Fallback avatar generation.
 - **Google Fonts**: DM Sans, Outfit.
-- **Stripe**: Via Replit Connector (`stripe-replit-sync`) for tiered subscription management (Basic, Pro, Elite), checkout, and customer portal.
+- **PayPal**: Subscriptions API for tiered subscription management (Basic $4.99, Pro $9.99, Elite $19.99). Plans are auto-seeded on server start. Webhook events (`BILLING.SUBSCRIPTION.*`) at `/api/paypal/webhook` keep premium state in sync. Set `PAYPAL_WEBHOOK_ID` to enforce signature verification (required in production).
 - **OpenAI**: For AI Conversation Coach and AI Profile Optimizer.

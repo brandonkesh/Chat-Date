@@ -97,7 +97,7 @@ async function createProduct(
       name,
       description,
       type: 'SERVICE',
-      category: 'ONLINE_DATING_SERVICES',
+      category: 'SOFTWARE',
     }),
   });
   return product.id;
