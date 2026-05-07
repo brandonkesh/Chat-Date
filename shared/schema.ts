@@ -96,6 +96,7 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   paypalSubscriptionId: true,
   paypalPlanId: true,
   isPremium: true,
+  membershipTier: true,
   isVerified: true,
   verificationPhotoUrl: true,
   verificationStatus: true,
