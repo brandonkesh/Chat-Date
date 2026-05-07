@@ -1013,6 +1013,28 @@ Guidelines:
       }
 
       await storage.blockUser(blockerId, blockedUserId);
+
+      // Evict any active video call between these two users
+      for (const [roomId, room] of callRooms.entries()) {
+        if (room.has(blockerId) && room.has(blockedUserId)) {
+          room.forEach((socket) => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ type: 'call-ended', reason: 'blocked' }));
+              socket.close();
+            }
+          });
+          callRooms.delete(roomId);
+          activeCallInvites.delete(parseInt(roomId));
+          break;
+        }
+      }
+      // Revoke pending video call tokens for either user
+      videoCallTokens.forEach((data, token) => {
+        if (data.userId === blockerId || data.userId === blockedUserId) {
+          videoCallTokens.delete(token);
+        }
+      });
+
       res.status(201).json({ success: true, message: "User blocked successfully." });
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1402,6 +1424,26 @@ Guidelines:
       if (!deleted) {
         return res.status(404).json({ message: "Match not found" });
       }
+
+      // Evict any active video call for this match
+      const unmatchRoomId = matchId.toString();
+      if (callRooms.has(unmatchRoomId)) {
+        callRooms.get(unmatchRoomId)!.forEach((socket) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'call-ended', reason: 'unmatched' }));
+            socket.close();
+          }
+        });
+        callRooms.delete(unmatchRoomId);
+      }
+      activeCallInvites.delete(matchId);
+      // Revoke any pending video call tokens for this match
+      videoCallTokens.forEach((data, token) => {
+        if (data.matchId === matchId) {
+          videoCallTokens.delete(token);
+        }
+      });
+
       res.json({ message: "Conversation ended successfully" });
     } catch (err) {
       console.error("Unmatch error:", err);
@@ -1764,11 +1806,11 @@ Guidelines:
     if (!microDate) {
       return res.status(404).json({ message: "Micro-date not found" });
     }
-    if (microDate.inviteeId !== userId && microDate.inviterId !== userId) {
-      return res.status(403).json({ message: "Not authorized" });
+    if (microDate.inviteeId !== userId) {
+      return res.status(403).json({ message: "Only the invited user can accept this invitation." });
     }
 
-    const acceptPartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const acceptPartnerId = microDate.inviterId;
     const acceptBlocked = await storage.isBlockedEither(userId, acceptPartnerId);
     if (acceptBlocked) {
       return res.status(403).json({ message: "Not authorized" });
@@ -2513,13 +2555,29 @@ Return ONLY valid JSON — no markdown, no code blocks.`
               return;
             }
             
+            // Consume token (one-time use)
+            videoCallTokens.delete(token);
+
+            // Re-verify match still exists and users are not blocked
+            const wsMatchId = tokenData.matchId;
+            const [liveMatch] = await db.select().from(matches).where(eq(matches.id, wsMatchId));
+            if (!liveMatch || (liveMatch.user1Id !== tokenData.userId && liveMatch.user2Id !== tokenData.userId)) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Match no longer valid' }));
+              ws.close();
+              return;
+            }
+            const wsPartnerId = liveMatch.user1Id === tokenData.userId ? liveMatch.user2Id : liveMatch.user1Id;
+            const wsBlocked = await storage.isBlockedEither(tokenData.userId, wsPartnerId);
+            if (wsBlocked) {
+              ws.send(JSON.stringify({ type: 'error', message: 'Not authorized for this call' }));
+              ws.close();
+              return;
+            }
+
             // Use userId from token, not from client
             currentRoom = message.matchId as string;
             currentUserId = tokenData.userId;
             authenticated = true;
-            
-            // Consume token (one-time use)
-            videoCallTokens.delete(token);
             
             const roomId = currentRoom;
             const oderId = currentUserId;
