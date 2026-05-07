@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { isAuthenticated } from "../auth";
+import { canAccessObject, getObjectAclPolicy, ObjectPermission } from "./objectAcl";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -86,10 +87,27 @@ export function registerObjectStorageRoutes(app: Express): void {
    * This serves files from object storage. For public files, no auth needed.
    * For protected files, add authentication middleware and ACL checks.
    */
-  app.get("/objects/uploads/:id", async (req, res) => {
+  app.get("/objects/uploads/:id", isAuthenticated, async (req: any, res) => {
     try {
       const objectPath = `/objects/uploads/${req.params.id}`;
       const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+
+      // Authorization: enforce ACL when one exists. Legacy uploads with no
+      // ACL fall back to "authenticated users only" — the route is already
+      // gated by `isAuthenticated`, so anonymous URL replay is blocked.
+      const userId: string | undefined = req.user?.claims?.sub;
+      const aclPolicy = await getObjectAclPolicy(objectFile);
+      if (aclPolicy) {
+        const allowed = await canAccessObject({
+          userId,
+          objectFile,
+          requestedPermission: ObjectPermission.READ,
+        });
+        if (!allowed) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
+
       await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error serving object:", error);
