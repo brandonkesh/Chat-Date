@@ -47,15 +47,34 @@ export async function registerRoutes(
   // no authenticated API endpoint can be reached without completing the 2FA challenge.
   // Exempt paths are limited to those required to complete or manage the 2FA flow itself.
   const twoFAExemptPrefixes = [
-    "/2fa/", "/auth/", "/login", "/logout", "/callback", "/password/",
+    "/2fa/", "/login", "/logout", "/callback", "/password/",
   ];
   app.use("/api", async (req: any, res: any, next: any) => {
-    // Allow access to the current user's own profile (needed for the challenge screen to render)
-    if (req.path === "/profiles/me" || twoFAExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    // Allow GET /profiles/me only (needed for the challenge screen to render).
+    // PUT /profiles/me must pass the 2FA gate like any other write endpoint.
+    if ((req.method === "GET" && req.path === "/profiles/me") || twoFAExemptPrefixes.some(p => req.path.startsWith(p))) return next();
     if (!req.user?.claims?.sub) return next();
     const profile = await storage.getProfile(req.user.claims.sub);
     if (profile?.twoFactorEnabled && !(req.session as any).twoFactorVerified) {
       return res.status(403).json({ message: "Two-factor authentication required.", twoFactorRequired: true });
+    }
+    next();
+  });
+
+  // === APP LOCK MIDDLEWARE ===
+  // Must be registered here, alongside the 2FA middleware and BEFORE any route
+  // registrations, so that every subsequent handler (including PUT /profiles/me)
+  // is subject to the app-lock gate.
+  const appLockExemptPrefixes = [
+    "/password/", "/2fa/", "/login", "/logout", "/callback",
+  ];
+  app.use("/api", async (req: any, res: any, next: any) => {
+    // Allow GET /profiles/me only; PUT /profiles/me must pass app-lock like any write endpoint.
+    if ((req.method === "GET" && req.path === "/profiles/me") || appLockExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    if (!req.user?.claims?.sub) return next();
+    const profile = await storage.getProfile(req.user.claims.sub);
+    if (profile?.passwordHash && !(req.session as any).appLockVerified) {
+      return res.status(423).json({ message: "App is locked. Please enter your password." });
     }
     next();
   });
@@ -362,20 +381,6 @@ export async function registerRoutes(
       backupCodesCount: profile.backupCodes?.length || 0,
       appLockVerified: !!(req.session as any).appLockVerified || !profile.passwordHash,
     });
-  });
-
-  // === APP LOCK MIDDLEWARE ===
-  const appLockExemptPrefixes = [
-    "/password/", "/2fa/", "/auth/", "/login", "/logout", "/callback",
-  ];
-  app.use("/api", async (req: any, res: any, next: any) => {
-    if (req.path === "/profiles/me" || appLockExemptPrefixes.some(p => req.path.startsWith(p))) return next();
-    if (!req.user?.claims?.sub) return next();
-    const profile = await storage.getProfile(req.user.claims.sub);
-    if (profile?.passwordHash && !(req.session as any).appLockVerified) {
-      return res.status(423).json({ message: "App is locked. Please enter your password." });
-    }
-    next();
   });
 
   // === EMAIL VERIFICATION ===

@@ -112,20 +112,34 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`replitauth:${req.hostname}`, (err: any, user: any) => {
+      if (err || !user) {
+        return res.redirect("/api/login");
+      }
+      // Regenerate the session ID on login to prevent session fixation and
+      // ensure no secondary-auth state from a previous user is inherited.
+      req.session.regenerate((regenErr) => {
+        if (regenErr) return next(regenErr);
+        req.logIn(user, (loginErr) => {
+          if (loginErr) return next(loginErr);
+          res.redirect("/");
+        });
+      });
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
+    const endSessionUrl = client.buildEndSessionUrl(config, {
+      client_id: process.env.REPL_ID!,
+      post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+    }).href;
+    // Destroy the session entirely on logout so that secondary-auth flags
+    // (twoFactorVerified, appLockVerified, pendingTwoFactorSecret) cannot
+    // survive into a subsequent login on the same browser.
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+      req.session.destroy(() => {
+        res.redirect(endSessionUrl);
+      });
     });
   });
 }
