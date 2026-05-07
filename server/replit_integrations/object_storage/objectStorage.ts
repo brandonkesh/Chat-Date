@@ -207,9 +207,13 @@ export class ObjectStorageService {
   }
 
   // Tries to set the ACL policy for the object entity and return the normalized path.
+  // If the object already has an ACL, the requestingUserId must match the existing
+  // owner. This prevents one user from hijacking another user's uploaded object by
+  // submitting its path to a media-binding endpoint.
   async trySetObjectEntityAclPolicy(
     rawPath: string,
-    aclPolicy: ObjectAclPolicy
+    aclPolicy: ObjectAclPolicy,
+    requestingUserId: string
   ): Promise<string> {
     const normalizedPath = this.normalizeObjectEntityPath(rawPath);
     if (!normalizedPath.startsWith("/")) {
@@ -217,6 +221,13 @@ export class ObjectStorageService {
     }
 
     const objectFile = await this.getObjectEntityFile(normalizedPath);
+
+    // Check existing ownership before overwriting the ACL.
+    const existingAcl = await getObjectAclPolicy(objectFile);
+    if (existingAcl && existingAcl.owner !== requestingUserId) {
+      throw new Error("Object is already owned by another user");
+    }
+
     await setObjectAclPolicy(objectFile, aclPolicy);
     return normalizedPath;
   }

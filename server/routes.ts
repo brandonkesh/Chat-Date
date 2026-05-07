@@ -25,7 +25,7 @@ import QRCode from "qrcode";
 
 function sanitizeProfile(profile: any) {
   if (!profile) return profile;
-  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, ...safe } = profile;
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, ...safe } = profile;
   return { ...safe, hasPassword: !!passwordHash };
 }
 
@@ -997,6 +997,7 @@ Guidelines:
         normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
           photoUrl,
           { owner: userId, visibility: "private" },
+          userId,
         );
       } catch {
         return res.status(400).json({ message: "Invalid verification photo reference" });
@@ -1049,6 +1050,7 @@ Guidelines:
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             voiceIntroUrl,
             { owner: userId, visibility: "public" },
+            userId,
           );
         } catch {
           return res.status(400).json({ message: "Invalid voice intro reference" });
@@ -1097,6 +1099,7 @@ Guidelines:
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             introVideoUrl,
             { owner: userId, visibility: "public" },
+            userId,
           );
         } catch {
           return res.status(400).json({ message: "Invalid intro video reference" });
@@ -1336,6 +1339,7 @@ Guidelines:
           resolvedVoiceNoteUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             resolvedVoiceNoteUrl,
             { owner: userId, visibility: "public" },
+            userId,
           );
         } catch {
           return res.status(400).json({ message: "Invalid voice note reference" });
