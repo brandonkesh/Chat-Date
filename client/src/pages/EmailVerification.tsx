@@ -20,12 +20,11 @@ type SendCodeResponse = {
   success: boolean;
   message: string;
   email: string;
-  codePreview: string;
 };
 
 export default function EmailVerification() {
   const [code, setCode] = useState("");
-  const [sentCode, setSentCode] = useState<string | null>(null);
+  const [codeRequested, setCodeRequested] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -40,10 +39,10 @@ export default function EmailVerification() {
       return res.json() as Promise<SendCodeResponse>;
     },
     onSuccess: (data) => {
-      setSentCode(data.codePreview);
+      setCodeRequested(true);
       toast({
         title: "Code Sent",
-        description: `Verification code sent to ${data.email}`,
+        description: `Verification code sent to ${data.email}. Check your inbox.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/email-verification/status"] });
     },
@@ -68,7 +67,7 @@ export default function EmailVerification() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/email-verification/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      setSentCode(null);
+      setCodeRequested(false);
       setCode("");
     },
     onError: (error: Error) => {
@@ -176,7 +175,7 @@ export default function EmailVerification() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-5 pb-6">
-            {!(sentCode || status?.codeSent) ? (
+            {!(codeRequested || status?.codeSent) ? (
               <>
                 <p className="text-sm text-muted-foreground text-center">
                   We'll send a 6-digit verification code to your email address. The code will be valid for 10 minutes.
@@ -197,23 +196,11 @@ export default function EmailVerification() {
               </>
             ) : (
               <>
-                {sentCode && (
-                  <div className="w-full max-w-xs bg-muted/50 rounded-md p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Your verification code:</p>
-                    <p className="text-2xl font-mono font-bold tracking-widest" data-testid="text-verification-code">
-                      {sentCode}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Enter this code below to verify your email.
-                    </p>
-                  </div>
-                )}
-
-                {!sentCode && status?.codeSent && (
-                  <p className="text-sm text-muted-foreground text-center" data-testid="text-code-already-sent">
-                    A verification code was already sent to your email. Enter it below, or request a new one.
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground text-center" data-testid="text-code-sent">
+                  {codeRequested
+                    ? "A 6-digit code has been sent to your email. Check your inbox and enter it below."
+                    : "A verification code was already sent to your email. Enter it below, or request a new one."}
+                </p>
 
                 <InputOTP
                   maxLength={6}
@@ -246,7 +233,6 @@ export default function EmailVerification() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setSentCode(null);
                     setCode("");
                     sendCodeMutation.mutate();
                   }}

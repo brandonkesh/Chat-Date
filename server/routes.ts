@@ -29,6 +29,11 @@ function sanitizeProfile(profile: any) {
   return { ...safe, hasPassword: !!passwordHash };
 }
 
+// In-memory tracker for email verification brute-force protection.
+// Single-instance deployment; resets on restart. Cleared on successful verify
+// or when a new code is requested.
+const emailVerifyAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -384,12 +389,11 @@ export async function registerRoutes(
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await storage.setEmailVerificationCode(userId, code, expiry);
-    console.log(`[Email Verification] Code for ${user[0].email}: ${code}`);
+    emailVerifyAttempts.delete(userId);
     res.json({
       success: true,
       message: "Verification code sent to your email.",
       email: user[0].email,
-      codePreview: code,
     });
   });
 
@@ -400,6 +404,14 @@ export async function registerRoutes(
     if (!code || typeof code !== "string") {
       return res.status(400).json({ message: "Verification code is required." });
     }
+
+    // Brute-force protection: limit attempts per code window.
+    const now = Date.now();
+    const existing = emailVerifyAttempts.get(userId);
+    if (existing && existing.lockedUntil > now) {
+      return res.status(429).json({ message: "Too many incorrect attempts. Please request a new code." });
+    }
+
     const profile = await storage.getProfile(userId);
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
@@ -411,11 +423,23 @@ export async function registerRoutes(
       return res.status(400).json({ message: "No verification code has been sent. Please request a new one." });
     }
     if (new Date() > new Date(profile.emailVerificationExpiry)) {
+      emailVerifyAttempts.delete(userId);
       return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
     }
     if (profile.emailVerificationCode !== code) {
+      const tracker = existing ?? { count: 0, lockedUntil: 0 };
+      tracker.count += 1;
+      if (tracker.count >= 5) {
+        // Invalidate the code so the attacker cannot keep guessing this one.
+        await storage.setEmailVerificationCode(userId, "", new Date(0));
+        tracker.lockedUntil = now + 10 * 60 * 1000;
+        emailVerifyAttempts.set(userId, tracker);
+        return res.status(429).json({ message: "Too many incorrect attempts. Please request a new code." });
+      }
+      emailVerifyAttempts.set(userId, tracker);
       return res.status(400).json({ message: "Invalid verification code. Please try again." });
     }
+    emailVerifyAttempts.delete(userId);
     await storage.verifyEmail(userId);
     res.json({ success: true, message: "Email verified successfully." });
   });
@@ -924,25 +948,37 @@ Guidelines:
     const userId = req.user.claims.sub;
     try {
       const { photoUrl } = req.body;
-      if (!photoUrl) {
+      if (!photoUrl || typeof photoUrl !== "string") {
         return res.status(400).json({ message: "Photo URL is required" });
       }
-      
-      const profile = await storage.submitVerification(userId, photoUrl);
-      
-      // For now, auto-approve verification (in production, this would go to admin review)
-      // Simulate a brief delay then approve
-      setTimeout(async () => {
-        try {
-          await storage.updateVerificationStatus(userId, 'approved');
-        } catch (error) {
-          console.error("Failed to auto-approve verification:", error);
-        }
-      }, 3000);
-      
-      res.json({ 
-        message: "Verification submitted successfully", 
-        status: profile.verificationStatus 
+
+      // Only accept object paths from our own object storage (uploaded by an
+      // authenticated user), not arbitrary external URLs. Setting an ACL with
+      // the requesting user as owner both confirms the object exists in our
+      // bucket and binds it to the submitter.
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      let normalizedPath: string;
+      try {
+        normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
+          photoUrl,
+          { owner: userId, visibility: "private" },
+        );
+      } catch {
+        return res.status(400).json({ message: "Invalid verification photo reference" });
+      }
+      if (!normalizedPath.startsWith("/objects/")) {
+        return res.status(400).json({ message: "Verification photo must be uploaded through the app" });
+      }
+
+      // Submit for review. Verification stays in 'pending' until reviewed by a
+      // trusted operator — the verified badge is a trust signal that other
+      // users rely on, so it must never be self-issued.
+      const profile = await storage.submitVerification(userId, normalizedPath);
+
+      res.json({
+        message: "Verification submitted. Your photo is pending review.",
+        status: profile.verificationStatus,
       });
     } catch (err) {
       console.error("Verification submission error:", err);
@@ -1070,7 +1106,10 @@ Guidelines:
   app.get(api.matches.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const results = await storage.getMatches(userId);
-    res.json(results);
+    res.json(results.map((r: any) => ({
+      ...r,
+      partnerProfile: sanitizeProfile(r.partnerProfile),
+    })));
   });
 
   app.get(api.matches.get.path, isAuthenticated, async (req: any, res) => {
@@ -1095,7 +1134,7 @@ Guidelines:
       return res.status(404).json({ message: "Partner profile not found" });
     }
 
-    res.json({ match, partnerProfile });
+    res.json({ match, partnerProfile: sanitizeProfile(partnerProfile) });
   });
 
   // === UNMATCH / END CONVERSATION ===
