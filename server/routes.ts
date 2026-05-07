@@ -47,6 +47,45 @@ function sanitizeMessage(message: any) {
 // or when a new code is requested.
 const emailVerifyAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
+// Per-user rate limiter for secondary-auth challenge endpoints (2FA verify,
+// app-lock verify). Tracks consecutive failures and temporarily blocks further
+// attempts after the configured threshold. Resets on a successful verification
+// or after the lockout window expires.
+const secondaryAuthAttempts = new Map<string, { failures: number; lockedUntil: number }>();
+
+const SECONDARY_AUTH_MAX_FAILURES = 5;
+const SECONDARY_AUTH_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkSecondaryAuthRateLimit(key: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now();
+  const entry = secondaryAuthAttempts.get(key);
+  if (!entry) return { allowed: true };
+  // If an active lockout is in effect, reject the request.
+  if (entry.lockedUntil > now) {
+    return { allowed: false, retryAfterMs: entry.lockedUntil - now };
+  }
+  // Lockout window has expired — reset the counter so the user gets a fresh
+  // budget instead of being immediately re-locked on the next failure.
+  if (entry.lockedUntil > 0 && entry.lockedUntil <= now) {
+    secondaryAuthAttempts.delete(key);
+  }
+  return { allowed: true };
+}
+
+function recordSecondaryAuthFailure(key: string): void {
+  const now = Date.now();
+  const entry = secondaryAuthAttempts.get(key) ?? { failures: 0, lockedUntil: 0 };
+  entry.failures += 1;
+  if (entry.failures >= SECONDARY_AUTH_MAX_FAILURES) {
+    entry.lockedUntil = now + SECONDARY_AUTH_LOCKOUT_MS;
+  }
+  secondaryAuthAttempts.set(key, entry);
+}
+
+function resetSecondaryAuthAttempts(key: string): void {
+  secondaryAuthAttempts.delete(key);
+}
+
 // Per-user AI endpoint rate limiter (in-memory, single-instance).
 // Tracks call counts within a sliding window and rejects requests that exceed
 // the configured quota. This prevents abuse of billable OpenAI-backed routes.
@@ -86,14 +125,28 @@ export async function registerRoutes(
   // === 2FA ENFORCEMENT MIDDLEWARE ===
   // Registered before ALL route and object-storage handler registrations so that
   // no authenticated API endpoint can be reached without completing the 2FA challenge.
-  // Exempt paths are limited to those required to complete or manage the 2FA flow itself.
-  const twoFAExemptPrefixes = [
-    "/2fa/", "/login", "/logout", "/callback", "/password/",
-  ];
+  // Exempt paths are ONLY those strictly required for the challenge flow itself:
+  //   - /2fa/verify  – submit the TOTP code
+  //   - /2fa/status  – let the UI detect whether 2FA is active
+  //   - /password/verify  – unlock app-lock (challenge screen dependency)
+  //   - /password/recover – backup-code unlock (challenge screen dependency)
+  //   - /password/status  – let the UI detect app-lock state
+  // Security-sensitive management operations (/password/set, /password/change,
+  // /password/remove, /2fa/setup, /2fa/enable, /2fa/disable) are NOT exempted;
+  // they require the 2FA challenge to be completed first.
+  const twoFAExemptExact = new Set([
+    "/2fa/verify", "/2fa/status",
+    "/password/verify", "/password/recover", "/password/status",
+  ]);
+  const twoFAExemptPrefixes = ["/login", "/logout", "/callback"];
   app.use("/api", async (req: any, res: any, next: any) => {
     // Allow GET /profiles/me only (needed for the challenge screen to render).
     // PUT /profiles/me must pass the 2FA gate like any other write endpoint.
-    if ((req.method === "GET" && req.path === "/profiles/me") || twoFAExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    if (
+      (req.method === "GET" && req.path === "/profiles/me") ||
+      twoFAExemptExact.has(req.path) ||
+      twoFAExemptPrefixes.some(p => req.path.startsWith(p))
+    ) return next();
     if (!req.user?.claims?.sub) return next();
     const profile = await storage.getProfile(req.user.claims.sub);
     if (profile?.twoFactorEnabled && !(req.session as any).twoFactorVerified) {
@@ -106,12 +159,27 @@ export async function registerRoutes(
   // Must be registered here, alongside the 2FA middleware and BEFORE any route
   // registrations, so that every subsequent handler (including PUT /profiles/me)
   // is subject to the app-lock gate.
-  const appLockExemptPrefixes = [
-    "/password/", "/2fa/", "/login", "/logout", "/callback",
-  ];
+  // Exempt paths are ONLY those strictly required for the challenge flow:
+  //   - /password/verify  – submit the app-lock password
+  //   - /password/recover – backup-code unlock
+  //   - /password/status  – let the UI detect app-lock state
+  //   - /2fa/verify       – submit the TOTP code (challenge screen dependency)
+  //   - /2fa/status       – let the UI detect 2FA state
+  // Security-sensitive management operations (/2fa/setup, /2fa/enable,
+  // /2fa/disable, /password/set, /password/change, /password/remove) are NOT
+  // exempted; they require the app-lock to be unlocked first.
+  const appLockExemptExact = new Set([
+    "/password/verify", "/password/recover", "/password/status",
+    "/2fa/verify", "/2fa/status",
+  ]);
+  const appLockExemptPrefixes = ["/login", "/logout", "/callback"];
   app.use("/api", async (req: any, res: any, next: any) => {
     // Allow GET /profiles/me only; PUT /profiles/me must pass app-lock like any write endpoint.
-    if ((req.method === "GET" && req.path === "/profiles/me") || appLockExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    if (
+      (req.method === "GET" && req.path === "/profiles/me") ||
+      appLockExemptExact.has(req.path) ||
+      appLockExemptPrefixes.some(p => req.path.startsWith(p))
+    ) return next();
     if (!req.user?.claims?.sub) return next();
     const profile = await storage.getProfile(req.user.claims.sub);
     if (profile?.passwordHash && !(req.session as any).appLockVerified) {
@@ -137,6 +205,12 @@ export async function registerRoutes(
     // profile data must not be served until the 2FA challenge is completed.
     if (profile.twoFactorEnabled && !(req.session as any).twoFactorVerified) {
       return res.json({ userId: profile.userId, twoFactorEnabled: true });
+    }
+    // When app-lock is active but not yet unlocked in this session, return only
+    // the minimum fields required for the lock-screen routing logic. Full profile
+    // data must not be served until the app-lock challenge is completed.
+    if (profile.passwordHash && !(req.session as any).appLockVerified) {
+      return res.json({ userId: profile.userId, appLocked: true });
     }
     res.json(sanitizeProfile(profile));
   });
@@ -291,6 +365,12 @@ export async function registerRoutes(
   // Verify 2FA code (for login challenge)
   app.post("/api/2fa/verify", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+    const rateLimitKey = `2fa:${userId}`;
+    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
+    }
     const { code } = req.body;
     if (!code || typeof code !== "string") {
       return res.status(400).json({ message: "Verification code is required." });
@@ -301,8 +381,10 @@ export async function registerRoutes(
     }
     const result = verifySync({ token: code, secret: profile.twoFactorSecret });
     if (!result.valid) {
+      recordSecondaryAuthFailure(rateLimitKey);
       return res.status(400).json({ message: "Invalid verification code. Please try again." });
     }
+    resetSecondaryAuthAttempts(rateLimitKey);
     (req.session as any).twoFactorVerified = true;
     res.json({ success: true });
   });
@@ -312,8 +394,8 @@ export async function registerRoutes(
   app.post("/api/password/set", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { password } = req.body;
-    if (!password || typeof password !== "string" || password.length < 4) {
-      return res.status(400).json({ message: "Password must be at least 4 characters." });
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters." });
     }
     const profile = await storage.getProfile(userId);
     if (!profile) {
@@ -333,8 +415,8 @@ export async function registerRoutes(
   app.post("/api/password/change", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { currentPassword, newPassword } = req.body;
-    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 4) {
-      return res.status(400).json({ message: "New password must be at least 4 characters." });
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters." });
     }
     const profile = await storage.getProfile(userId);
     if (!profile || !profile.passwordHash) {
@@ -369,6 +451,12 @@ export async function registerRoutes(
 
   app.post("/api/password/verify", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+    const rateLimitKey = `applock:${userId}`;
+    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
+    }
     const { password } = req.body;
     const profile = await storage.getProfile(userId);
     if (!profile || !profile.passwordHash) {
@@ -377,8 +465,10 @@ export async function registerRoutes(
     const bcrypt = await import("bcryptjs");
     const valid = await bcrypt.compare(password || "", profile.passwordHash);
     if (!valid) {
+      recordSecondaryAuthFailure(rateLimitKey);
       return res.status(403).json({ message: "Incorrect password." });
     }
+    resetSecondaryAuthAttempts(rateLimitKey);
     (req.session as any).appLockVerified = true;
     res.json({ success: true });
   });
