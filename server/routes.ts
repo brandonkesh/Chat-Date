@@ -41,7 +41,25 @@ export async function registerRoutes(
   // Setup Auth
   await setupAuth(app);
   registerAuthRoutes(app);
-  
+
+  // === 2FA ENFORCEMENT MIDDLEWARE ===
+  // Registered before ALL route and object-storage handler registrations so that
+  // no authenticated API endpoint can be reached without completing the 2FA challenge.
+  // Exempt paths are limited to those required to complete or manage the 2FA flow itself.
+  const twoFAExemptPrefixes = [
+    "/2fa/", "/auth/", "/login", "/logout", "/callback", "/password/",
+  ];
+  app.use("/api", async (req: any, res: any, next: any) => {
+    // Allow access to the current user's own profile (needed for the challenge screen to render)
+    if (req.path === "/profiles/me" || twoFAExemptPrefixes.some(p => req.path.startsWith(p))) return next();
+    if (!req.user?.claims?.sub) return next();
+    const profile = await storage.getProfile(req.user.claims.sub);
+    if (profile?.twoFactorEnabled && !(req.session as any).twoFactorVerified) {
+      return res.status(403).json({ message: "Two-factor authentication required.", twoFactorRequired: true });
+    }
+    next();
+  });
+
   // Setup Object Storage for file uploads
   registerObjectStorageRoutes(app);
 
@@ -53,6 +71,12 @@ export async function registerRoutes(
     const profile = await storage.getProfile(userId);
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
+    }
+    // When 2FA is enabled but not yet verified in this session, return only the
+    // minimum fields required for the challenge/onboarding routing logic. Full
+    // profile data must not be served until the 2FA challenge is completed.
+    if (profile.twoFactorEnabled && !(req.session as any).twoFactorVerified) {
+      return res.json({ userId: profile.userId, twoFactorEnabled: true });
     }
     res.json(sanitizeProfile(profile));
   });
