@@ -1142,6 +1142,12 @@ Guidelines:
         return res.status(400).json({ message: "Cannot swipe yourself" });
       }
 
+      // Prevent swiping or matching across a block relationship
+      const swipeBlocked = await storage.isBlockedEither(userId, input.swipedId);
+      if (swipeBlocked) {
+        return res.status(403).json({ message: "Action not allowed" });
+      }
+
       await storage.createSwipe({ ...input, swiperId: userId });
 
       let isMatch = false;
@@ -1198,6 +1204,12 @@ Guidelines:
     }
 
     const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    const matchBlocked = await storage.isBlockedEither(userId, partnerId);
+    if (matchBlocked) {
+      return res.status(403).json({ message: "Access not allowed" });
+    }
+
     const partnerProfile = await storage.getProfile(partnerId);
 
     if (!partnerProfile) {
@@ -1232,6 +1244,12 @@ Guidelines:
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
       return res.status(404).json({ message: "Match not found" });
+    }
+
+    const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const msgBlocked = await storage.isBlockedEither(userId, partnerId);
+    if (msgBlocked) {
+      return res.status(403).json({ message: "Access not allowed" });
     }
 
     const msgs = await storage.getMessages(matchId);
@@ -1568,6 +1586,13 @@ Guidelines:
     if (microDate.inviteeId !== userId && microDate.inviterId !== userId) {
       return res.status(403).json({ message: "Not authorized" });
     }
+
+    const acceptPartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const acceptBlocked = await storage.isBlockedEither(userId, acceptPartnerId);
+    if (acceptBlocked) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     if (microDate.status !== "pending") {
       return res.status(400).json({ message: "This invitation is no longer pending." });
     }
@@ -1591,6 +1616,12 @@ Guidelines:
       return res.status(403).json({ message: "Not authorized" });
     }
 
+    const declinePartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const declineBlocked = await storage.isBlockedEither(userId, declinePartnerId);
+    if (declineBlocked) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const updated = await storage.updateMicroDateStatus(microDateId, "declined");
     res.json(updated);
   });
@@ -1605,6 +1636,12 @@ Guidelines:
       return res.status(404).json({ message: "Micro-date not found" });
     }
     if (microDate.inviterId !== userId && microDate.inviteeId !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const microDatePartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const microDateBlocked = await storage.isBlockedEither(userId, microDatePartnerId);
+    if (microDateBlocked) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -1644,6 +1681,13 @@ Guidelines:
     if (microDate.inviterId !== userId && microDate.inviteeId !== userId) {
       return res.status(403).json({ message: "Not authorized" });
     }
+
+    const respondPartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const respondBlocked = await storage.isBlockedEither(userId, respondPartnerId);
+    if (respondBlocked) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     if (microDate.status !== "active") {
       return res.status(400).json({ message: "Micro-date is not active." });
     }
@@ -1678,6 +1722,12 @@ Guidelines:
       return res.status(403).json({ message: "Not authorized" });
     }
 
+    const completePartnerId = microDate.inviterId === userId ? microDate.inviteeId : microDate.inviterId;
+    const completeBlocked = await storage.isBlockedEither(userId, completePartnerId);
+    if (completeBlocked) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const updated = await storage.updateMicroDateStatus(microDateId, "completed");
     res.json(updated);
   });
@@ -1690,6 +1740,12 @@ Guidelines:
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
       return res.status(404).json({ message: "Match not found" });
+    }
+
+    const microMatchPartnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const microMatchBlocked = await storage.isBlockedEither(userId, microMatchPartnerId);
+    if (microMatchBlocked) {
+      return res.status(403).json({ message: "Not authorized" });
     }
 
     const microDate = await storage.getMicroDateByMatch(matchId);
@@ -1960,6 +2016,12 @@ Return ONLY valid JSON — no markdown, no code blocks.`
       return res.status(403).json({ error: "Not authorized for this call" });
     }
 
+    const callInvitePartnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const callInviteBlocked = await storage.isBlockedEither(userId, callInvitePartnerId);
+    if (callInviteBlocked) {
+      return res.status(403).json({ error: "Not authorized for this call" });
+    }
+
     activeCallInvites.set(matchId, {
       callerId: userId,
       callerName: userProfile.displayName,
@@ -1986,6 +2048,12 @@ Return ONLY valid JSON — no markdown, no code blocks.`
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const activePartnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const activeCallBlocked = await storage.isBlockedEither(userId, activePartnerId);
+    if (activeCallBlocked) {
       return res.status(403).json({ error: "Not authorized" });
     }
 
@@ -2030,6 +2098,17 @@ Return ONLY valid JSON — no markdown, no code blocks.`
   app.get("/api/video-call/invite-status/:matchId", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const matchId = parseInt(req.params.matchId);
+
+    const [statusMatch] = await db.select().from(matches).where(eq(matches.id, matchId));
+    if (!statusMatch || (statusMatch.user1Id !== userId && statusMatch.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const statusPartnerId = statusMatch.user1Id === userId ? statusMatch.user2Id : statusMatch.user1Id;
+    const statusBlocked = await storage.isBlockedEither(userId, statusPartnerId);
+    if (statusBlocked) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
 
     if (declinedCallInvites.has(matchId)) {
       return res.json({ status: "declined" });
@@ -2081,6 +2160,12 @@ Return ONLY valid JSON — no markdown, no code blocks.`
 
     const [match] = await db.select().from(matches).where(eq(matches.id, matchId));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(403).json({ error: "Not authorized for this call" });
+    }
+
+    const callTokenPartnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const callTokenBlocked = await storage.isBlockedEither(userId, callTokenPartnerId);
+    if (callTokenBlocked) {
       return res.status(403).json({ error: "Not authorized for this call" });
     }
     

@@ -551,6 +551,8 @@ export class DatabaseStorage implements IStorage {
     const results = [];
     for (const match of userMatches) {
       const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const blocked = await this.isBlockedEither(userId, partnerId);
+      if (blocked) continue;
       const partnerProfile = await this.getProfile(partnerId);
       if (partnerProfile) {
         results.push({ ...match, partnerProfile });
