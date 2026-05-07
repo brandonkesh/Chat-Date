@@ -854,8 +854,13 @@ Guidelines:
 
   // Get specific profile
   app.get(api.profiles.get.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
     const profile = await storage.getProfileById(Number(req.params.id));
     if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    const blockedIds = await storage.getBlockedUserIds(userId);
+    if (blockedIds.includes(profile.userId)) {
       return res.status(404).json({ message: "Profile not found" });
     }
     res.json(sanitizeProfile(profile));
@@ -1879,8 +1884,10 @@ Return ONLY valid JSON — no markdown, no code blocks.`
         ? analysis.detectedInterests.slice(0, 8)
         : [];
 
-      // Find profiles with overlapping interests (exclude self)
-      const allProfiles = await db.select().from(profiles).where(ne(profiles.userId, userId)).limit(300);
+      // Find profiles with overlapping interests (exclude self and blocked users)
+      const blockedIds = await storage.getBlockedUserIds(userId);
+      const excludedIds = [userId, ...blockedIds];
+      const allProfiles = await db.select().from(profiles).where(notInArray(profiles.userId, excludedIds)).limit(300);
 
       const scoredProfiles = allProfiles
         .filter(p => p.interests && p.interests.length > 0)
