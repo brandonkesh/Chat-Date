@@ -25,8 +25,8 @@ Crush is a dating app with a React frontend and an Express/TypeScript backend ba
 ## Scan Anchors
 
 - **Production entry points:** `server/index.ts`, `server/routes.ts`, `server/replit_integrations/auth/replitAuth.ts`, `server/replit_integrations/object_storage/routes.ts`, `server/paypalWebhookHandler.ts`
-- **Highest-risk areas:** auth/session enforcement, profile/media access control, verification flows, payment/subscription routes, WebSocket signaling, and any route returning private user data
-- **Public vs authenticated:** most app APIs are authenticated; PayPal webhook and object-serving paths are special boundaries that need explicit review
+- **Highest-risk areas:** auth/session enforcement, path-based `/api` gate exemptions, profile/media ACL binding, shared profile write schemas in `shared/schema.ts` / `shared/routes.ts`, payment/subscription routes, WebSocket signaling, and any route returning private user data
+- **Public vs authenticated:** most app APIs are authenticated; PayPal webhook and object-serving paths are special boundaries that need explicit review; match-scoped APIs must still enforce block and ownership rules after authentication
 - **Dev-only / usually ignore unless proven reachable:** unregistered integration route files under `server/replit_integrations/chat`, `audio/routes.ts`, and `image/routes.ts`; Vite/dev tooling; mockup sandbox assumptions
 
 ## Threat Categories
