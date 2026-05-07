@@ -84,6 +84,15 @@ async function initPaypal() {
 
   app.use(express.urlencoded({ extended: false }));
 
+  // Request logging middleware.
+  //
+  // SECURITY: Only safe request metadata (method, path, status, duration) is
+  // ever written to logs. Response bodies are NEVER captured or logged.
+  // Several API routes return account secrets that must remain confidential:
+  //   - POST /api/2fa/setup       → TOTP secret (one-time display only)
+  //   - POST /api/password/set    → plaintext backup codes (one-time display)
+  // Logging any response body would expose these secrets to anyone who can
+  // read deployment logs, support archives, or copied log streams.
   app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
@@ -91,10 +100,6 @@ async function initPaypal() {
     res.on("finish", () => {
       const duration = Date.now() - start;
       if (path.startsWith("/api")) {
-        // NEVER log response bodies. Several routes return account secrets
-        // (TOTP secret, backup codes, email verification codes) and personal
-        // data (profiles, messages). Logging the body would let anyone with
-        // access to logs recover those secrets.
         log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
       }
     });

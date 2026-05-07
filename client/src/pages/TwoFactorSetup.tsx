@@ -11,7 +11,6 @@ import { useLocation } from "wouter";
 type SetupData = {
   qrCode: string;
   secret: string;
-  otpauthUrl: string;
 };
 
 type TwoFactorStatus = {

@@ -184,7 +184,7 @@ export async function registerRoutes(
     });
     const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
     (req.session as any).pendingTwoFactorSecret = secret;
-    res.json({ qrCode: qrCodeDataUrl, secret, otpauthUrl });
+    res.json({ qrCode: qrCodeDataUrl, secret });
   });
 
   // Verify and enable 2FA
