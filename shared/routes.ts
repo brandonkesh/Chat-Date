@@ -123,7 +123,7 @@ export const api = {
       method: 'POST' as const,
       path: '/api/matches/:id/messages',
       input: z.object({ 
-        content: z.string().min(1),
+        content: z.string().min(1).max(2000),
         voiceNoteUrl: z.string().optional(),
         voiceNoteDuration: z.number().optional(),
       }),

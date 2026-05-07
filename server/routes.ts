@@ -34,6 +34,34 @@ function sanitizeProfile(profile: any) {
 // or when a new code is requested.
 const emailVerifyAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
+// Per-user AI endpoint rate limiter (in-memory, single-instance).
+// Tracks call counts within a sliding window and rejects requests that exceed
+// the configured quota. This prevents abuse of billable OpenAI-backed routes.
+const aiCallTracker = new Map<string, { count: number; windowStart: number }>();
+
+/**
+ * Returns true and increments the counter when the call is within quota.
+ * Returns false when the user has exceeded the limit for the current window.
+ * @param userId    Authenticated user identifier
+ * @param endpoint  Short label used to namespace the key (e.g. "ai-feedback")
+ * @param limit     Maximum allowed calls within windowMs
+ * @param windowMs  Rolling window duration in milliseconds
+ */
+function checkAiRateLimit(userId: string, endpoint: string, limit: number, windowMs: number): boolean {
+  const key = `${userId}:${endpoint}`;
+  const now = Date.now();
+  const entry = aiCallTracker.get(key);
+  if (!entry || now - entry.windowStart >= windowMs) {
+    aiCallTracker.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  if (entry.count >= limit) {
+    return false;
+  }
+  entry.count += 1;
+  return true;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -502,6 +530,16 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Profile not found" });
     }
 
+    // Elite-only feature as marketed on the Premium page.
+    if (profile.membershipTier !== "elite") {
+      return res.status(403).json({ message: "AI Profile Optimizer is available on the Elite plan. Please upgrade." });
+    }
+
+    // 5 calls per hour — profile analysis is expensive and results change slowly.
+    if (!checkAiRateLimit(userId, "ai-feedback", 5, 60 * 60 * 1000)) {
+      return res.status(429).json({ message: "You have reached the limit for AI profile analysis. Please try again later." });
+    }
+
     const profileData: Record<string, any> = {};
     if (profile.displayName) profileData.displayName = profile.displayName;
     if (profile.bio) profileData.bio = profile.bio;
@@ -622,21 +660,31 @@ Be encouraging but honest. Give specific, actionable suggestions. Score fairly b
       return res.status(400).json({ message: "matchId and recentMessages are required" });
     }
 
+    // AI conversation coach is a paid feature (Basic/Pro/Elite).
+    const coachProfile = await storage.getProfile(userId);
+    if (!coachProfile || !coachProfile.isPremium) {
+      return res.status(403).json({ message: "AI Conversation Coach is available on paid plans. Please upgrade." });
+    }
+
+    // 20 calls per hour — coaching is used frequently during active conversations.
+    if (!checkAiRateLimit(userId, "chat-coach", 20, 60 * 60 * 1000)) {
+      return res.status(429).json({ message: "You have reached the limit for AI coaching. Please try again later." });
+    }
+
     const [match] = await db.select().from(matches).where(eq(matches.id, Number(matchId)));
     if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
       return res.status(404).json({ message: "Match not found" });
     }
 
-    const myProfile = await storage.getProfile(userId);
     const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
     const otherProfile = await storage.getProfile(otherUserId);
 
-    if (!myProfile || !otherProfile) {
+    if (!coachProfile || !otherProfile) {
       return res.status(400).json({ message: "Profile not found" });
     }
 
     const context: Record<string, any> = {
-      myName: myProfile.displayName,
+      myName: coachProfile.displayName,
       partnerName: otherProfile.displayName,
       partnerInterests: otherProfile.interests || [],
       partnerBio: otherProfile.bio || "",
@@ -645,7 +693,7 @@ Be encouraging but honest. Give specific, actionable suggestions. Score fairly b
 
     const chatHistory = recentMessages.slice(-10).map((m: any) => ({
       from: m.senderId === userId ? "me" : "them",
-      text: m.content,
+      text: typeof m.content === "string" ? m.content.slice(0, 500) : "",
     }));
 
     try {
@@ -759,6 +807,16 @@ Guidelines:
       const userProfile = await storage.getProfile(userId);
       if (!userProfile) {
         return res.status(404).json({ error: "Profile not found" });
+      }
+
+      // AI match suggestions are a paid feature (Basic/Pro/Elite).
+      if (!userProfile.isPremium) {
+        return res.status(403).json({ error: "AI Match is available on paid plans. Please upgrade." });
+      }
+
+      // 10 calls per hour — each call fans out across up to 20 candidate profiles.
+      if (!checkAiRateLimit(userId, "ai-matches", 10, 60 * 60 * 1000)) {
+        return res.status(429).json({ error: "You have reached the limit for AI match suggestions. Please try again later." });
       }
 
       // Get existing matches to exclude
@@ -1294,8 +1352,12 @@ Guidelines:
       const input = api.messages.create.input.parse(req.body);
 
       // AI Scam Detection
+      // Rate-limited to 60 scans per hour per user to avoid cost amplification
+      // from automated high-frequency message sends.
       let isScam = false;
       let scamAnalysis = null;
+      const scamRateLimitOk = checkAiRateLimit(userId, "scam-detect", 60, 60 * 60 * 1000);
+      if (scamRateLimitOk) {
       try {
         const OpenAI = (await import("openai")).default;
         const openai = new OpenAI({
@@ -1324,6 +1386,7 @@ Guidelines:
       } catch (err) {
         console.error("AI Scam Detection Error:", err);
       }
+      } // end if (scamRateLimitOk)
 
       // If a voice note is attached, bind it to the sending user with an ACL
       // policy before persisting. This ensures the object has an explicit
@@ -1773,6 +1836,17 @@ Guidelines:
     const userId = req.user.claims.sub;
     const { text, audio, history, generateAudio, voice, language } = req.body;
 
+    // AI Dating Advisor is a paid feature (Basic/Pro/Elite).
+    const advisorProfile = await storage.getProfile(userId);
+    if (!advisorProfile || !advisorProfile.isPremium) {
+      return res.status(403).json({ message: "AI Dating Advisor is available on paid plans. Please upgrade." });
+    }
+
+    // 30 calls per hour — chat is conversational and users may send many turns.
+    if (!checkAiRateLimit(userId, "ai-advisor", 30, 60 * 60 * 1000)) {
+      return res.status(429).json({ message: "You have reached the limit for AI advisor messages. Please try again later." });
+    }
+
     const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
     const selectedVoice = validVoices.includes(voice) ? voice as typeof validVoices[number] : "nova";
 
@@ -1796,6 +1870,16 @@ Guidelines:
       return res.status(400).json({ message: "Please provide text or audio input." });
     }
 
+    // Reject excessively long text inputs before calling any AI.
+    if (typeof text === "string" && text.length > 2000) {
+      return res.status(400).json({ message: "Message is too long. Please keep it under 2000 characters." });
+    }
+
+    // Reject suspiciously large audio payloads (base64 of ~5 MB raw ≈ 6.7 MB base64).
+    if (typeof audio === "string" && audio.length > 7_000_000) {
+      return res.status(400).json({ message: "Audio file is too large." });
+    }
+
     try {
       let userText = text;
 
@@ -1809,7 +1893,7 @@ Guidelines:
         return res.status(400).json({ message: "Could not understand the audio. Please try again." });
       }
 
-      const profile = await storage.getProfile(userId);
+      const profile = advisorProfile;
 
       const languageInstruction = selectedLanguage !== "English"
         ? `\n\nIMPORTANT: You MUST respond entirely in ${selectedLanguage}. All your text output must be in ${selectedLanguage}.`
@@ -1848,7 +1932,7 @@ Topics you can help with:
           if (msg.role === "user" || msg.role === "assistant") {
             conversationMessages.push({
               role: msg.role,
-              content: msg.content,
+              content: typeof msg.content === "string" ? msg.content.slice(0, 1000) : "",
             });
           }
         }
@@ -1905,6 +1989,11 @@ Topics you can help with:
     const userProfile = await storage.getProfile(userId);
     if (!userProfile || (userProfile.membershipTier !== 'pro' && userProfile.membershipTier !== 'elite')) {
       return res.status(403).json({ error: "AI Photo Match is available on Pro and Elite plans. Please upgrade." });
+    }
+
+    // 10 calls per hour — vision model invocations are costly.
+    if (!checkAiRateLimit(userId, "photo-match", 10, 60 * 60 * 1000)) {
+      return res.status(429).json({ message: "You have reached the limit for AI photo match. Please try again later." });
     }
 
     try {
