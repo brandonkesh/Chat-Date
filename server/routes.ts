@@ -1030,7 +1030,25 @@ Guidelines:
     try {
       const schema = z.object({ voiceIntroUrl: z.string().nullable() });
       const { voiceIntroUrl } = schema.parse(req.body);
-      const profile = await storage.updateProfile(userId, { voiceIntroUrl });
+
+      let resolvedUrl = voiceIntroUrl;
+      if (voiceIntroUrl) {
+        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const objectStorageService = new ObjectStorageService();
+        try {
+          resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
+            voiceIntroUrl,
+            { owner: userId, visibility: "public" },
+          );
+        } catch {
+          return res.status(400).json({ message: "Invalid voice intro reference" });
+        }
+        if (!resolvedUrl.startsWith("/objects/")) {
+          return res.status(400).json({ message: "Voice intro must be uploaded through the app" });
+        }
+      }
+
+      const profile = await storage.updateProfile(userId, { voiceIntroUrl: resolvedUrl });
       res.json(sanitizeProfile(profile));
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1060,7 +1078,25 @@ Guidelines:
     try {
       const schema = z.object({ introVideoUrl: z.string().nullable() });
       const { introVideoUrl } = schema.parse(req.body);
-      const profile = await storage.updateProfile(userId, { introVideoUrl });
+
+      let resolvedUrl = introVideoUrl;
+      if (introVideoUrl) {
+        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const objectStorageService = new ObjectStorageService();
+        try {
+          resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
+            introVideoUrl,
+            { owner: userId, visibility: "public" },
+          );
+        } catch {
+          return res.status(400).json({ message: "Invalid intro video reference" });
+        }
+        if (!resolvedUrl.startsWith("/objects/")) {
+          return res.status(400).json({ message: "Intro video must be uploaded through the app" });
+        }
+      }
+
+      const profile = await storage.updateProfile(userId, { introVideoUrl: resolvedUrl });
       res.json(sanitizeProfile(profile));
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1258,11 +1294,34 @@ Guidelines:
         console.error("AI Scam Detection Error:", err);
       }
 
+      // If a voice note is attached, bind it to the sending user with an ACL
+      // policy before persisting. This ensures the object has an explicit
+      // access-control decision and cannot be served to unauthenticated callers
+      // or denied by the no-ACL-equals-forbidden fallback on the serve route.
+      // Voice notes are marked public so the recipient (an authenticated matched
+      // user who receives the URL through the match message API) can play them.
+      let resolvedVoiceNoteUrl = input.voiceNoteUrl || null;
+      if (resolvedVoiceNoteUrl) {
+        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const objectStorageService = new ObjectStorageService();
+        try {
+          resolvedVoiceNoteUrl = await objectStorageService.trySetObjectEntityAclPolicy(
+            resolvedVoiceNoteUrl,
+            { owner: userId, visibility: "public" },
+          );
+        } catch {
+          return res.status(400).json({ message: "Invalid voice note reference" });
+        }
+        if (!resolvedVoiceNoteUrl.startsWith("/objects/")) {
+          return res.status(400).json({ message: "Voice note must be uploaded through the app" });
+        }
+      }
+
       const msg = await storage.createMessage({
         matchId,
         senderId: userId,
         content: input.content,
-        voiceNoteUrl: input.voiceNoteUrl || null,
+        voiceNoteUrl: resolvedVoiceNoteUrl,
         voiceNoteDuration: input.voiceNoteDuration || null,
         isScam,
         scamAnalysis,

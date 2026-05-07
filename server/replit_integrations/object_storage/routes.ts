@@ -92,20 +92,23 @@ export function registerObjectStorageRoutes(app: Express): void {
       const objectPath = `/objects/uploads/${req.params.id}`;
       const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
-      // Authorization: enforce ACL when one exists. Legacy uploads with no
-      // ACL fall back to "authenticated users only" — the route is already
-      // gated by `isAuthenticated`, so anonymous URL replay is blocked.
+      // Authorization: every object must have an explicit ACL policy.
+      // Objects without one are denied — there is no implicit fallback that
+      // grants access to authenticated users, because that would make
+      // authentication the only protection for sensitive uploads such as
+      // verification photos and voice notes.
       const userId: string | undefined = req.user?.claims?.sub;
       const aclPolicy = await getObjectAclPolicy(objectFile);
-      if (aclPolicy) {
-        const allowed = await canAccessObject({
-          userId,
-          objectFile,
-          requestedPermission: ObjectPermission.READ,
-        });
-        if (!allowed) {
-          return res.status(403).json({ error: "Forbidden" });
-        }
+      if (!aclPolicy) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const allowed = await canAccessObject({
+        userId,
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!allowed) {
+        return res.status(403).json({ error: "Forbidden" });
       }
 
       await objectStorageService.downloadObject(objectFile, res);
