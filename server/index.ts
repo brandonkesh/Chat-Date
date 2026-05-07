@@ -87,23 +87,15 @@ async function initPaypal() {
   app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
-    let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
 
     res.on("finish", () => {
       const duration = Date.now() - start;
       if (path.startsWith("/api")) {
-        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-        if (capturedJsonResponse) {
-          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-        }
-
-        log(logLine);
+        // NEVER log response bodies. Several routes return account secrets
+        // (TOTP secret, backup codes, email verification codes) and personal
+        // data (profiles, messages). Logging the body would let anyone with
+        // access to logs recover those secrets.
+        log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
       }
     });
 
