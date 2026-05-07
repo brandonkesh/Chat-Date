@@ -61,6 +61,7 @@ export interface IStorage {
   
   // Messages
   getMessages(matchId: number): Promise<Message[]>;
+  getMessage(messageId: number): Promise<Message | undefined>;
   createMessage(message: InsertMessage & { senderId: string }): Promise<Message>;
   
   // Verification
@@ -99,6 +100,7 @@ export interface IStorage {
   hideProfile(userId: string, hiddenUserId: string): Promise<void>;
   unhideProfile(userId: string, hiddenUserId: string): Promise<void>;
   isHidden(userId: string, hiddenUserId: string): Promise<boolean>;
+  isHiddenEither(userId1: string, userId2: string): Promise<boolean>;
   getHiddenUserIds(userId: string): Promise<string[]>;
 
   // Micro Dates
@@ -625,6 +627,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
+  async getMessage(messageId: number): Promise<Message | undefined> {
+    const [msg] = await db.select().from(messages).where(eq(messages.id, messageId));
+    return msg || undefined;
+  }
+
   async createMessage(message: InsertMessage & { senderId: string }): Promise<Message> {
     const [msg] = await db.insert(messages).values(message).returning();
     return msg;
@@ -704,6 +711,78 @@ export class DatabaseStorage implements IStorage {
       .from(hiddenProfiles)
       .where(eq(hiddenProfiles.userId, userId));
     return hidden.map(h => h.hiddenUserId);
+  }
+
+  async hideProfile(userId: string, hiddenUserId: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(hiddenProfiles)
+      .where(and(eq(hiddenProfiles.userId, userId), eq(hiddenProfiles.hiddenUserId, hiddenUserId)));
+    if (!existing) {
+      await db.insert(hiddenProfiles).values({ userId, hiddenUserId });
+    }
+  }
+
+  async unhideProfile(userId: string, hiddenUserId: string): Promise<void> {
+    await db
+      .delete(hiddenProfiles)
+      .where(and(eq(hiddenProfiles.userId, userId), eq(hiddenProfiles.hiddenUserId, hiddenUserId)));
+  }
+
+  async isHidden(userId: string, hiddenUserId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(hiddenProfiles)
+      .where(and(eq(hiddenProfiles.userId, userId), eq(hiddenProfiles.hiddenUserId, hiddenUserId)));
+    return !!existing;
+  }
+
+  async isHiddenEither(userId1: string, userId2: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(hiddenProfiles)
+      .where(or(
+        and(eq(hiddenProfiles.userId, userId1), eq(hiddenProfiles.hiddenUserId, userId2)),
+        and(eq(hiddenProfiles.userId, userId2), eq(hiddenProfiles.hiddenUserId, userId1)),
+      ));
+    return !!existing;
+  }
+
+  async saveProfile(userId: string, savedUserId: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(savedProfiles)
+      .where(and(eq(savedProfiles.userId, userId), eq(savedProfiles.savedUserId, savedUserId)));
+    if (!existing) {
+      await db.insert(savedProfiles).values({ userId, savedUserId });
+    }
+  }
+
+  async unsaveProfile(userId: string, savedUserId: string): Promise<void> {
+    await db
+      .delete(savedProfiles)
+      .where(and(eq(savedProfiles.userId, userId), eq(savedProfiles.savedUserId, savedUserId)));
+  }
+
+  async isSaved(userId: string, savedUserId: string): Promise<boolean> {
+    const [existing] = await db
+      .select()
+      .from(savedProfiles)
+      .where(and(eq(savedProfiles.userId, userId), eq(savedProfiles.savedUserId, savedUserId)));
+    return !!existing;
+  }
+
+  async getSavedProfiles(userId: string): Promise<Profile[]> {
+    const saved = await db
+      .select({ savedUserId: savedProfiles.savedUserId })
+      .from(savedProfiles)
+      .where(eq(savedProfiles.userId, userId));
+    const profiles: Profile[] = [];
+    for (const s of saved) {
+      const profile = await this.getProfile(s.savedUserId);
+      if (profile) profiles.push(profile);
+    }
+    return profiles;
   }
 
   async createReport(reporterId: string, report: InsertReport): Promise<Report> {

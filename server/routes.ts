@@ -25,8 +25,21 @@ import QRCode from "qrcode";
 
 function sanitizeProfile(profile: any) {
   if (!profile) return profile;
-  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, ...safe } = profile;
-  return { ...safe, hasPassword: !!passwordHash };
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, voiceIntroUrl, introVideoUrl, ...safe } = profile;
+  return {
+    ...safe,
+    hasPassword: !!passwordHash,
+    voiceIntroUrl: voiceIntroUrl ? `/api/media/voice-intro/${profile.userId}` : null,
+    introVideoUrl: introVideoUrl ? `/api/media/intro-video/${profile.userId}` : null,
+  };
+}
+
+function sanitizeMessage(message: any) {
+  if (!message) return message;
+  return {
+    ...message,
+    voiceNoteUrl: message.voiceNoteUrl ? `/api/media/voice-note/${message.id}` : null,
+  };
 }
 
 // In-memory tracker for email verification brute-force protection.
@@ -1107,7 +1120,7 @@ Guidelines:
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             voiceIntroUrl,
-            { owner: userId, visibility: "public" },
+            { owner: userId, visibility: "private" },
             userId,
           );
         } catch {
@@ -1156,7 +1169,7 @@ Guidelines:
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             introVideoUrl,
-            { owner: userId, visibility: "public" },
+            { owner: userId, visibility: "private" },
             userId,
           );
         } catch {
@@ -1189,6 +1202,106 @@ Guidelines:
     } catch (error) {
       console.error("Error generating voice note upload URL:", error);
       res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // === MEDIA PROXY ROUTES ===
+  // These routes enforce app-level authorization (block state, match membership)
+  // before streaming private media objects. Raw object paths are never exposed
+  // to clients; all media is accessed exclusively through these proxies.
+
+  app.get("/api/media/voice-intro/:targetUserId", isAuthenticated, async (req: any, res) => {
+    const requesterId = req.user.claims.sub;
+    const targetUserId = req.params.targetUserId;
+    try {
+      if (requesterId !== targetUserId) {
+        const blocked = await storage.isBlockedEither(requesterId, targetUserId);
+        if (blocked) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        const hidden = await storage.isHiddenEither(requesterId, targetUserId);
+        if (hidden) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
+      const profile = await storage.getProfile(targetUserId);
+      if (!profile?.voiceIntroUrl) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(profile.voiceIntroUrl);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      if (error?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "Not found" });
+      }
+      console.error("Voice intro proxy error:", error);
+      res.status(500).json({ error: "Failed to serve voice intro" });
+    }
+  });
+
+  app.get("/api/media/intro-video/:targetUserId", isAuthenticated, async (req: any, res) => {
+    const requesterId = req.user.claims.sub;
+    const targetUserId = req.params.targetUserId;
+    try {
+      if (requesterId !== targetUserId) {
+        const blocked = await storage.isBlockedEither(requesterId, targetUserId);
+        if (blocked) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        const hidden = await storage.isHiddenEither(requesterId, targetUserId);
+        if (hidden) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
+      const profile = await storage.getProfile(targetUserId);
+      if (!profile?.introVideoUrl) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(profile.introVideoUrl);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      if (error?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "Not found" });
+      }
+      console.error("Intro video proxy error:", error);
+      res.status(500).json({ error: "Failed to serve intro video" });
+    }
+  });
+
+  app.get("/api/media/voice-note/:messageId", isAuthenticated, async (req: any, res) => {
+    const requesterId = req.user.claims.sub;
+    const messageId = Number(req.params.messageId);
+    if (isNaN(messageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+    try {
+      const message = await storage.getMessage(messageId);
+      if (!message?.voiceNoteUrl) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      const match = await storage.getMatch(message.matchId);
+      if (!match || (match.user1Id !== requesterId && match.user2Id !== requesterId)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const otherUserId = match.user1Id === requesterId ? match.user2Id : match.user1Id;
+      const blocked = await storage.isBlockedEither(requesterId, otherUserId);
+      if (blocked) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(message.voiceNoteUrl);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      if (error?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "Not found" });
+      }
+      console.error("Voice note proxy error:", error);
+      res.status(500).json({ error: "Failed to serve voice note" });
     }
   });
 
@@ -1314,7 +1427,7 @@ Guidelines:
     }
 
     const msgs = await storage.getMessages(matchId);
-    res.json(msgs);
+    res.json(msgs.map(sanitizeMessage));
   });
 
   app.post(api.messages.create.path, isAuthenticated, async (req: any, res) => {
@@ -1392,8 +1505,9 @@ Guidelines:
       // policy before persisting. This ensures the object has an explicit
       // access-control decision and cannot be served to unauthenticated callers
       // or denied by the no-ACL-equals-forbidden fallback on the serve route.
-      // Voice notes are marked public so the recipient (an authenticated matched
-      // user who receives the URL through the match message API) can play them.
+      // Voice notes are stored as private objects; access is controlled by the
+      // /api/media/voice-note/:messageId proxy route which re-checks current
+      // match membership and block state before serving the object.
       let resolvedVoiceNoteUrl = input.voiceNoteUrl || null;
       if (resolvedVoiceNoteUrl) {
         const { ObjectStorageService } = await import("./replit_integrations/object_storage");
@@ -1401,7 +1515,7 @@ Guidelines:
         try {
           resolvedVoiceNoteUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             resolvedVoiceNoteUrl,
-            { owner: userId, visibility: "public" },
+            { owner: userId, visibility: "private" },
             userId,
           );
         } catch {
@@ -1421,7 +1535,7 @@ Guidelines:
         isScam,
         scamAnalysis,
       });
-      res.status(201).json(msg);
+      res.status(201).json(sanitizeMessage(msg));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({

@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { ensurePaypalPlans } from './paypalService';
 import { PaypalWebhookHandler } from './paypalWebhookHandler';
+import { backfillMediaAcls } from './mediaAclBackfill';
 
 const app = express();
 const httpServer = createServer(app);
@@ -138,6 +139,12 @@ async function initPaypal() {
     },
     () => {
       log(`serving on port ${port}`);
+      // Run ACL backfill after startup to make previously public media objects
+      // private. This is a background, best-effort job so failures do not affect
+      // server availability.
+      backfillMediaAcls().catch((err) => {
+        log(`Media ACL backfill error: ${err?.message}`, "security");
+      });
     },
   );
 })();
