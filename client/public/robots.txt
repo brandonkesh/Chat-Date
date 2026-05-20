@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /objects/
+Disallow: /ws
+
+Sitemap: https://chat-date.replit.app/sitemap.xml
