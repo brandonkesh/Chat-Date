@@ -48,6 +48,8 @@ export interface IStorage {
   getCrushPicks(userId: string): Promise<Profile[]>;
   getMatchmakingProfiles(userId: string): Promise<MatchmakingResult[]>;
   updatePaypalSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, planId?: string, subscriberId?: string): Promise<void>;
+  setTestPremium(userId: string, membershipTier: MembershipTier): Promise<void>;
+  clearTestPremium(userId: string): Promise<void>;
   getProfileByPaypalSubscriptionId(subscriptionId: string): Promise<Profile | undefined>;
   
   // Swipes & Matches
@@ -174,6 +176,24 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(profiles)
       .set(updates)
+      .where(eq(profiles.userId, userId));
+  }
+
+  async setTestPremium(userId: string, membershipTier: MembershipTier): Promise<void> {
+    // Grants premium to allow-listed test/family accounts WITHOUT touching any
+    // PayPal fields, so it never collides with the real subscription flow.
+    await db
+      .update(profiles)
+      .set({ isPremium: true, membershipTier })
+      .where(eq(profiles.userId, userId));
+  }
+
+  async clearTestPremium(userId: string): Promise<void> {
+    // Revokes a test-granted premium WITHOUT touching any PayPal fields. Only
+    // ever called for accounts that never had a PayPal subscription.
+    await db
+      .update(profiles)
+      .set({ isPremium: false, membershipTier: "free" })
       .where(eq(profiles.userId, userId));
   }
 

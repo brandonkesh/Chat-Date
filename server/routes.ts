@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
+import { isTestPremiumUser, applyTestPremiumIfNeeded } from "./testPremiumUsers";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -272,6 +273,12 @@ export async function registerRoutes(
         profile = await storage.updateProfile(userId, { ...input, ageVerified });
       } else {
         profile = await storage.createProfile({ ...input, userId, ageVerified });
+      }
+      // Controlled testing: auto-grant premium to allow-listed family/test
+      // accounts right after their profile exists. No-op for everyone else.
+      if (isTestPremiumUser(req.user.claims)) {
+        await applyTestPremiumIfNeeded(userId, req.user.claims);
+        profile = (await storage.getProfile(userId)) ?? profile;
       }
       res.json(sanitizeProfile(profile));
     } catch (err) {
