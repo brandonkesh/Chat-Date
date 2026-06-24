@@ -1,0 +1,1 @@
+- [OpenAI via Replit integration](openai-integration.md) — use AI_INTEGRATIONS_OPENAI_API_KEY/BASE_URL, never raw OPENAI_API_KEY (silent auth fail).

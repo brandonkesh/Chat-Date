@@ -2251,7 +2251,10 @@ Topics you can help with:
 
     try {
       const OpenAI = (await import("openai")).default;
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const client = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
 
       // Use vision model to detect interests from the photo
       const visionResponse = await client.chat.completions.create({
