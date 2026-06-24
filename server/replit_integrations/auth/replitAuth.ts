@@ -7,7 +7,7 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
-import { applyTestPremiumIfNeeded } from "../../testPremiumUsers";
+import { applyTestPremiumIfNeeded, isTestPremiumUser } from "../../testPremiumUsers";
 
 const getOidcConfig = memoize(
   async () => {
@@ -77,10 +77,18 @@ export async function setupAuth(app: Express) {
     updateUserSession(user, tokens);
     const claims = tokens.claims();
     await upsertUser(claims);
+    // TEMP DIAGNOSTIC: prints the identifiers we can match a test user on, so you
+    // can see exactly what to put in server/testPremiumUsers.ts. Remove later.
+    console.log(
+      `[test-premium] login → username="${(claims as any)?.username ?? "(none)"}" email="${(claims as any)?.email ?? "(none)"}"`,
+    );
     // Controlled testing: auto-grant premium to allow-listed family/test
     // accounts. No-op (and safe) for everyone else, including PayPal subscribers.
     try {
       await applyTestPremiumIfNeeded(claims?.["sub"] as string, claims);
+      console.log(
+        `[test-premium] applied for sub=${claims?.["sub"]} → onAllowList=${isTestPremiumUser(claims)}`,
+      );
     } catch (err) {
       console.error("applyTestPremiumIfNeeded failed during login:", err);
     }
