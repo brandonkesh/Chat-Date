@@ -88,10 +88,13 @@ export async function applyTestPremiumIfNeeded(
   // This will be applied right after the profile is created instead.
   if (!profile) return;
 
-  // Hands off completely from anyone with a real PayPal subscription. We never
-  // grant or revoke premium for paying subscribers, even if they are also on
-  // the test list.
-  if (profile.paypalSubscriptionId) return;
+  // Hands off completely from anyone with an ACTIVE PayPal subscription. We
+  // never grant or revoke premium for current paying subscribers, even if they
+  // are also on the test list. A leftover subscription id on a non-premium
+  // account (cancelled/incomplete checkout) is NOT treated as active, so it
+  // won't block testing.
+  const hasActivePaypal = Boolean(profile.paypalSubscriptionId) && profile.isPremium;
+  if (hasActivePaypal) return;
 
   const tier = getTestPremiumTier(claims);
 

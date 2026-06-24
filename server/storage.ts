@@ -180,11 +180,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setTestPremium(userId: string, membershipTier: MembershipTier): Promise<void> {
-    // Grants premium to allow-listed test/family accounts WITHOUT touching any
-    // PayPal fields, so it never collides with the real subscription flow.
+    // Grants premium to allow-listed test/family accounts. We also clear any
+    // stale PayPal identifiers here: this method is only ever called for accounts
+    // that are NOT active paying subscribers, so any leftover subscription id is
+    // from a cancelled/incomplete checkout and would otherwise block testing.
     await db
       .update(profiles)
-      .set({ isPremium: true, membershipTier })
+      .set({
+        isPremium: true,
+        membershipTier,
+        paypalSubscriptionId: null,
+        paypalPlanId: null,
+        paypalSubscriberId: null,
+      })
       .where(eq(profiles.userId, userId));
   }
 
