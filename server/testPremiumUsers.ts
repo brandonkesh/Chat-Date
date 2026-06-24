@@ -2,28 +2,30 @@ import { storage } from "./storage";
 import type { MembershipTier } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
-// Controlled testing: auto-premium allow-list
+// Controlled testing: auto-premium allow-list (per-tier)
 // ---------------------------------------------------------------------------
-// Accounts listed here are automatically upgraded to premium when they log in
-// (or when they create their profile). This is meant for safe, controlled
-// testing with family/friends. Everyone NOT on this list keeps the normal
-// PayPal payment flow untouched.
+// Accounts listed here are automatically upgraded to the tier you assign them
+// when they log in (or when they create their profile). This is meant for safe,
+// controlled testing with family/friends so you can try EVERY tier. Everyone
+// NOT on this list keeps the normal PayPal payment flow untouched.
 //
 // Matching is case-insensitive and checks the user's Replit username and email
-// only (stable identifiers), so list one of those for each tester.
-// Examples: "uncle", "dad", "friend1", or "uncle@example.com".
+// only (stable identifiers), so use one of those as the key.
+// The value is the tier they should get: "basic", "pro", or "elite".
 //
-// To stop a tester's premium access, remove them from this list. Their stored
-// premium flag will then be cleared the next time they log in.
-export const TEST_PREMIUM_USERS: string[] = [
-  "uncle",
-  "dad",
-  "friend1",
-];
-
-// Tier granted to test users. "elite" unlocks every premium feature
-// (video calling, micro-dates, AI advisor, etc.) so testers can try everything.
-export const TEST_PREMIUM_TIER: MembershipTier = "elite";
+// Examples:
+//   "uncle": "elite",            // uncle tests the top tier
+//   "dad": "pro",                // dad tests Pro
+//   "friend1": "basic",          // friend1 tests Basic
+//   "aunt@example.com": "elite", // you can also key by email
+//
+// To stop a tester's premium access, remove their entry. Their premium will be
+// cleared the next time they log in. To change a tester's tier, edit the value.
+export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {
+  uncle: "elite",
+  dad: "pro",
+  friend1: "basic",
+};
 
 function normalize(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -31,30 +33,45 @@ function normalize(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+// Build a case-insensitive lookup once per call from the configured map.
+function buildLookup(): Map<string, MembershipTier> {
+  const lookup = new Map<string, MembershipTier>();
+  for (const [identifier, tier] of Object.entries(TEST_PREMIUM_USERS)) {
+    const key = normalize(identifier);
+    if (key) lookup.set(key, tier);
+  }
+  return lookup;
+}
+
 /**
- * Returns true if the authenticated user's claims match an entry in the
- * test-premium allow-list.
+ * Returns the tier a test account should be granted, or null if the account is
+ * not on the allow-list. Only matches on stable, unique identifiers (username
+ * and email) — never first name, which is non-unique and user-controlled.
  */
-export function isTestPremiumUser(claims: any): boolean {
-  if (!claims) return false;
-  const list = new Set(
-    TEST_PREMIUM_USERS.map((u) => u.trim().toLowerCase()).filter(Boolean),
+export function getTestPremiumTier(claims: any): MembershipTier | null {
+  if (!claims) return null;
+  const lookup = buildLookup();
+  if (lookup.size === 0) return null;
+
+  const candidates = [normalize(claims.username), normalize(claims.email)].filter(
+    (c): c is string => c !== null,
   );
-  if (list.size === 0) return false;
 
-  // Only match on stable, unique identifiers. Do NOT match on first name, which
-  // is non-unique and user-controlled (would allow premium escalation).
-  const candidates = [
-    normalize(claims.username),
-    normalize(claims.email),
-  ].filter((c): c is string => c !== null);
+  for (const candidate of candidates) {
+    const tier = lookup.get(candidate);
+    if (tier) return tier;
+  }
+  return null;
+}
 
-  return candidates.some((c) => list.has(c));
+/** True if the authenticated user is on the test-premium allow-list. */
+export function isTestPremiumUser(claims: any): boolean {
+  return getTestPremiumTier(claims) !== null;
 }
 
 /**
  * Ensures the test user's profile reflects the correct premium state.
- * - If they ARE on the allow-list: grant premium (idempotent).
+ * - If they ARE on the allow-list: grant the tier assigned to them (idempotent).
  * - If they were previously a test user but were removed from the list:
  *   clear the test premium so access stays controlled.
  *
@@ -75,11 +92,12 @@ export async function applyTestPremiumIfNeeded(
   // the test list.
   if (profile.paypalSubscriptionId) return;
 
-  if (isTestPremiumUser(claims)) {
-    const alreadyCorrect =
-      profile.isPremium && profile.membershipTier === TEST_PREMIUM_TIER;
+  const tier = getTestPremiumTier(claims);
+
+  if (tier) {
+    const alreadyCorrect = profile.isPremium && profile.membershipTier === tier;
     if (!alreadyCorrect) {
-      await storage.setTestPremium(userId, TEST_PREMIUM_TIER);
+      await storage.setTestPremium(userId, tier);
     }
     return;
   }
