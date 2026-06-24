@@ -48,8 +48,6 @@ async function initPaypal() {
 }
 
 (async () => {
-  await initPaypal();
-
   app.post(
     '/api/paypal/webhook',
     express.raw({ type: 'application/json' }),
@@ -139,6 +137,14 @@ async function initPaypal() {
     },
     () => {
       log(`serving on port ${port}`);
+      // Seed PayPal products/plans in the background AFTER the server is already
+      // accepting traffic. ensurePaypalPlans() makes blocking external API calls;
+      // running it before listen() delayed readiness on every cold start and could
+      // trip the platform health check, showing up as brief outages. It is
+      // idempotent and only needs to finish before the first checkout, so it is
+      // safe to run as a best-effort background job. initPaypal() catches its own
+      // errors, so failures never affect server availability.
+      initPaypal();
       // Run ACL backfill after startup to make previously public media objects
       // private. This is a background, best-effort job so failures do not affect
       // server availability.
