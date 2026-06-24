@@ -23,9 +23,8 @@ import type { MembershipTier } from "@shared/schema";
 // cleared the next time they log in. To change a tester's tier, edit the value.
 export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {
   "brandonkeshwani@gmail.com": "elite",
-  uncle: "elite",
-  dad: "pro",
-  friend1: "basic",
+  "travismiller93@yahoo.com": "pro",
+  "bobkessh@gmail.com": "basic",
 };
 
 function normalize(value: unknown): string | null {
