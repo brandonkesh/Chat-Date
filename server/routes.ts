@@ -619,6 +619,13 @@ export async function registerRoutes(
   // taken from the session — a client-supplied user id is never trusted.
   app.post(api.feedback.create.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+    // Per-user rate limit: cap submissions to prevent spam/abuse and (once email
+    // notifications are enabled) avoid triggering a flood of owner emails.
+    if (!checkAiRateLimit(userId, "feedback-create", 3, 60 * 1000)) {
+      return res.status(429).json({
+        message: "You're sending feedback too quickly. Please wait a minute and try again.",
+      });
+    }
     try {
       const input = api.feedback.create.input.parse(req.body);
       const created = await storage.createFeedback({ ...input, userId });

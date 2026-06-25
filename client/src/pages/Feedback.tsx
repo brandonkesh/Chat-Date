@@ -45,9 +45,25 @@ export default function Feedback() {
       form.reset({ category: "suggestion", message: "" });
     },
     onError: (error: Error) => {
+      // apiRequest throws errors of the form "<status>: <body>" where the body is
+      // a JSON object like {"message":"..."}. Extract the human-readable message
+      // (e.g. the rate-limit notice) so users don't see the raw status/JSON.
+      let description = "Something went wrong. Please try again.";
+      const raw = error.message || "";
+      const jsonStart = raw.indexOf("{");
+      if (jsonStart !== -1) {
+        try {
+          const parsed = JSON.parse(raw.slice(jsonStart));
+          if (parsed?.message) description = parsed.message;
+        } catch {
+          description = raw.replace(/^\d+:\s*/, "") || description;
+        }
+      } else if (raw) {
+        description = raw.replace(/^\d+:\s*/, "");
+      }
       toast({
         title: "Couldn't send feedback",
-        description: error.message || "Something went wrong. Please try again.",
+        description,
         variant: "destructive",
       });
     },
