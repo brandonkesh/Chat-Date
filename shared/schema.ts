@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -236,6 +236,18 @@ export const insertFeedbackSchema = createInsertSchema(feedback, {
 
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
+
+// === RATE LIMITS ===
+// Durable, shared fixed-window rate limiting so limits survive server
+// restarts and hold across multiple instances (in-memory counters do not).
+// `key` is `${userId}:${endpoint}`; `windowStart` is epoch milliseconds.
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  windowStart: bigint("window_start", { mode: "number" }).notNull(),
+});
+
+export type RateLimit = typeof rateLimits.$inferSelect;
 
 // === MICRO DATES ===
 export type MicroDateStatus = 'pending' | 'active' | 'completed' | 'expired' | 'declined';

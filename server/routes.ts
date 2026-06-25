@@ -89,32 +89,22 @@ function resetSecondaryAuthAttempts(key: string): void {
   secondaryAuthAttempts.delete(key);
 }
 
-// Per-user AI endpoint rate limiter (in-memory, single-instance).
-// Tracks call counts within a sliding window and rejects requests that exceed
-// the configured quota. This prevents abuse of billable OpenAI-backed routes.
-const aiCallTracker = new Map<string, { count: number; windowStart: number }>();
-
+// Per-user endpoint rate limiter backed by a durable, shared store.
+// Tracks call counts within a fixed window and rejects requests that exceed
+// the configured quota. This prevents abuse of billable OpenAI-backed routes
+// and other abuse-prone endpoints, and the limits survive restarts/scaling.
 /**
  * Returns true and increments the counter when the call is within quota.
  * Returns false when the user has exceeded the limit for the current window.
+ * Backed by a durable, shared store so limits hold across server restarts
+ * and multiple instances (see storage.checkRateLimit).
  * @param userId    Authenticated user identifier
  * @param endpoint  Short label used to namespace the key (e.g. "ai-feedback")
  * @param limit     Maximum allowed calls within windowMs
  * @param windowMs  Rolling window duration in milliseconds
  */
-function checkAiRateLimit(userId: string, endpoint: string, limit: number, windowMs: number): boolean {
-  const key = `${userId}:${endpoint}`;
-  const now = Date.now();
-  const entry = aiCallTracker.get(key);
-  if (!entry || now - entry.windowStart >= windowMs) {
-    aiCallTracker.set(key, { count: 1, windowStart: now });
-    return true;
-  }
-  if (entry.count >= limit) {
-    return false;
-  }
-  entry.count += 1;
-  return true;
+async function checkAiRateLimit(userId: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
+  return storage.checkRateLimit(`${userId}:${endpoint}`, limit, windowMs);
 }
 
 export async function registerRoutes(
@@ -621,7 +611,7 @@ export async function registerRoutes(
     const userId = req.user.claims.sub;
     // Per-user rate limit: cap submissions to prevent spam/abuse and (once email
     // notifications are enabled) avoid triggering a flood of owner emails.
-    if (!checkAiRateLimit(userId, "feedback-create", 3, 60 * 1000)) {
+    if (!(await checkAiRateLimit(userId, "feedback-create", 3, 60 * 1000))) {
       return res.status(429).json({
         message: "You're sending feedback too quickly. Please wait a minute and try again.",
       });
@@ -700,7 +690,7 @@ export async function registerRoutes(
     }
 
     // 5 calls per hour — profile analysis is expensive and results change slowly.
-    if (!checkAiRateLimit(userId, "ai-feedback", 5, 60 * 60 * 1000)) {
+    if (!(await checkAiRateLimit(userId, "ai-feedback", 5, 60 * 60 * 1000))) {
       return res.status(429).json({ message: "You have reached the limit for AI profile analysis. Please try again later." });
     }
 
@@ -831,7 +821,7 @@ Be encouraging but honest. Give specific, actionable suggestions. Score fairly b
     }
 
     // 20 calls per hour — coaching is used frequently during active conversations.
-    if (!checkAiRateLimit(userId, "chat-coach", 20, 60 * 60 * 1000)) {
+    if (!(await checkAiRateLimit(userId, "chat-coach", 20, 60 * 60 * 1000))) {
       return res.status(429).json({ message: "You have reached the limit for AI coaching. Please try again later." });
     }
 
@@ -979,7 +969,7 @@ Guidelines:
       }
 
       // 10 calls per hour — each call fans out across up to 20 candidate profiles.
-      if (!checkAiRateLimit(userId, "ai-matches", 10, 60 * 60 * 1000)) {
+      if (!(await checkAiRateLimit(userId, "ai-matches", 10, 60 * 60 * 1000))) {
         return res.status(429).json({ error: "You have reached the limit for AI match suggestions. Please try again later." });
       }
 
@@ -1662,7 +1652,7 @@ Guidelines:
       // from automated high-frequency message sends.
       let isScam = false;
       let scamAnalysis = null;
-      const scamRateLimitOk = checkAiRateLimit(userId, "scam-detect", 60, 60 * 60 * 1000);
+      const scamRateLimitOk = await checkAiRateLimit(userId, "scam-detect", 60, 60 * 60 * 1000);
       if (scamRateLimitOk) {
       try {
         const OpenAI = (await import("openai")).default;
@@ -2150,7 +2140,7 @@ Guidelines:
     }
 
     // 30 calls per hour — chat is conversational and users may send many turns.
-    if (!checkAiRateLimit(userId, "ai-advisor", 30, 60 * 60 * 1000)) {
+    if (!(await checkAiRateLimit(userId, "ai-advisor", 30, 60 * 60 * 1000))) {
       return res.status(429).json({ message: "You have reached the limit for AI advisor messages. Please try again later." });
     }
 
@@ -2299,7 +2289,7 @@ Topics you can help with:
     }
 
     // 10 calls per hour — vision model invocations are costly.
-    if (!checkAiRateLimit(userId, "photo-match", 10, 60 * 60 * 1000)) {
+    if (!(await checkAiRateLimit(userId, "photo-match", 10, 60 * 60 * 1000))) {
       return res.status(429).json({ message: "You have reached the limit for AI photo match. Please try again later." });
     }
 

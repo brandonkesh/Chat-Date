@@ -12,6 +12,7 @@ import {
   microDates,
   microDateResponses,
   feedback,
+  rateLimits,
   type Feedback,
   type InsertFeedback,
   type User,
@@ -31,7 +32,7 @@ import {
   type SavedProfile,
   type HiddenProfile,
 } from "@shared/schema";
-import { eq, and, ne, notInArray, desc, or } from "drizzle-orm";
+import { eq, and, ne, notInArray, desc, or, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
 
 export interface MatchmakingResult {
@@ -121,6 +122,9 @@ export interface IStorage {
   // Feedback
   createFeedback(feedback: InsertFeedback & { userId: string }): Promise<Feedback>;
   getAllFeedback(): Promise<(Feedback & { submitterEmail: string | null; submitterName: string | null })[]>;
+
+  // Rate limiting (durable, shared fixed-window)
+  checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1034,6 +1038,26 @@ export class DatabaseStorage implements IStorage {
         submitterName: name.length > 0 ? name : null,
       };
     });
+  }
+
+  async checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {
+    const now = Date.now();
+    // Atomic fixed-window upsert: on conflict, reset the window when it has
+    // expired, otherwise increment. Returns the resulting count so we can
+    // decide whether this request is within quota. Running this in a single
+    // statement keeps it correct across restarts and multiple instances.
+    const [row] = await db
+      .insert(rateLimits)
+      .values({ key, count: 1, windowStart: now })
+      .onConflictDoUpdate({
+        target: rateLimits.key,
+        set: {
+          count: sql`CASE WHEN ${now} - ${rateLimits.windowStart} >= ${windowMs} THEN 1 ELSE ${rateLimits.count} + 1 END`,
+          windowStart: sql`CASE WHEN ${now} - ${rateLimits.windowStart} >= ${windowMs} THEN ${now} ELSE ${rateLimits.windowStart} END`,
+        },
+      })
+      .returning({ count: rateLimits.count });
+    return row.count <= limit;
   }
 }
 
