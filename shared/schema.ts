@@ -221,18 +221,26 @@ export type HiddenProfile = typeof hiddenProfiles.$inferSelect;
 export const feedbackCategories = ['bug', 'suggestion', 'other'] as const;
 export type FeedbackCategory = typeof feedbackCategories[number];
 
+export const feedbackStatuses = ['new', 'resolved'] as const;
+export type FeedbackStatus = typeof feedbackStatuses[number];
+
 export const feedback = pgTable("feedback", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   category: text("category").notNull().default("other"), // 'bug', 'suggestion', 'other'
   message: text("message").notNull(),
+  status: text("status").notNull().default("new"), // 'new', 'resolved'
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertFeedbackSchema = createInsertSchema(feedback, {
   category: z.enum(feedbackCategories),
   message: z.string().min(1, "Please enter a message").max(2000, "Message is too long"),
-}).omit({ id: true, userId: true, createdAt: true });
+}).omit({ id: true, userId: true, status: true, createdAt: true });
+
+export const updateFeedbackStatusSchema = z.object({
+  status: z.enum(feedbackStatuses),
+});
 
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;

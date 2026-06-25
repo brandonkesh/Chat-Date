@@ -122,6 +122,7 @@ export interface IStorage {
   // Feedback
   createFeedback(feedback: InsertFeedback & { userId: string }): Promise<Feedback>;
   getAllFeedback(): Promise<(Feedback & { submitterEmail: string | null; submitterName: string | null })[]>;
+  updateFeedbackStatus(id: number, status: string): Promise<Feedback | undefined>;
 
   // Rate limiting (durable, shared fixed-window)
   checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean>;
@@ -1017,6 +1018,7 @@ export class DatabaseStorage implements IStorage {
         userId: feedback.userId,
         category: feedback.category,
         message: feedback.message,
+        status: feedback.status,
         createdAt: feedback.createdAt,
         submitterEmail: users.email,
         submitterFirstName: users.firstName,
@@ -1033,11 +1035,21 @@ export class DatabaseStorage implements IStorage {
         userId: r.userId,
         category: r.category,
         message: r.message,
+        status: r.status,
         createdAt: r.createdAt,
         submitterEmail: r.submitterEmail ?? null,
         submitterName: name.length > 0 ? name : null,
       };
     });
+  }
+
+  async updateFeedbackStatus(id: number, status: string): Promise<Feedback | undefined> {
+    const [updated] = await db
+      .update(feedback)
+      .set({ status })
+      .where(eq(feedback.id, id))
+      .returning();
+    return updated;
   }
 
   async checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {

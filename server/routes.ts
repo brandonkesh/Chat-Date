@@ -655,6 +655,34 @@ export async function registerRoutes(
     res.json(items);
   });
 
+  // Update feedback status (owner-only). Lets the owner triage submissions by
+  // marking them resolved (or back to new).
+  app.patch(api.feedback.updateStatus.path, isAuthenticated, async (req: any, res) => {
+    if (!isOwner(req.user.claims)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "Invalid feedback id" });
+    }
+    try {
+      const { status } = api.feedback.updateStatus.input.parse(req.body);
+      const updated = await storage.updateFeedbackStatus(id, status);
+      if (!updated) {
+        return res.status(404).json({ message: "Feedback not found" });
+      }
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
+    }
+  });
+
   // Get potential matches (Feed)
   app.get(api.profiles.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

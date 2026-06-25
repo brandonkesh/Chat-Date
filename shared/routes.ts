@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertProfileSchema, insertMessageSchema, profiles, matches, messages, insertSwipeSchema, insertFeedbackSchema, feedback } from './schema';
+import { insertProfileSchema, insertMessageSchema, profiles, matches, messages, insertSwipeSchema, insertFeedbackSchema, updateFeedbackStatusSchema, feedback } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -150,6 +150,16 @@ export const api = {
       path: '/api/feedback',
       responses: {
         200: z.array(z.custom<typeof feedback.$inferSelect & { submitterEmail: string | null; submitterName: string | null }>()),
+        403: errorSchemas.unauthorized,
+      },
+    },
+    updateStatus: {
+      method: 'PATCH' as const,
+      path: '/api/feedback/:id/status',
+      input: updateFeedbackStatusSchema,
+      responses: {
+        200: z.custom<typeof feedback.$inferSelect>(),
+        400: errorSchemas.validation,
         403: errorSchemas.unauthorized,
       },
     },
