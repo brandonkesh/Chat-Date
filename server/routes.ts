@@ -1896,6 +1896,9 @@ Guidelines:
         // Idempotent: already canceled or never subscribed — clear local state and return success
         if (profile?.paypalSubscriptionId) {
           await storage.updatePaypalSubscription(userId, profile.paypalSubscriptionId, false);
+        } else if (profile?.isPremium) {
+          // Free-granted plan (no PayPal) — downgrade to free.
+          await storage.clearTestPremium(userId);
         }
         return res.json({
           url: `${baseUrl}/premium?canceled=true`,
@@ -1923,6 +1926,43 @@ Guidelines:
     } catch (error: any) {
       console.error("Cancel error:", error);
       res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  });
+
+  // Select a plan for free (no PayPal). Users choose their own tier and get it
+  // granted directly. Real PayPal subscribers manage their plan via PayPal.
+  app.post("/api/select-plan", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      const { tier } = z
+        .object({ tier: z.enum(["free", "basic", "pro", "elite"]) })
+        .parse(req.body);
+
+      const profile = await storage.getProfile(userId);
+      if (!profile) {
+        return res.status(400).json({ message: "Profile required" });
+      }
+
+      if (profile.paypalSubscriptionId && profile.isPremium) {
+        return res.status(400).json({
+          message:
+            "You have an active PayPal subscription. Manage it from the subscription page.",
+        });
+      }
+
+      if (tier === "free") {
+        await storage.clearTestPremium(userId);
+      } else {
+        await storage.setTestPremium(userId, tier);
+      }
+
+      const updated = (await storage.getProfile(userId)) ?? profile;
+      res.json(sanitizeProfile(updated));
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
     }
   });
 

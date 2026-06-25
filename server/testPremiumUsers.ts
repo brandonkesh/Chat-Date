@@ -97,9 +97,7 @@ export async function applyTestPremiumIfNeeded(
     return;
   }
 
-  // Not on the allow-list and not a PayPal subscriber. If this account got
-  // premium via the test path, revoke it so testing stays controlled.
-  if (profile.isPremium) {
-    await storage.clearTestPremium(userId);
-  }
+  // Not on the allow-list. We do NOT revoke premium here: users now choose
+  // their own plan (granted for free, no PayPal), and that choice must persist
+  // across logins. Downgrades happen explicitly via the plan/cancel flow.
 }

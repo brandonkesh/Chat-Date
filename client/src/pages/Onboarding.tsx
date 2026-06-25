@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { differenceInYears, parse, isValid } from "date-fns";
 import type { MembershipTier } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const PLAN_OPTIONS: {
   id: MembershipTier;
@@ -99,10 +100,10 @@ export default function Onboarding() {
     try {
       await createProfile({ ...data, age });
       if (selectedPlan !== "free") {
-        setLocation(`/premium?plan=${selectedPlan}`);
-      } else {
-        setLocation("/feed");
+        await apiRequest("POST", "/api/select-plan", { tier: selectedPlan });
+        queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
       }
+      setLocation("/feed");
     } catch (error) {
       // Error handled by hook toast
     }
@@ -297,7 +298,7 @@ export default function Onboarding() {
               <FormItem>
                 <FormLabel>Choose your plan</FormLabel>
                 <p className="text-xs text-muted-foreground -mt-1 mb-1">
-                  Pick what works for you. Paid plans are set up on the next step — no payment needed to sign up.
+                  Pick what works for you — every plan is free right now, no payment needed. You can change it anytime.
                 </p>
                 <div className="grid grid-cols-2 gap-3" data-testid="plan-options">
                   {PLAN_OPTIONS.map((plan) => {
@@ -340,11 +341,7 @@ export default function Onboarding() {
                 className="w-full h-12 text-lg rounded-full font-semibold shadow-lg shadow-primary/20"
                 disabled={isPending}
               >
-                {isPending
-                  ? "Creating..."
-                  : selectedPlan === "free"
-                    ? "Start Matching"
-                    : "Continue to Plan"}
+                {isPending ? "Creating..." : "Start Matching"}
               </Button>
             </form>
           </Form>

@@ -5,7 +5,7 @@ import { Check, Crown, Heart, MessageCircle, Sparkles, Zap, Loader2, ExternalLin
 import { useMyProfile } from "@/hooks/use-dating";
 import { differenceInDays } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useSearch } from "wouter";
 import { useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -135,10 +135,6 @@ export default function Premium() {
   const search = useSearch();
   
   const searchParams = useMemo(() => new URLSearchParams(search), [search]);
-  const planParam = searchParams.get('plan');
-  const preselectedPlan = tiers.some(t => t.id === planParam)
-    ? (planParam as MembershipTier)
-    : null;
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -155,38 +151,27 @@ export default function Premium() {
     }
   }, [searchParams, toast]);
 
-  useEffect(() => {
-    if (preselectedPlan && preselectedPlan !== 'free') {
-      const selectedName = tiers.find(t => t.id === preselectedPlan)?.name ?? 'your plan';
-      toast({
-        title: `Finish setting up ${selectedName}`,
-        description: "Review the plan you chose below and tap Get to complete payment.",
-      });
-      const el = document.querySelector(`[data-testid="tier-card-${preselectedPlan}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    // Only run once when the page loads with a preselected plan.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const { data: products, isLoading: productsLoading } = useQuery<{ data: Product[] }>({
     queryKey: ['/api/products'],
   });
 
-  const checkoutMutation = useMutation({
-    mutationFn: async (priceId: string) => {
-      const response = await apiRequest('POST', '/api/checkout', { priceId });
-      return await response.json() as { url: string };
+  const selectPlanMutation = useMutation({
+    mutationFn: async (tier: MembershipTier) => {
+      const response = await apiRequest('POST', '/api/select-plan', { tier });
+      return await response.json();
     },
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
+    onSuccess: (_data, tier) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/profiles/me'] });
+      const name = tiers.find(t => t.id === tier)?.name ?? 'your plan';
+      toast({
+        title: "Plan updated",
+        description: `${name} is now active. Enjoy!`,
+      });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to start checkout. Please try again.",
+        description: "Failed to update your plan. Please try again.",
         variant: "destructive",
       });
     },
@@ -227,24 +212,8 @@ export default function Premium() {
   const isPremium = profile?.isPremium;
   const currentTier = (profile?.membershipTier || 'free') as MembershipTier;
 
-  const findPriceForTier = (tier: MembershipTier) => {
-    const product = products?.data?.find(p => 
-      p.metadata?.tier === tier || 
-      p.name.toLowerCase().includes(tier)
-    );
-    return product?.prices?.find(p => p.recurring?.interval === 'month' && p.active);
-  };
-
   const handleSubscribe = (tier: TierInfo) => {
-    const price = findPriceForTier(tier.id);
-    if (price) {
-      checkoutMutation.mutate(price.id);
-    } else {
-      toast({
-        title: "Setup Required",
-        description: `${tier.name} subscription is being configured. Please check back soon.`,
-      });
-    }
+    selectPlanMutation.mutate(tier.id);
   };
 
   const handleManageSubscription = () => {
@@ -314,20 +283,13 @@ export default function Premium() {
             {tiers.map((tier) => {
               const Icon = tier.icon;
               const isCurrentTier = currentTier === tier.id;
-              const isPreselected = !isCurrentTier && preselectedPlan === tier.id;
-              const livePrice = findPriceForTier(tier.id);
-              const displayPrice = livePrice 
-                ? (livePrice.unit_amount / 100).toFixed(2)
-                : tier.price.toFixed(2);
 
               return (
                 <Card 
                   key={tier.id} 
                   className={`relative border-none shadow-xl transition-transform hover:scale-[1.02] ${
                     tier.popular ? 'ring-2 ring-primary' : ''
-                  } ${isCurrentTier ? 'ring-2 ring-green-500' : ''} ${
-                    isPreselected ? 'ring-2 ring-primary ring-offset-2' : ''
-                  }`}
+                  } ${isCurrentTier ? 'ring-2 ring-green-500' : ''}`}
                   data-testid={`tier-card-${tier.id}`}
                 >
                   {tier.popular && !isCurrentTier && (
@@ -348,8 +310,7 @@ export default function Premium() {
                     <CardTitle className="text-xl">{tier.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-1 font-medium">{tier.tagline}</p>
                     <div className="flex items-baseline justify-center gap-1 mt-3">
-                      <span className="text-3xl font-bold">${displayPrice}</span>
-                      <span className="text-muted-foreground text-sm">/month</span>
+                      <span className="text-3xl font-bold">Free</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1">Best for: {tier.bestFor}</p>
                   </CardHeader>
@@ -386,10 +347,10 @@ export default function Premium() {
                       }`}
                       variant={isCurrentTier ? "outline" : tier.popular ? "default" : "secondary"}
                       onClick={() => handleSubscribe(tier)}
-                      disabled={checkoutMutation.isPending || isCurrentTier}
+                      disabled={selectPlanMutation.isPending || isCurrentTier}
                       data-testid={`button-subscribe-${tier.id}`}
                     >
-                      {checkoutMutation.isPending ? (
+                      {selectPlanMutation.isPending ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : isCurrentTier ? (
                         <>
@@ -413,7 +374,7 @@ export default function Premium() {
         <Card className="border-none shadow-lg">
           <CardContent className="p-6 text-center">
             <p className="text-sm text-muted-foreground">
-              All plans include a 7-day money-back guarantee. Cancel anytime through your account settings.
+              Every plan is free right now — switch or cancel anytime, no payment required.
             </p>
           </CardContent>
         </Card>
