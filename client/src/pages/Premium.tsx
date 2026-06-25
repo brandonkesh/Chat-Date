@@ -135,6 +135,10 @@ export default function Premium() {
   const search = useSearch();
   
   const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  const planParam = searchParams.get('plan');
+  const preselectedPlan = tiers.some(t => t.id === planParam)
+    ? (planParam as MembershipTier)
+    : null;
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -150,6 +154,20 @@ export default function Premium() {
       });
     }
   }, [searchParams, toast]);
+
+  useEffect(() => {
+    if (preselectedPlan && preselectedPlan !== 'free') {
+      const selectedName = tiers.find(t => t.id === preselectedPlan)?.name ?? 'your plan';
+      toast({
+        title: `Finish setting up ${selectedName}`,
+        description: "Review the plan you chose below and tap Get to complete payment.",
+      });
+      const el = document.querySelector(`[data-testid="tier-card-${preselectedPlan}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Only run once when the page loads with a preselected plan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: products, isLoading: productsLoading } = useQuery<{ data: Product[] }>({
     queryKey: ['/api/products'],
@@ -296,6 +314,7 @@ export default function Premium() {
             {tiers.map((tier) => {
               const Icon = tier.icon;
               const isCurrentTier = currentTier === tier.id;
+              const isPreselected = !isCurrentTier && preselectedPlan === tier.id;
               const livePrice = findPriceForTier(tier.id);
               const displayPrice = livePrice 
                 ? (livePrice.unit_amount / 100).toFixed(2)
@@ -306,7 +325,9 @@ export default function Premium() {
                   key={tier.id} 
                   className={`relative border-none shadow-xl transition-transform hover:scale-[1.02] ${
                     tier.popular ? 'ring-2 ring-primary' : ''
-                  } ${isCurrentTier ? 'ring-2 ring-green-500' : ''}`}
+                  } ${isCurrentTier ? 'ring-2 ring-green-500' : ''} ${
+                    isPreselected ? 'ring-2 ring-primary ring-offset-2' : ''
+                  }`}
                   data-testid={`tier-card-${tier.id}`}
                 >
                   {tier.popular && !isCurrentTier && (

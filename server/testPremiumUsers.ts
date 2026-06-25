@@ -2,30 +2,18 @@ import { storage } from "./storage";
 import type { MembershipTier } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
-// Controlled testing: auto-premium allow-list (per-tier)
+// Email-based tier assignment is DISABLED.
 // ---------------------------------------------------------------------------
-// Accounts listed here are automatically upgraded to the tier you assign them
-// when they log in (or when they create their profile). This is meant for safe,
-// controlled testing with family/friends so you can try EVERY tier. Everyone
-// NOT on this list keeps the normal PayPal payment flow untouched.
+// Subscription tiers are no longer assigned automatically based on a user's
+// email or username. Every user starts on the "free" tier and chooses their
+// own plan during signup; paid tiers are only granted through the normal
+// PayPal payment flow.
 //
-// Matching is case-insensitive and checks the user's Replit username and email
-// only (stable identifiers), so use one of those as the key.
-// The value is the tier they should get: "basic", "pro", or "elite".
-//
-// Examples:
-//   "uncle": "elite",            // uncle tests the top tier
-//   "dad": "pro",                // dad tests Pro
-//   "friend1": "basic",          // friend1 tests Basic
-//   "aunt@example.com": "elite", // you can also key by email
-//
-// To stop a tester's premium access, remove their entry. Their premium will be
-// cleared the next time they log in. To change a tester's tier, edit the value.
-export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {
-  "brandonkeshwani@gmail.com": "elite",
-  "travismiller93@yahoo.com": "pro",
-  "bobkessh@gmail.com": "basic",
-};
+// This map is intentionally empty. Because it is empty, any account that was
+// previously granted premium through this allow-list (and is NOT a real PayPal
+// subscriber) will have that premium cleared the next time they log in, so
+// access stays tied to actual payments only.
+export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {};
 
 function normalize(value: unknown): string | null {
   if (typeof value !== "string") return null;
