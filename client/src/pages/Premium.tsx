@@ -310,7 +310,8 @@ export default function Premium() {
                     <CardTitle className="text-xl">{tier.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-1 font-medium">{tier.tagline}</p>
                     <div className="flex items-baseline justify-center gap-1 mt-3">
-                      <span className="text-3xl font-bold">Free</span>
+                      <span className="text-3xl font-bold">${tier.price.toFixed(2)}</span>
+                      <span className="text-muted-foreground text-sm">/month</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1">Best for: {tier.bestFor}</p>
                   </CardHeader>
