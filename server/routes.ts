@@ -2,6 +2,8 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { isTestPremiumUser, applyTestPremiumIfNeeded } from "./testPremiumUsers";
+import { isOwner } from "./ownerUsers";
+import { sendFeedbackNotification } from "./feedbackEmail";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -213,7 +215,7 @@ export async function registerRoutes(
     if (profile.passwordHash && !(req.session as any).appLockVerified) {
       return res.json({ userId: profile.userId, appLocked: true });
     }
-    res.json(sanitizeProfile(profile));
+    res.json({ ...sanitizeProfile(profile), isOwner: isOwner(req.user.claims) });
   });
 
   // Create/Update current user profile
@@ -609,6 +611,51 @@ export async function registerRoutes(
     emailVerifyAttempts.delete(userId);
     await storage.verifyEmail(userId);
     res.json({ success: true, message: "Email verified successfully." });
+  });
+
+  // === FEEDBACK ===
+
+  // Submit feedback (any authenticated user). The submitting user's id is always
+  // taken from the session — a client-supplied user id is never trusted.
+  app.post(api.feedback.create.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    try {
+      const input = api.feedback.create.input.parse(req.body);
+      const created = await storage.createFeedback({ ...input, userId });
+
+      // Best-effort owner notification. Email failures must NOT fail the request:
+      // sendFeedbackNotification never throws, but we also don't await blocking
+      // behavior beyond the send itself.
+      const user = await db.select().from(users).where(eq(users.id, userId));
+      const submitterName = [user[0]?.firstName, user[0]?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      await sendFeedbackNotification(created, {
+        email: user[0]?.email ?? null,
+        name: submitterName.length > 0 ? submitterName : null,
+      });
+
+      res.status(201).json({ success: true });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join("."),
+        });
+      }
+      throw err;
+    }
+  });
+
+  // List all feedback (owner-only). Gated by both authentication and the owner
+  // allow-list so non-owners cannot read other users' submissions.
+  app.get(api.feedback.list.path, isAuthenticated, async (req: any, res) => {
+    if (!isOwner(req.user.claims)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const items = await storage.getAllFeedback();
+    res.json(items);
   });
 
   // Get potential matches (Feed)

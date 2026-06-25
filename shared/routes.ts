@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertProfileSchema, insertMessageSchema, profiles, matches, messages, insertSwipeSchema } from './schema';
+import { insertProfileSchema, insertMessageSchema, profiles, matches, messages, insertSwipeSchema, insertFeedbackSchema, feedback } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -132,6 +132,25 @@ export const api = {
         400: errorSchemas.validation,
         402: errorSchemas.paymentRequired, // For expired trial
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  feedback: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/feedback',
+      input: insertFeedbackSchema,
+      responses: {
+        201: z.object({ success: z.boolean() }),
+        400: errorSchemas.validation,
+      },
+    },
+    list: {
+      method: 'GET' as const,
+      path: '/api/feedback',
+      responses: {
+        200: z.array(z.custom<typeof feedback.$inferSelect & { submitterEmail: string | null; submitterName: string | null }>()),
+        403: errorSchemas.unauthorized,
       },
     },
   },

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -16,6 +16,7 @@ export function Navbar() {
   const [location] = useLocation();
   const { logout } = useAuth();
   const { data: profile } = useMyProfile();
+  const isOwner = (profile as any)?.isOwner === true;
 
   if (location === "/" || location === "/onboarding") return null;
 
@@ -117,6 +118,20 @@ export function Navbar() {
                     Help & Support
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/feedback">
+                  <DropdownMenuItem data-testid="button-feedback">
+                    <MessageSquarePlus className="w-4 h-4 mr-2" />
+                    Send Feedback
+                  </DropdownMenuItem>
+                </Link>
+                {isOwner && (
+                  <Link href="/admin/feedback">
+                    <DropdownMenuItem data-testid="button-admin-feedback">
+                      <Inbox className="w-4 h-4 mr-2" />
+                      View Feedback
+                    </DropdownMenuItem>
+                  </Link>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout">
                   <LogOut className="w-4 h-4 mr-2" />
@@ -185,6 +200,20 @@ export function Navbar() {
                   Help & Support
                 </DropdownMenuItem>
               </Link>
+              <Link href="/feedback">
+                <DropdownMenuItem data-testid="button-feedback-mobile">
+                  <MessageSquarePlus className="w-4 h-4 mr-2" />
+                  Send Feedback
+                </DropdownMenuItem>
+              </Link>
+              {isOwner && (
+                <Link href="/admin/feedback">
+                  <DropdownMenuItem data-testid="button-admin-feedback-mobile">
+                    <Inbox className="w-4 h-4 mr-2" />
+                    View Feedback
+                  </DropdownMenuItem>
+                </Link>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout-mobile">
                 <LogOut className="w-4 h-4 mr-2" />

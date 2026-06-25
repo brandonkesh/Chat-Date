@@ -11,6 +11,9 @@ import {
   hiddenProfiles,
   microDates,
   microDateResponses,
+  feedback,
+  type Feedback,
+  type InsertFeedback,
   type User,
   type Profile,
   type InsertProfile,
@@ -114,6 +117,10 @@ export interface IStorage {
   getMicroDateResponses(microDateId: number): Promise<MicroDateResponse[]>;
   createMicroDateResponse(microDateId: number, activityIndex: number, userId: string, response: string): Promise<MicroDateResponse>;
   getMicroDatesForUser(userId: string): Promise<MicroDate[]>;
+
+  // Feedback
+  createFeedback(feedback: InsertFeedback & { userId: string }): Promise<Feedback>;
+  getAllFeedback(): Promise<(Feedback & { submitterEmail: string | null; submitterName: string | null })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -989,6 +996,44 @@ export class DatabaseStorage implements IStorage {
       .from(microDates)
       .where(or(eq(microDates.inviterId, userId), eq(microDates.inviteeId, userId)))
       .orderBy(desc(microDates.createdAt));
+  }
+
+  async createFeedback(feedbackData: InsertFeedback & { userId: string }): Promise<Feedback> {
+    const [created] = await db
+      .insert(feedback)
+      .values(feedbackData)
+      .returning();
+    return created;
+  }
+
+  async getAllFeedback(): Promise<(Feedback & { submitterEmail: string | null; submitterName: string | null })[]> {
+    const rows = await db
+      .select({
+        id: feedback.id,
+        userId: feedback.userId,
+        category: feedback.category,
+        message: feedback.message,
+        createdAt: feedback.createdAt,
+        submitterEmail: users.email,
+        submitterFirstName: users.firstName,
+        submitterLastName: users.lastName,
+      })
+      .from(feedback)
+      .leftJoin(users, eq(feedback.userId, users.id))
+      .orderBy(desc(feedback.createdAt));
+
+    return rows.map((r) => {
+      const name = [r.submitterFirstName, r.submitterLastName].filter(Boolean).join(" ").trim();
+      return {
+        id: r.id,
+        userId: r.userId,
+        category: r.category,
+        message: r.message,
+        createdAt: r.createdAt,
+        submitterEmail: r.submitterEmail ?? null,
+        submitterName: name.length > 0 ? name : null,
+      };
+    });
   }
 }
 

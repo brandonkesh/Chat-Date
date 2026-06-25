@@ -33,6 +33,8 @@ import AppLock from "@/pages/AppLock";
 import { Redirect } from "wouter";
 import SavedProfiles from "@/pages/SavedProfiles";
 import AIAdvisor from "@/pages/AIAdvisor";
+import Feedback from "@/pages/Feedback";
+import AdminFeedback from "@/pages/AdminFeedback";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -202,6 +204,14 @@ function Router() {
 
         <Route path="/ai-advisor">
           <ProtectedRoute component={AIAdvisor} />
+        </Route>
+
+        <Route path="/feedback">
+          <ProtectedRoute component={Feedback} />
+        </Route>
+
+        <Route path="/admin/feedback">
+          <ProtectedRoute component={AdminFeedback} />
         </Route>
         
         <Route component={NotFound} />
