@@ -2,18 +2,22 @@ import { storage } from "./storage";
 import type { MembershipTier } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
-// Email-based tier assignment is DISABLED.
+// Private owner/tester grants (NOT the public signup flow).
 // ---------------------------------------------------------------------------
-// Subscription tiers are no longer assigned automatically based on a user's
-// email or username. Every user starts on the "free" tier and chooses their
-// own plan during signup; paid tiers are only granted through the normal
-// PayPal payment flow.
+// Regular users are NEVER assigned a tier based on their email — they choose
+// their own plan during signup and pay through PayPal for paid tiers.
 //
-// This map is intentionally empty. Because it is empty, any account that was
-// previously granted premium through this allow-list (and is NOT a real PayPal
-// subscriber) will have that premium cleared the next time they log in, so
-// access stays tied to actual payments only.
-export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {};
+// The accounts listed below are a deliberate exception: they get the assigned
+// tier directly (no PayPal), for the owner and any trusted testers. Matching is
+// case-insensitive on the user's Replit username and email only.
+// Value is the tier to grant: "basic", "pro", or "elite" (Elite = everything).
+//
+// To grant access, add an entry. To revoke it, remove the entry — their premium
+// is cleared the next time they log in. Real PayPal subscribers are never
+// affected by this list.
+export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {
+  "brandonkeshwani@gmail.com": "elite",
+};
 
 function normalize(value: unknown): string | null {
   if (typeof value !== "string") return null;
