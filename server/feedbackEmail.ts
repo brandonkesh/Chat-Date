@@ -1,5 +1,6 @@
 import { log } from "./index";
 import { getOwnerNotificationEmail } from "./ownerUsers";
+import { getResendApiKey } from "./email";
 import type { Feedback } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
@@ -10,41 +11,6 @@ import type { Feedback } from "@shared/schema";
 // is logged and swallowed so feedback is still saved and the API still returns
 // success. Credentials come from the Replit Resend connector at runtime — never
 // cache the client because the access token expires.
-
-let connectionSettings: any;
-
-async function getResendApiKey(): Promise<string | null> {
-  // Prefer an explicitly provided API key secret if present, otherwise fall back
-  // to the Replit Resend connector proxy.
-  if (process.env.RESEND_API_KEY) {
-    return process.env.RESEND_API_KEY;
-  }
-
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-      ? "depl " + process.env.WEB_REPL_RENEWAL
-      : null;
-
-  if (!hostname || !xReplitToken) {
-    return null;
-  }
-
-  const response = await fetch(
-    `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=resend`,
-    {
-      headers: {
-        Accept: "application/json",
-        X_REPLIT_TOKEN: xReplitToken,
-      },
-    },
-  );
-  const data = await response.json();
-  connectionSettings = data.items?.[0];
-  const apiKey = connectionSettings?.settings?.api_key;
-  return apiKey ?? null;
-}
 
 function categoryLabel(category: string): string {
   switch (category) {
@@ -89,10 +55,16 @@ export async function sendFeedbackNotification(
     const who = submitter.name || submitter.email || item.userId;
     const label = categoryLabel(item.category);
 
-    const safeMessage = item.message
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    const escapeHtml = (v: string) =>
+      v
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const safeMessage = escapeHtml(item.message);
+    const safeWho = escapeHtml(who);
+    const safeEmail = submitter.email ? escapeHtml(submitter.email) : "";
 
     await resend.emails.send({
       from: `Crush Feedback <${fromEmail}>`,
@@ -107,7 +79,7 @@ export async function sendFeedbackNotification(
       html:
         `<h2>New feedback submitted on Crush</h2>` +
         `<p><strong>Category:</strong> ${label}</p>` +
-        `<p><strong>From:</strong> ${who}${submitter.email ? ` (${submitter.email})` : ""}</p>` +
+        `<p><strong>From:</strong> ${safeWho}${safeEmail ? ` (${safeEmail})` : ""}</p>` +
         `<p><strong>Submitted:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleString() : "just now"}</p>` +
         `<p><strong>Message:</strong></p>` +
         `<p style="white-space:pre-wrap">${safeMessage}</p>`,

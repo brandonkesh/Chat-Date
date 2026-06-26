@@ -4,6 +4,13 @@ import { storage } from "./storage";
 import { isTestPremiumUser, applyTestPremiumIfNeeded } from "./testPremiumUsers";
 import { isOwner } from "./ownerUsers";
 import { sendFeedbackNotification } from "./feedbackEmail";
+import {
+  sendWelcomeEmail,
+  sendMatchEmail,
+  sendNewMessageEmail,
+  sendAppLockBackupCodesEmail,
+  sendAppLockChangedEmail,
+} from "./email";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -265,6 +272,8 @@ export async function registerRoutes(
         profile = await storage.updateProfile(userId, { ...input, ageVerified });
       } else {
         profile = await storage.createProfile({ ...input, userId, ageVerified });
+        // Best-effort welcome email (never blocks or fails the request).
+        void sendWelcomeEmail(userId);
       }
       // Controlled testing: auto-grant premium to allow-listed family/test
       // accounts right after their profile exists. No-op for everyone else.
@@ -408,6 +417,8 @@ export async function registerRoutes(
     const codes = Array.from({ length: 6 }, () => crypto.randomUUID().slice(0, 8).toUpperCase());
     const hashedCodes = await Promise.all(codes.map(c => bcrypt.hash(c, 10)));
     await db.update(profiles).set({ passwordHash: hash, backupCodes: hashedCodes }).where(eq(profiles.userId, userId));
+    // Best-effort: email the recovery codes so the user has them off-device.
+    void sendAppLockBackupCodesEmail(userId, codes);
     res.json({ success: true, backupCodes: codes, message: "Password set. Save your backup codes in a safe place." });
   });
 
@@ -428,6 +439,8 @@ export async function registerRoutes(
     }
     const hash = await bcrypt.hash(newPassword, 10);
     await db.update(profiles).set({ passwordHash: hash }).where(eq(profiles.userId, userId));
+    // Best-effort security alert that the app-lock password changed.
+    void sendAppLockChangedEmail(userId);
     res.json({ success: true, message: "Password changed successfully." });
   });
 
@@ -1522,6 +1535,8 @@ Guidelines:
         isMatch = await storage.checkMatch(userId, input.swipedId);
         if (isMatch) {
           matchId = await storage.createMatch(userId, input.swipedId);
+          // Best-effort "it's a match" emails to both users.
+          void sendMatchEmail(userId, input.swipedId);
         }
       }
 
@@ -1746,6 +1761,8 @@ Guidelines:
         isScam,
         scamAnalysis,
       });
+      // Best-effort new-message email to the recipient (throttled per convo).
+      void sendNewMessageEmail(otherUserId, userId, matchId);
       res.status(201).json(sanitizeMessage(msg));
     } catch (err) {
       if (err instanceof z.ZodError) {
