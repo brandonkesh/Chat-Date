@@ -82,6 +82,12 @@ export const profiles = pgTable("profiles", {
   // Two-factor authentication
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecret: text("two_factor_secret"),
+  // Delivery-based 2FA: 'totp' (authenticator app), 'email', or 'sms'
+  twoFactorMethod: text("two_factor_method"),
+  phoneNumber: text("phone_number"),
+  // One-time login code delivered by email/SMS (short-lived)
+  loginOtpCode: text("login_otp_code"),
+  loginOtpExpiry: timestamp("login_otp_expiry"),
   // Email verification
   emailVerified: boolean("email_verified").default(false),
   emailVerificationCode: text("email_verification_code"),
@@ -105,6 +111,10 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   backupCodes: true,
   twoFactorEnabled: true,
   twoFactorSecret: true,
+  twoFactorMethod: true,
+  phoneNumber: true,
+  loginOtpCode: true,
+  loginOtpExpiry: true,
   emailVerified: true,
   emailVerificationCode: true,
   emailVerificationExpiry: true,

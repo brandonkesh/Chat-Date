@@ -11,7 +11,9 @@ import {
   sendNewMessageEmail,
   sendAppLockBackupCodesEmail,
   sendAppLockChangedEmail,
+  sendLoginCodeEmail,
 } from "./email";
+import { isSmsConfigured, isValidPhoneNumber, sendSms } from "./sms";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -34,9 +36,61 @@ import { openai } from "./replit_integrations/image/client";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
 
+// Which 2FA delivery method is active. Legacy users (enabled before this
+// feature) have a secret but no explicit method — treat them as 'totp'.
+function effectiveTwoFactorMethod(p: any): "totp" | "email" | "sms" | null {
+  if (!p?.twoFactorEnabled) return null;
+  if (p.twoFactorMethod) return p.twoFactorMethod;
+  return p.twoFactorSecret ? "totp" : null;
+}
+
+function generateOtpCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "your email";
+  const visible = local.slice(0, 1);
+  return `${visible}${"*".repeat(Math.max(local.length - 1, 1))}@${domain}`;
+}
+
+function maskPhone(phone: string): string {
+  const last4 = phone.slice(-4);
+  return `•••• •••• ${last4}`;
+}
+
+// When true, every user is required to have 2FA. Off by default so it stays
+// opt-in for test users; flip REQUIRE_2FA=true to enforce for everyone later.
+function twoFactorRequiredForAll(): boolean {
+  return process.env.REQUIRE_2FA === "true";
+}
+
+// Validate a delivered email/SMS one-time code against the stored value.
+async function verifyLoginOtp(
+  userId: string,
+  code: unknown,
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+  if (!code || typeof code !== "string") {
+    return { ok: false, status: 400, message: "Verification code is required." };
+  }
+  const profile = await storage.getProfile(userId);
+  if (!profile?.loginOtpCode || !profile.loginOtpExpiry) {
+    return { ok: false, status: 400, message: "No code has been sent. Please request a new one." };
+  }
+  if (new Date() > new Date(profile.loginOtpExpiry)) {
+    await storage.clearLoginOtp(userId);
+    return { ok: false, status: 400, message: "Code expired. Please request a new one." };
+  }
+  if (profile.loginOtpCode !== code.trim()) {
+    return { ok: false, status: 400, message: "Invalid verification code. Please try again." };
+  }
+  return { ok: true };
+}
+
 function sanitizeProfile(profile: any) {
   if (!profile) return profile;
-  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, voiceIntroUrl, introVideoUrl, ...safe } = profile;
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, voiceIntroUrl, introVideoUrl, phoneNumber, loginOtpCode, loginOtpExpiry, ...safe } = profile;
   return {
     ...safe,
     hasPassword: !!passwordHash,
@@ -136,7 +190,7 @@ export async function registerRoutes(
   // /password/remove, /2fa/setup, /2fa/enable, /2fa/disable) are NOT exempted;
   // they require the 2FA challenge to be completed first.
   const twoFAExemptExact = new Set([
-    "/2fa/verify", "/2fa/status",
+    "/2fa/verify", "/2fa/status", "/2fa/challenge/send",
     "/password/verify", "/password/recover", "/password/status",
   ]);
   const twoFAExemptPrefixes = ["/login", "/logout", "/callback"];
@@ -171,7 +225,7 @@ export async function registerRoutes(
   // exempted; they require the app-lock to be unlocked first.
   const appLockExemptExact = new Set([
     "/password/verify", "/password/recover", "/password/status",
-    "/2fa/verify", "/2fa/status",
+    "/2fa/verify", "/2fa/status", "/2fa/challenge/send",
   ]);
   const appLockExemptPrefixes = ["/login", "/logout", "/callback"];
   app.use("/api", async (req: any, res: any, next: any) => {
@@ -305,9 +359,19 @@ export async function registerRoutes(
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
+    const method = effectiveTwoFactorMethod(profile);
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    let destination: string | null = null;
+    if (method === "email" && user?.email) destination = maskEmail(user.email);
+    if (method === "sms" && profile.phoneNumber) destination = maskPhone(profile.phoneNumber);
     res.json({
       enabled: profile.twoFactorEnabled ?? false,
       verified: (req.session as any).twoFactorVerified ?? false,
+      method,
+      destination,
+      hasEmail: !!user?.email,
+      smsConfigured: isSmsConfigured(),
+      required: twoFactorRequiredForAll(),
     });
   });
 
@@ -353,27 +417,175 @@ export async function registerRoutes(
     res.json({ success: true, message: "Two-factor authentication enabled." });
   });
 
-  // Disable 2FA
+  // --- Email-based 2FA setup ---
+  // Send a code to the account email to begin enabling email 2FA.
+  app.post("/api/2fa/email/setup", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    if (profile.twoFactorEnabled) {
+      return res.status(400).json({ message: "Two-step verification is already enabled." });
+    }
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user?.email) {
+      return res.status(400).json({ message: "No email address found on your account." });
+    }
+    const code = generateOtpCode();
+    await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
+    (req.session as any).pendingTwoFactorMethod = "email";
+    resetSecondaryAuthAttempts(`2fa:${userId}`);
+    void sendLoginCodeEmail(userId, code);
+    res.json({ success: true, destination: maskEmail(user.email) });
+  });
+
+  // Verify the emailed code and turn on email 2FA.
+  app.post("/api/2fa/email/enable", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    const rateLimitKey = `2fa:${userId}`;
+    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
+    }
+    if ((req.session as any).pendingTwoFactorMethod !== "email") {
+      return res.status(400).json({ message: "Please start email setup first." });
+    }
+    const check = await verifyLoginOtp(userId, code);
+    if (!check.ok) {
+      if (check.status === 400) recordSecondaryAuthFailure(rateLimitKey);
+      return res.status(check.status).json({ message: check.message });
+    }
+    resetSecondaryAuthAttempts(rateLimitKey);
+    await storage.enableTwoFactorDelivery(userId, "email");
+    delete (req.session as any).pendingTwoFactorMethod;
+    (req.session as any).twoFactorVerified = true;
+    res.json({ success: true, message: "Email two-step verification enabled." });
+  });
+
+  // --- SMS-based 2FA setup ---
+  // Send a code to a phone number to begin enabling SMS 2FA.
+  app.post("/api/2fa/sms/setup", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    if (profile.twoFactorEnabled) {
+      return res.status(400).json({ message: "Two-step verification is already enabled." });
+    }
+    if (!isSmsConfigured()) {
+      return res.status(400).json({ message: "Text messaging isn't set up on this app yet." });
+    }
+    const { phoneNumber } = req.body;
+    if (!phoneNumber || typeof phoneNumber !== "string" || !isValidPhoneNumber(phoneNumber)) {
+      return res.status(400).json({ message: "Enter a valid phone number with country code, e.g. +14155551234." });
+    }
+    const phone = phoneNumber.trim();
+    const code = generateOtpCode();
+    await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
+    (req.session as any).pendingTwoFactorMethod = "sms";
+    (req.session as any).pendingTwoFactorPhone = phone;
+    resetSecondaryAuthAttempts(`2fa:${userId}`);
+    void sendSms({ to: phone, body: `Your Crush verification code is ${code}. It expires in 10 minutes.`, logLabel: "sms-2fa-setup" });
+    res.json({ success: true, destination: maskPhone(phone) });
+  });
+
+  // Verify the texted code and turn on SMS 2FA.
+  app.post("/api/2fa/sms/enable", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { code } = req.body;
+    const rateLimitKey = `2fa:${userId}`;
+    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
+    }
+    if ((req.session as any).pendingTwoFactorMethod !== "sms") {
+      return res.status(400).json({ message: "Please start text-message setup first." });
+    }
+    const phone = (req.session as any).pendingTwoFactorPhone;
+    if (!phone) {
+      return res.status(400).json({ message: "Please start text-message setup first." });
+    }
+    const check = await verifyLoginOtp(userId, code);
+    if (!check.ok) {
+      if (check.status === 400) recordSecondaryAuthFailure(rateLimitKey);
+      return res.status(check.status).json({ message: check.message });
+    }
+    resetSecondaryAuthAttempts(rateLimitKey);
+    await storage.enableTwoFactorDelivery(userId, "sms", phone);
+    delete (req.session as any).pendingTwoFactorMethod;
+    delete (req.session as any).pendingTwoFactorPhone;
+    (req.session as any).twoFactorVerified = true;
+    res.json({ success: true, message: "Text-message two-step verification enabled." });
+  });
+
+  // --- Login challenge: (re)send a code for email/SMS users ---
+  app.post("/api/2fa/challenge/send", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    // Cap how often a user can request a fresh code to prevent email/SMS spam
+    // and cost amplification (5 sends per 10 minutes, durable across restarts).
+    const withinQuota = await checkAiRateLimit(userId, "2fa-challenge-send", 5, 10 * 60 * 1000);
+    if (!withinQuota) {
+      return res.status(429).json({ message: "Too many code requests. Please wait a few minutes and try again." });
+    }
+    const profile = await storage.getProfile(userId);
+    const method = effectiveTwoFactorMethod(profile);
+    if (method !== "email" && method !== "sms") {
+      return res.status(400).json({ message: "No code-based two-step verification is enabled." });
+    }
+    const code = generateOtpCode();
+    await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
+    if (method === "email") {
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (!user?.email) return res.status(400).json({ message: "No email address on file." });
+      void sendLoginCodeEmail(userId, code);
+      return res.json({ success: true, method, destination: maskEmail(user.email) });
+    }
+    if (!profile?.phoneNumber) return res.status(400).json({ message: "No phone number on file." });
+    if (!isSmsConfigured()) return res.status(400).json({ message: "Text messaging isn't set up on this app yet." });
+    void sendSms({ to: profile.phoneNumber, body: `Your Crush verification code is ${code}. It expires in 10 minutes.`, logLabel: "sms-2fa-challenge" });
+    res.json({ success: true, method, destination: maskPhone(profile.phoneNumber) });
+  });
+
+  // Disable 2FA (method-aware)
   app.post("/api/2fa/disable", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { code } = req.body;
+    const rateLimitKey = `2fa:${userId}`;
+    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
+    }
     if (!code || typeof code !== "string") {
-      return res.status(400).json({ message: "Verification code is required to disable 2FA." });
+      return res.status(400).json({ message: "Verification code is required to disable two-step verification." });
     }
-    const secret = await storage.getTwoFactorSecret(userId);
-    if (!secret) {
-      return res.status(400).json({ message: "Two-factor authentication is not enabled." });
+    const profile = await storage.getProfile(userId);
+    const method = effectiveTwoFactorMethod(profile);
+    if (!method) {
+      return res.status(400).json({ message: "Two-step verification is not enabled." });
     }
-    const result = verifySync({ token: code, secret });
-    if (!result.valid) {
-      return res.status(400).json({ message: "Invalid verification code." });
+    if (method === "totp") {
+      const secret = profile!.twoFactorSecret!;
+      const result = verifySync({ token: code, secret });
+      if (!result.valid) {
+        recordSecondaryAuthFailure(rateLimitKey);
+        return res.status(400).json({ message: "Invalid verification code." });
+      }
+    } else {
+      const check = await verifyLoginOtp(userId, code);
+      if (!check.ok) {
+        if (check.status === 400) recordSecondaryAuthFailure(rateLimitKey);
+        return res.status(check.status).json({ message: check.message });
+      }
     }
+    resetSecondaryAuthAttempts(rateLimitKey);
     await storage.disableTwoFactor(userId);
     (req.session as any).twoFactorVerified = false;
-    res.json({ success: true, message: "Two-factor authentication disabled." });
+    res.json({ success: true, message: "Two-step verification disabled." });
   });
 
-  // Verify 2FA code (for login challenge)
+  // Verify 2FA code (for login challenge) — method-aware
   app.post("/api/2fa/verify", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const rateLimitKey = `2fa:${userId}`;
@@ -387,15 +599,25 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Verification code is required." });
     }
     const profile = await storage.getProfile(userId);
-    if (!profile?.twoFactorEnabled || !profile.twoFactorSecret) {
+    const method = effectiveTwoFactorMethod(profile);
+    if (!method) {
       return res.status(400).json({ message: "Two-factor authentication is not enabled." });
     }
-    const result = verifySync({ token: code, secret: profile.twoFactorSecret });
-    if (!result.valid) {
-      recordSecondaryAuthFailure(rateLimitKey);
-      return res.status(400).json({ message: "Invalid verification code. Please try again." });
+    if (method === "totp") {
+      const result = verifySync({ token: code, secret: profile!.twoFactorSecret! });
+      if (!result.valid) {
+        recordSecondaryAuthFailure(rateLimitKey);
+        return res.status(400).json({ message: "Invalid verification code. Please try again." });
+      }
+    } else {
+      const check = await verifyLoginOtp(userId, code);
+      if (!check.ok) {
+        if (check.status === 400) recordSecondaryAuthFailure(rateLimitKey);
+        return res.status(check.status).json({ message: check.message });
+      }
     }
     resetSecondaryAuthAttempts(rateLimitKey);
+    await storage.clearLoginOtp(userId);
     (req.session as any).twoFactorVerified = true;
     res.json({ success: true });
   });

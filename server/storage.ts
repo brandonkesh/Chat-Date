@@ -78,6 +78,9 @@ export interface IStorage {
   enableTwoFactor(userId: string, secret: string): Promise<Profile>;
   disableTwoFactor(userId: string): Promise<Profile>;
   getTwoFactorSecret(userId: string): Promise<string | null>;
+  enableTwoFactorDelivery(userId: string, method: "email" | "sms", phoneNumber?: string | null): Promise<Profile>;
+  setLoginOtp(userId: string, code: string, expiry: Date): Promise<Profile>;
+  clearLoginOtp(userId: string): Promise<Profile>;
 
   // Email verification
   setEmailVerificationCode(userId: string, code: string, expiry: Date): Promise<Profile>;
@@ -707,7 +710,7 @@ export class DatabaseStorage implements IStorage {
   async enableTwoFactor(userId: string, secret: string): Promise<Profile> {
     const [updated] = await db
       .update(profiles)
-      .set({ twoFactorEnabled: true, twoFactorSecret: secret })
+      .set({ twoFactorEnabled: true, twoFactorSecret: secret, twoFactorMethod: "totp" })
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
@@ -716,7 +719,14 @@ export class DatabaseStorage implements IStorage {
   async disableTwoFactor(userId: string): Promise<Profile> {
     const [updated] = await db
       .update(profiles)
-      .set({ twoFactorEnabled: false, twoFactorSecret: null })
+      .set({
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        twoFactorMethod: null,
+        phoneNumber: null,
+        loginOtpCode: null,
+        loginOtpExpiry: null,
+      })
       .where(eq(profiles.userId, userId))
       .returning();
     return updated;
@@ -725,6 +735,44 @@ export class DatabaseStorage implements IStorage {
   async getTwoFactorSecret(userId: string): Promise<string | null> {
     const profile = await this.getProfile(userId);
     return profile?.twoFactorSecret ?? null;
+  }
+
+  async enableTwoFactorDelivery(
+    userId: string,
+    method: "email" | "sms",
+    phoneNumber?: string | null,
+  ): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({
+        twoFactorEnabled: true,
+        twoFactorMethod: method,
+        twoFactorSecret: null,
+        phoneNumber: method === "sms" ? (phoneNumber ?? null) : null,
+        loginOtpCode: null,
+        loginOtpExpiry: null,
+      })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async setLoginOtp(userId: string, code: string, expiry: Date): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ loginOtpCode: code, loginOtpExpiry: expiry })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async clearLoginOtp(userId: string): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ loginOtpCode: null, loginOtpExpiry: null })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
   }
 
   async setEmailVerificationCode(userId: string, code: string, expiry: Date): Promise<Profile> {

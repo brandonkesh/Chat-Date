@@ -41,6 +41,7 @@ import { Navbar } from "@/components/Navbar";
 type TwoFactorStatus = {
   enabled: boolean;
   verified: boolean;
+  required?: boolean;
 };
 
 type PasswordStatus = {
@@ -71,6 +72,16 @@ function ProtectedRoute({ component: Component, skip2FA = false }: { component: 
     }
   }, [user, isLoading, profile, profileLoading, setLocation]);
 
+  // When 2FA is required for everyone (REQUIRE_2FA flag) but this user hasn't
+  // set it up yet, send them to the setup page until they enable it.
+  const needs2FASetup =
+    !skip2FA && twoFactorStatus?.required === true && twoFactorStatus?.enabled === false;
+  useEffect(() => {
+    if (needs2FASetup) {
+      setLocation("/security/2fa");
+    }
+  }, [needs2FASetup, setLocation]);
+
   if (isLoading || profileLoading) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-background">
@@ -92,6 +103,14 @@ function ProtectedRoute({ component: Component, skip2FA = false }: { component: 
 
   if (!skip2FA && twoFactorStatus?.enabled && !twoFactorStatus?.verified) {
     return <TwoFactorChallenge />;
+  }
+
+  if (needs2FASetup) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
   }
 
   if (passwordLoading) {

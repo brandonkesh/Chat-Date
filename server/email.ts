@@ -331,3 +331,32 @@ export async function sendAppLockChangedEmail(userId: string): Promise<void> {
     ),
   });
 }
+
+/**
+ * Two-factor login code email. Returns true if Resend accepted it. Used for
+ * both enabling email 2FA and the login challenge.
+ */
+export async function sendLoginCodeEmail(
+  userId: string,
+  code: string,
+): Promise<boolean> {
+  const contact = await getRecipientContact(userId);
+  if (!contact) return false;
+  const safeCode = escapeHtml(code);
+  return sendEmail({
+    logLabel: "login-2fa-code",
+    to: contact.email,
+    subject: "Your Crush verification code",
+    text:
+      `Hi ${contact.name},\n\n` +
+      `Your Crush verification code is: ${code}\n\n` +
+      `It expires in 10 minutes. If you didn't request this, you can ignore this email.\n\n` +
+      `The Crush Team`,
+    html: shell(
+      `Your verification code`,
+      `<p>Use this code to finish signing in to Crush:</p>` +
+        `<p style="font-size:32px;font-weight:bold;letter-spacing:6px;color:#2563eb;margin:16px 0">${safeCode}</p>` +
+        `<p>It expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`,
+    ),
+  });
+}
