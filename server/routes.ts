@@ -6,6 +6,7 @@ import { isOwner } from "./ownerUsers";
 import { sendFeedbackNotification } from "./feedbackEmail";
 import {
   sendWelcomeEmail,
+  sendNewMemberAlertToOwner,
   sendMatchEmail,
   sendNewMessageEmail,
   sendAppLockBackupCodesEmail,
@@ -272,8 +273,10 @@ export async function registerRoutes(
         profile = await storage.updateProfile(userId, { ...input, ageVerified });
       } else {
         profile = await storage.createProfile({ ...input, userId, ageVerified });
-        // Best-effort welcome email (never blocks or fails the request).
+        // Best-effort emails (never block or fail the request): welcome the new
+        // member, and notify the app owner that someone joined.
         void sendWelcomeEmail(userId);
+        void sendNewMemberAlertToOwner(userId);
       }
       // Controlled testing: auto-grant premium to allow-listed family/test
       // accounts right after their profile exists. No-op for everyone else.

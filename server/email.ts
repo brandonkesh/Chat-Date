@@ -2,6 +2,7 @@ import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { storage } from "./storage";
+import { getOwnerNotificationEmail } from "./ownerUsers";
 
 // ---------------------------------------------------------------------------
 // Transactional email (Resend)
@@ -81,11 +82,13 @@ async function sendEmail(opts: {
   subject: string;
   html: string;
   text: string;
+  // Static, non-PII label used only for logging (subjects can contain names).
+  logLabel: string;
 }): Promise<boolean> {
   try {
     const apiKey = await getResendApiKey();
     if (!apiKey) {
-      console.log("[email] Resend not configured — skipping send.");
+      console.log(`[email] Resend not configured — skipping ${opts.logLabel}.`);
       return false;
     }
     const { Resend } = await import("resend");
@@ -99,7 +102,8 @@ async function sendEmail(opts: {
     });
     return true;
   } catch (error: any) {
-    console.error(`[email] Failed to send "${opts.subject}":`, error?.message);
+    // Never log subject/body — they can contain user PII. Log only the label.
+    console.error(`[email] Failed to send ${opts.logLabel}:`, error?.message);
     return false;
   }
 }
@@ -143,6 +147,7 @@ export async function sendWelcomeEmail(userId: string): Promise<void> {
   if (!contact) return;
   const name = escapeHtml(contact.name);
   await sendEmail({
+    logLabel: "welcome",
     to: contact.email,
     subject: "Welcome to Crush! 🔥",
     text:
@@ -153,6 +158,34 @@ export async function sendWelcomeEmail(userId: string): Promise<void> {
       `Welcome, ${name}! 🔥`,
       `<p>Your profile is all set. Start swiping to find people near you and strike up a conversation.</p>` +
         `<p>Have fun,<br/>The Crush Team</p>`,
+    ),
+  });
+}
+
+/** Alert the app owner whenever a new member finishes creating their profile. */
+export async function sendNewMemberAlertToOwner(userId: string): Promise<void> {
+  const to = getOwnerNotificationEmail();
+  if (!to) {
+    console.log("[email] New member joined but no owner email configured (set OWNER_EMAILS).");
+    return;
+  }
+  const contact = await getRecipientContact(userId);
+  const name = contact?.name ?? "Someone";
+  const memberEmail = contact?.email ?? "unknown";
+  await sendEmail({
+    logLabel: "new-member-alert",
+    to,
+    subject: `New Crush member: ${name}`,
+    text:
+      `Good news — a new member just joined Crush.\n\n` +
+      `Name: ${name}\n` +
+      `Email: ${memberEmail}\n` +
+      `Joined: ${new Date().toLocaleString()}\n`,
+    html: shell(
+      `A new member just joined! 🎉`,
+      `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` +
+        `<p><strong>Email:</strong> ${escapeHtml(memberEmail)}</p>` +
+        `<p><strong>Joined:</strong> ${escapeHtml(new Date().toLocaleString())}</p>`,
     ),
   });
 }
@@ -170,6 +203,7 @@ export async function sendMatchEmail(
   if (a && b) {
     tasks.push(
       sendEmail({
+        logLabel: "match",
         to: a.email,
         subject: `It's a match on Crush! 💘`,
         text:
@@ -184,6 +218,7 @@ export async function sendMatchEmail(
     );
     tasks.push(
       sendEmail({
+        logLabel: "match",
         to: b.email,
         subject: `It's a match on Crush! 💘`,
         text:
@@ -227,6 +262,7 @@ export async function sendNewMessageEmail(
   if (!recipient || !sender) return;
 
   await sendEmail({
+    logLabel: "new-message",
     to: recipient.email,
     subject: `New message from ${sender.name} on Crush`,
     text:
@@ -255,6 +291,7 @@ export async function sendAppLockBackupCodesEmail(
     )
     .join("");
   await sendEmail({
+    logLabel: "app-lock-codes",
     to: contact.email,
     subject: "Your Crush app-lock recovery codes",
     text:
@@ -278,6 +315,7 @@ export async function sendAppLockChangedEmail(userId: string): Promise<void> {
   const contact = await getRecipientContact(userId);
   if (!contact) return;
   await sendEmail({
+    logLabel: "app-lock-changed",
     to: contact.email,
     subject: "Your Crush app-lock password was changed",
     text:

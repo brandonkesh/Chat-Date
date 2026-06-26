@@ -1,2 +1,2 @@
 - [OpenAI via Replit integration](openai-integration.md) — use AI_INTEGRATIONS_OPENAI_API_KEY/BASE_URL, never raw OPENAI_API_KEY (silent auth fail).
-- [Resend transactional email](resend-email.md) — onboarding@resend.dev only delivers to Resend account owner until a domain is verified; senders live in server/email.ts.
+- [Resend transactional email](resend-email.md) — onboarding@resend.dev only delivers to the Resend account owner until a domain is verified (silent for other recipients).
