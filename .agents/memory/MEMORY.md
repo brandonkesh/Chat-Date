@@ -1,2 +1,3 @@
 - [OpenAI via Replit integration](openai-integration.md) — use AI_INTEGRATIONS_OPENAI_API_KEY/BASE_URL, never raw OPENAI_API_KEY (silent auth fail).
 - [Resend transactional email](resend-email.md) — onboarding@resend.dev only delivers to the Resend account owner until a domain is verified (silent for other recipients).
+- [auth/user bootstrap](auth-user-bootstrap.md) — never 403/423-gate GET /api/auth/user for 2FA/app-lock; it bootstraps the SPA and the challenge UI won't render (useAuth only treats 401 as logged-out).
