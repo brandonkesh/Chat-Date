@@ -1,7 +1,2 @@
 User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /objects/
-Disallow: /ws
-
-Sitemap: https://crushmatchup.com/sitemap.xml
+Disallow: /
