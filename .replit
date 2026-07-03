@@ -49,3 +49,4 @@ timeoutMs = 20000
 
 [userenv.shared]
 OWNER_EMAILS = "brandonkeshwani@gmail.com"
+EMAIL_FROM = "noreply@crushmatchup.com"
