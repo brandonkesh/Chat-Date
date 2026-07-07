@@ -1458,6 +1458,44 @@ Guidelines:
     res.json({ success: true, message: "User unblocked." });
   });
 
+  // Permanently delete the signed-in user's account and all of their data.
+  app.delete("/api/account", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const mediaPaths = await storage.deleteAccount(userId);
+      // Best-effort: remove the user's uploaded files (photos, voice notes,
+      // videos) from object storage. Failures are logged but don't block.
+      if (mediaPaths.length > 0) {
+        void (async () => {
+          try {
+            const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+            const objectStorageService = new ObjectStorageService();
+            for (const path of mediaPaths) {
+              try {
+                const objectFile = await objectStorageService.getObjectEntityFile(path);
+                await objectFile.delete();
+              } catch {
+                // Object already gone or path invalid — nothing to clean up.
+              }
+            }
+          } catch (cleanupErr: any) {
+            console.error("[account-delete] Media cleanup failed:", cleanupErr?.message);
+          }
+        })();
+      }
+      // End the current session so the deleted user is fully signed out
+      // (all other sessions were already revoked in deleteAccount).
+      req.logout(() => {
+        req.session.destroy(() => {
+          res.json({ success: true, message: "Your profile has been deleted." });
+        });
+      });
+    } catch (err) {
+      console.error("Failed to delete account:", err);
+      res.status(500).json({ message: "Failed to delete your profile. Please try again." });
+    }
+  });
+
   app.get("/api/blocks", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const blockedUsers = await storage.getBlockedUsers(userId);

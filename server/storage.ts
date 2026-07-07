@@ -1,6 +1,7 @@
 import { db } from "./db";
 import {
   users,
+  sessions,
   profiles,
   matches,
   messages,
@@ -32,7 +33,7 @@ import {
   type SavedProfile,
   type HiddenProfile,
 } from "@shared/schema";
-import { eq, and, ne, notInArray, desc, or, sql } from "drizzle-orm";
+import { eq, and, ne, notInArray, inArray, like, desc, or, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
 
 export interface MatchmakingResult {
@@ -63,6 +64,11 @@ export interface IStorage {
   getDailyMatch(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile }) | undefined>;
   getMatch(matchId: number): Promise<typeof matches.$inferSelect | undefined>;
   deleteMatch(matchId: number, userId: string): Promise<boolean>;
+  /**
+   * Permanently delete a user and all of their data. Returns the object-storage
+   * paths (`/objects/...`) of media the caller should remove from storage.
+   */
+  deleteAccount(userId: string): Promise<string[]>;
   getLikesReceived(userId: string): Promise<Profile[]>;
   
   // Messages
@@ -625,6 +631,82 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(matches).where(eq(matches.id, matchId));
     });
     return true;
+  }
+
+  async deleteAccount(userId: string): Promise<string[]> {
+    const mediaPaths: string[] = [];
+    const collectMedia = (value: string | null | undefined) => {
+      if (value && value.startsWith("/objects/")) mediaPaths.push(value);
+    };
+    await db.transaction(async (tx) => {
+      // 0. Collect uploaded media paths before the rows disappear.
+      const [profileRow] = await tx
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, userId));
+      if (profileRow) {
+        collectMedia(profileRow.photoUrl);
+        collectMedia(profileRow.verificationPhotoUrl);
+        collectMedia(profileRow.voiceIntroUrl);
+        collectMedia(profileRow.introVideoUrl);
+      }
+      const voiceNotes = await tx
+        .select({ voiceNoteUrl: messages.voiceNoteUrl })
+        .from(messages)
+        .where(and(eq(messages.senderId, userId), sql`${messages.voiceNoteUrl} IS NOT NULL`));
+      for (const vn of voiceNotes) collectMedia(vn.voiceNoteUrl);
+      // 1. Matches involving the user (and everything hanging off them).
+      const userMatches = await tx
+        .select({ id: matches.id })
+        .from(matches)
+        .where(or(eq(matches.user1Id, userId), eq(matches.user2Id, userId)));
+      const matchIds = userMatches.map((m) => m.id);
+      if (matchIds.length > 0) {
+        const relatedMicroDates = await tx
+          .select({ id: microDates.id })
+          .from(microDates)
+          .where(inArray(microDates.matchId, matchIds));
+        const microDateIds = relatedMicroDates.map((md) => md.id);
+        if (microDateIds.length > 0) {
+          await tx
+            .delete(microDateResponses)
+            .where(inArray(microDateResponses.microDateId, microDateIds));
+        }
+        await tx.delete(microDates).where(inArray(microDates.matchId, matchIds));
+        await tx.delete(messages).where(inArray(messages.matchId, matchIds));
+        await tx.delete(matches).where(inArray(matches.id, matchIds));
+      }
+      // 2. Swipes in either direction.
+      await tx
+        .delete(swipes)
+        .where(or(eq(swipes.swiperId, userId), eq(swipes.swipedId, userId)));
+      // 3. Reports filed by or about the user.
+      await tx
+        .delete(reports)
+        .where(or(eq(reports.reporterId, userId), eq(reports.reportedUserId, userId)));
+      // 4. Blocks in either direction.
+      await tx
+        .delete(blocks)
+        .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedUserId, userId)));
+      // 5. Saved / hidden profile links in either direction.
+      await tx
+        .delete(savedProfiles)
+        .where(or(eq(savedProfiles.userId, userId), eq(savedProfiles.savedUserId, userId)));
+      await tx
+        .delete(hiddenProfiles)
+        .where(or(eq(hiddenProfiles.userId, userId), eq(hiddenProfiles.hiddenUserId, userId)));
+      // 6. Feedback and rate-limit counters.
+      await tx.delete(feedback).where(eq(feedback.userId, userId));
+      await tx.delete(rateLimits).where(like(rateLimits.key, `${userId}:%`));
+      // 7. Revoke every login session for this user (all devices/browsers).
+      await tx
+        .delete(sessions)
+        .where(sql`${sessions.sess} -> 'passport' -> 'user' -> 'claims' ->> 'sub' = ${userId}`);
+      // 8. The profile itself, then the user row.
+      await tx.delete(profiles).where(eq(profiles.userId, userId));
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+    return mediaPaths;
   }
 
   async getLikesReceived(userId: string): Promise<Profile[]> {

@@ -4,7 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX, Lock, Eye, EyeOff, KeyRound, Copy } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX, Lock, Eye, EyeOff, KeyRound, Copy, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
@@ -1117,7 +1128,96 @@ export default function Preferences() {
 
       <BlockedUsersCard />
 
+      <DeleteProfileCard />
+
     </div>
+  );
+}
+
+function DeleteProfileCard() {
+  const { toast } = useToast();
+  const [confirmText, setConfirmText] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/account");
+    },
+    onSuccess: () => {
+      // Account and session are gone — send the user back to the landing page.
+      window.location.href = "/";
+    },
+    onError: () => {
+      toast({
+        title: "Failed",
+        description: "Could not delete your profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Card className="border-destructive/40" data-testid="card-delete-profile">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-5 h-5 text-destructive" />
+          <div>
+            <CardTitle className="text-base">Delete My Profile</CardTitle>
+            <CardDescription className="text-xs">
+              Permanently remove your profile and all your data
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          This permanently deletes your profile, photos, matches, messages, and
+          everything else tied to your account. This cannot be undone.
+        </p>
+        <AlertDialog onOpenChange={(open) => { if (!open) setConfirmText(""); }}>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" data-testid="button-delete-profile">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete My Profile
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent data-testid="dialog-delete-profile">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete your profile, matches, messages, and
+                all of your data. There is no way to get it back. Type{" "}
+                <span className="font-semibold text-foreground">DELETE</span> below
+                to confirm.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder='Type "DELETE" to confirm'
+              data-testid="input-delete-confirm"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={confirmText.trim().toUpperCase() !== "DELETE" || deleteMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  deleteMutation.mutate();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-delete"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Delete Forever"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   );
 }
 
