@@ -13,7 +13,6 @@ import {
   sendAppLockChangedEmail,
   sendLoginCodeEmail,
 } from "./email";
-import { isSmsConfigured, isValidPhoneNumber, normalizePhoneNumber, sendSms } from "./sms";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -38,7 +37,7 @@ import QRCode from "qrcode";
 
 // Which 2FA delivery method is active. Legacy users (enabled before this
 // feature) have a secret but no explicit method — treat them as 'totp'.
-function effectiveTwoFactorMethod(p: any): "totp" | "email" | "sms" | null {
+function effectiveTwoFactorMethod(p: any): "totp" | "email" | null {
   if (!p?.twoFactorEnabled) return null;
   if (p.twoFactorMethod) return p.twoFactorMethod;
   return p.twoFactorSecret ? "totp" : null;
@@ -55,7 +54,7 @@ function maskEmail(email: string): string {
   return `${visible}${"*".repeat(Math.max(local.length - 1, 1))}@${domain}`;
 }
 
-function maskPhone(phone: string): string {
+function unusedMaskPhonePlaceholder(phone: string): string {
   const last4 = phone.slice(-4);
   return `•••• •••• ${last4}`;
 }
