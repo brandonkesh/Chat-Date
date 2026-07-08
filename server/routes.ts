@@ -13,7 +13,7 @@ import {
   sendAppLockChangedEmail,
   sendLoginCodeEmail,
 } from "./email";
-import { isSmsConfigured, isValidPhoneNumber, sendSms } from "./sms";
+import { isSmsConfigured, isValidPhoneNumber, normalizePhoneNumber, sendSms } from "./sms";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
@@ -479,7 +479,7 @@ export async function registerRoutes(
     if (!phoneNumber || typeof phoneNumber !== "string" || !isValidPhoneNumber(phoneNumber)) {
       return res.status(400).json({ message: "Enter a valid phone number with country code, e.g. +14155551234." });
     }
-    const phone = phoneNumber.trim();
+    const phone = normalizePhoneNumber(phoneNumber);
     const code = generateOtpCode();
     await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
     (req.session as any).pendingTwoFactorMethod = "sms";

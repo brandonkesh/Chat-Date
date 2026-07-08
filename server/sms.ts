@@ -19,9 +19,23 @@ export function isSmsConfigured(): boolean {
   );
 }
 
+/**
+ * Normalize a phone number to E.164 form. Forgiving of common US formats:
+ * strips spaces/dashes/parens, adds +1 to bare 10-digit numbers, and adds
+ * the missing "+" to 11-digit numbers starting with 1.
+ */
+export function normalizePhoneNumber(phone: string): string {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/[^\d]/g, "");
+  if (trimmed.startsWith("+")) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return `+${digits}`;
+}
+
 /** Basic E.164 phone number check, e.g. +14155551234. */
 export function isValidPhoneNumber(phone: string): boolean {
-  return /^\+[1-9]\d{7,14}$/.test(phone.trim());
+  return /^\+[1-9]\d{7,14}$/.test(normalizePhoneNumber(phone));
 }
 
 /**
@@ -43,8 +57,8 @@ export async function sendSms(opts: {
       return false;
     }
     const params = new URLSearchParams({
-      To: opts.to,
-      From: from,
+      To: normalizePhoneNumber(opts.to),
+      From: normalizePhoneNumber(from),
       Body: opts.body,
     });
     const auth = Buffer.from(`${sid}:${token}`).toString("base64");
