@@ -139,7 +139,7 @@ export default function DateBingo() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24" data-testid="page-date-bingo">
+    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24 md:pt-20" data-testid="page-date-bingo">
       <div className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 flex items-center justify-center">
           <Grid3x3 className="w-5 h-5 text-white" />

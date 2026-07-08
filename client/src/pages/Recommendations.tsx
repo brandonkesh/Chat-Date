@@ -452,7 +452,7 @@ export default function Recommendations() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 space-y-8" data-testid="page-recommendations">
+    <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pt-20 space-y-8" data-testid="page-recommendations">
       
       <TopPicksSection onAction={handleProfileAction} />
 

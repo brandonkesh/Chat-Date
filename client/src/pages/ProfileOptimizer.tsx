@@ -131,7 +131,7 @@ export default function ProfileOptimizer() {
   };
 
   return (
-    <div className="max-w-lg mx-auto p-4 md:p-6 pb-24 space-y-6" data-testid="page-profile-optimizer">
+    <div className="max-w-lg mx-auto p-4 md:p-6 pb-24 md:pt-20 space-y-6" data-testid="page-profile-optimizer">
       <div className="flex items-center gap-3">
         <Link href="/preferences">
           <Button variant="ghost" size="icon" data-testid="button-back">

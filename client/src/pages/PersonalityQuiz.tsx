@@ -166,7 +166,7 @@ export default function PersonalityQuiz() {
   const progress = ((current) / QUESTIONS.length) * 100;
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24" data-testid="page-personality-quiz">
+    <div className="max-w-2xl mx-auto p-4 md:p-8 pb-24 md:pt-20" data-testid="page-personality-quiz">
       <div className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-600 flex items-center justify-center">
           <Sparkles className="w-5 h-5 text-white" />
