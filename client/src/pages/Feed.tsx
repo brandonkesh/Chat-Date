@@ -89,7 +89,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="feed-viewport w-full flex flex-col items-center justify-center p-4 pt-3 overflow-hidden relative max-w-md mx-auto">
+    <div className="feed-viewport w-full flex flex-col items-center p-4 pt-3 overflow-y-auto overflow-x-hidden relative max-w-md mx-auto">
       
       {/* AI Advisor Banner - shown at top */}
       <Link href="/ai-advisor" className="w-full mb-3 block shrink-0" data-testid="link-ai-advisor-banner">
@@ -163,7 +163,7 @@ export default function Feed() {
         </Link>
       </div>
 
-      <div className="w-full flex-1 min-h-0 max-h-[600px] relative">
+      <div className="w-full flex-1 min-h-[340px] max-h-[600px] relative shrink-0 sm:shrink">
         <AnimatePresence>
           {stack.length > 0 ? (
             <ProfileCard 
