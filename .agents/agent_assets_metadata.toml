@@ -11,4 +11,10 @@ title = "Crush Dating App — Slide Deck"
 id = "fuxRsyaJ2AxZYi-SaCqjI"
 uri = "file://exports/Crush-Dating-App.pptx"
 type = "slides"
-title = "Crush Dating App — Presentation"
+title = "Crush Presentation (PowerPoint)"
+
+[[outputs]]
+id = "ol1KydvgXfaUSY4-PYlqq"
+uri = "file://exports/Crush-Dating-App.pdf"
+type = "pdf"
+title = "Crush Presentation (PDF — opens on any device)"
