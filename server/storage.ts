@@ -32,6 +32,9 @@ import {
   type MicroDateResponse,
   type SavedProfile,
   type HiddenProfile,
+  dateCheckins,
+  type DateCheckin,
+  type InsertDateCheckin,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, inArray, like, desc, or, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -51,6 +54,9 @@ export interface IStorage {
   getPotentialMatches(userId: string): Promise<Profile[]>;
   getRecommendedProfiles(userId: string): Promise<Profile[]>;
   getCrushPicks(userId: string): Promise<Profile[]>;
+  getSecondChanceProfiles(userId: string): Promise<Profile[]>;
+  undoPass(userId: string, swipedId: string): Promise<boolean>;
+  setBoost(userId: string, until: Date): Promise<Profile>;
   getMatchmakingProfiles(userId: string): Promise<MatchmakingResult[]>;
   updatePaypalSubscription(userId: string, subscriptionId: string, isPremium: boolean, membershipTier?: MembershipTier, planId?: string, subscriberId?: string): Promise<void>;
   setTestPremium(userId: string, membershipTier: MembershipTier): Promise<void>;
@@ -117,6 +123,12 @@ export interface IStorage {
   isHidden(userId: string, hiddenUserId: string): Promise<boolean>;
   isHiddenEither(userId1: string, userId2: string): Promise<boolean>;
   getHiddenUserIds(userId: string): Promise<string[]>;
+
+  // Date Check-ins (safety)
+  createDateCheckin(userId: string, checkin: InsertDateCheckin): Promise<DateCheckin>;
+  getDateCheckins(userId: string): Promise<DateCheckin[]>;
+  markDateCheckinSafe(id: number, userId: string): Promise<DateCheckin | undefined>;
+  deleteDateCheckin(id: number, userId: string): Promise<boolean>;
 
   // Micro Dates
   createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate>;
@@ -274,10 +286,65 @@ export class DatabaseStorage implements IStorage {
           otherZip.push(p);
         }
       }
-      return [...sameZip, ...otherZip];
+      potentialProfiles = [...sameZip, ...otherZip];
     }
 
-    return potentialProfiles;
+    // Boosted profiles float to the front of the feed (stable within groups)
+    const now = new Date();
+    const isBoosted = (p: Profile) => !!p.boostedUntil && p.boostedUntil > now;
+    const boosted = potentialProfiles.filter(isBoosted);
+    const regular = potentialProfiles.filter(p => !isBoosted(p));
+    return [...boosted, ...regular];
+  }
+
+  async getSecondChanceProfiles(userId: string): Promise<Profile[]> {
+    // People this user passed on (swiped left)
+    const passed = await db
+      .select({ swipedId: swipes.swipedId, createdAt: swipes.createdAt })
+      .from(swipes)
+      .where(and(eq(swipes.swiperId, userId), eq(swipes.liked, false)))
+      .orderBy(desc(swipes.createdAt));
+
+    if (passed.length === 0) return [];
+
+    const blockedIds = new Set(await this.getBlockedUserIds(userId));
+    const hiddenIds = new Set(await this.getHiddenUserIds(userId));
+    const passedIds = passed
+      .map(p => p.swipedId)
+      .filter(id => !blockedIds.has(id) && !hiddenIds.has(id));
+    if (passedIds.length === 0) return [];
+
+    const passedProfiles = await db
+      .select()
+      .from(profiles)
+      .where(inArray(profiles.userId, passedIds));
+
+    // Keep the most-recently-passed first
+    const order = new Map(passedIds.map((id, i) => [id, i]));
+    return passedProfiles.sort(
+      (a, b) => (order.get(a.userId) ?? 0) - (order.get(b.userId) ?? 0),
+    );
+  }
+
+  async undoPass(userId: string, swipedId: string): Promise<boolean> {
+    const result = await db
+      .delete(swipes)
+      .where(and(
+        eq(swipes.swiperId, userId),
+        eq(swipes.swipedId, swipedId),
+        eq(swipes.liked, false),
+      ))
+      .returning({ id: swipes.id });
+    return result.length > 0;
+  }
+
+  async setBoost(userId: string, until: Date): Promise<Profile> {
+    const [updated] = await db
+      .update(profiles)
+      .set({ boostedUntil: until })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return updated;
   }
 
   async getRecommendedProfiles(userId: string): Promise<Profile[]> {
@@ -590,7 +657,7 @@ export class DatabaseStorage implements IStorage {
     return { ...dailyMatch, partnerProfile };
   }
 
-  async getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile })[]> {
+  async getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile; lastMessageAt: Date | null })[]> {
     const userMatches = await db
       .select()
       .from(matches)
@@ -599,6 +666,23 @@ export class DatabaseStorage implements IStorage {
         eq(matches.isDailyMatch, false)
       ));
 
+    // Last message time per match (one query for all)
+    const matchIds = userMatches.map(m => m.id);
+    const lastMessageByMatch = new Map<number, Date>();
+    if (matchIds.length > 0) {
+      const lastMessages = await db
+        .select({
+          matchId: messages.matchId,
+          lastAt: sql<string>`max(${messages.createdAt})`,
+        })
+        .from(messages)
+        .where(inArray(messages.matchId, matchIds))
+        .groupBy(messages.matchId);
+      for (const row of lastMessages) {
+        if (row.lastAt) lastMessageByMatch.set(row.matchId, new Date(row.lastAt));
+      }
+    }
+
     const results = [];
     for (const match of userMatches) {
       const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
@@ -606,7 +690,7 @@ export class DatabaseStorage implements IStorage {
       if (blocked) continue;
       const partnerProfile = await this.getProfile(partnerId);
       if (partnerProfile) {
-        results.push({ ...match, partnerProfile });
+        results.push({ ...match, partnerProfile, lastMessageAt: lastMessageByMatch.get(match.id) ?? null });
       }
     }
     return results;
@@ -1031,6 +1115,39 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return results;
+  }
+
+  async createDateCheckin(userId: string, checkin: InsertDateCheckin): Promise<DateCheckin> {
+    const [created] = await db
+      .insert(dateCheckins)
+      .values({ ...checkin, userId })
+      .returning();
+    return created;
+  }
+
+  async getDateCheckins(userId: string): Promise<DateCheckin[]> {
+    return db
+      .select()
+      .from(dateCheckins)
+      .where(eq(dateCheckins.userId, userId))
+      .orderBy(desc(dateCheckins.dateTime));
+  }
+
+  async markDateCheckinSafe(id: number, userId: string): Promise<DateCheckin | undefined> {
+    const [updated] = await db
+      .update(dateCheckins)
+      .set({ checkedIn: true })
+      .where(and(eq(dateCheckins.id, id), eq(dateCheckins.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteDateCheckin(id: number, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(dateCheckins)
+      .where(and(eq(dateCheckins.id, id), eq(dateCheckins.userId, userId)))
+      .returning({ id: dateCheckins.id });
+    return result.length > 0;
   }
 
   async createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate> {

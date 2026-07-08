@@ -400,6 +400,37 @@ function MatchmakingSection() {
   );
 }
 
+function TopPicksSection({ onAction }: { onAction: () => void }) {
+  const { data: topPicks, isLoading } = useQuery<Profile[]>({
+    queryKey: ["/api/top-picks"],
+  });
+
+  if (isLoading || !topPicks || topPicks.length === 0) return null;
+
+  return (
+    <section data-testid="section-top-picks">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+          <Flame className="w-5 h-5 text-white fill-current" />
+        </div>
+        <div>
+          <h2 className="font-display text-xl font-bold" data-testid="heading-top-picks">Top Picks of the Day</h2>
+          <p className="text-sm text-muted-foreground" data-testid="text-top-picks-subtitle">Today's standout profiles — don't miss out!</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3" data-testid="grid-top-picks">
+        {topPicks.map(profile => (
+          <ProfilePreviewCard
+            key={profile.id}
+            profile={profile}
+            onLike={onAction}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Recommendations() {
   const { data: recommended, isLoading: loadingRecommended } = useRecommendedProfiles();
   const { data: crushPicks, isLoading: loadingCrushPicks } = useCrushPicks();
@@ -408,6 +439,7 @@ export default function Recommendations() {
     queryClient.invalidateQueries({ queryKey: [api.profiles.recommended.path] });
     queryClient.invalidateQueries({ queryKey: [api.profiles.crushPicks.path] });
     queryClient.invalidateQueries({ queryKey: ["/api/profiles/matchmaking"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/top-picks"] });
   };
 
   if (loadingRecommended || loadingCrushPicks) {
@@ -422,6 +454,8 @@ export default function Recommendations() {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 space-y-8" data-testid="page-recommendations">
       
+      <TopPicksSection onAction={handleProfileAction} />
+
       <DailyMatchCard />
 
       <MatchmakingSection />

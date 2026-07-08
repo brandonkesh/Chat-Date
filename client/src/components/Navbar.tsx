@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox, RotateCcw, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -112,6 +112,18 @@ export function Navbar() {
                     AI Matches
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/second-chance">
+                  <DropdownMenuItem data-testid="button-second-chance">
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Second Chance
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/date-checkin">
+                  <DropdownMenuItem data-testid="button-date-checkin">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Date Check-In
+                  </DropdownMenuItem>
+                </Link>
                 <Link href="/help">
                   <DropdownMenuItem data-testid="button-help">
                     <HelpCircle className="w-4 h-4 mr-2" />
@@ -192,6 +204,18 @@ export function Navbar() {
                 <DropdownMenuItem data-testid="button-ai-matches-mobile">
                   <Wand2 className="w-4 h-4 mr-2" />
                   AI Matches
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/second-chance">
+                <DropdownMenuItem data-testid="button-second-chance-mobile">
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Second Chance
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/date-checkin">
+                <DropdownMenuItem data-testid="button-date-checkin-mobile">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Date Check-In
                 </DropdownMenuItem>
               </Link>
               <Link href="/help">

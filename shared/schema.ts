@@ -92,6 +92,8 @@ export const profiles = pgTable("profiles", {
   emailVerified: boolean("email_verified").default(false),
   emailVerificationCode: text("email_verification_code"),
   emailVerificationExpiry: timestamp("email_verification_expiry"),
+  // Profile boost (premium perk): shown first in the feed until this time
+  boostedUntil: timestamp("boosted_until"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -118,6 +120,7 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   emailVerified: true,
   emailVerificationCode: true,
   emailVerificationExpiry: true,
+  boostedUntil: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;
@@ -226,6 +229,31 @@ export const hiddenProfiles = pgTable("hidden_profiles", {
 export const insertHiddenProfileSchema = createInsertSchema(hiddenProfiles).omit({ id: true, createdAt: true });
 export type InsertHiddenProfile = z.infer<typeof insertHiddenProfileSchema>;
 export type HiddenProfile = typeof hiddenProfiles.$inferSelect;
+
+// === DATE CHECK-INS (safety feature) ===
+export const dateCheckins = pgTable("date_checkins", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  dateName: text("date_name").notNull(), // Who they're meeting
+  location: text("location").notNull(), // Where
+  dateTime: timestamp("date_time").notNull(), // When
+  notes: text("notes"), // Optional extra details
+  friendEmail: text("friend_email").notNull(), // Trusted contact
+  checkedIn: boolean("checked_in").default(false), // "I'm safe" pressed
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDateCheckinSchema = createInsertSchema(dateCheckins)
+  .omit({ id: true, userId: true, checkedIn: true, createdAt: true })
+  .extend({
+    dateName: z.string().min(1).max(100),
+    location: z.string().min(1).max(200),
+    notes: z.string().max(500).optional().nullable(),
+    friendEmail: z.string().email().max(200),
+    dateTime: z.coerce.date(),
+  });
+export type InsertDateCheckin = z.infer<typeof insertDateCheckinSchema>;
+export type DateCheckin = typeof dateCheckins.$inferSelect;
 
 // === FEEDBACK ===
 export const feedbackCategories = ['bug', 'suggestion', 'other'] as const;

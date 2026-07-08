@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown, Dices } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -13,6 +13,113 @@ import { VoiceNoteRecorder, VoiceNotePlayer } from "@/components/VoiceNote";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+
+const ICEBREAKERS = [
+  "What's the best trip you've ever taken?",
+  "What's a small thing that instantly makes your day better?",
+  "If you could have dinner with anyone, living or not, who would it be?",
+  "What's your go-to comfort food?",
+  "What's something you're weirdly good at?",
+  "What song do you have on repeat right now?",
+  "What's the most spontaneous thing you've ever done?",
+  "Coffee or tea — and how do you take it?",
+  "What's a hobby you've always wanted to try?",
+  "What's your idea of a perfect Sunday?",
+  "What's the last show you binge-watched?",
+  "If you won the lottery tomorrow, what's the first thing you'd do?",
+  "What's a food opinion you'll defend forever?",
+  "What's your hidden talent?",
+  "Beach vacation or mountain getaway?",
+  "What's the best piece of advice you've ever gotten?",
+  "What did you want to be when you were a kid?",
+  "What's something that always makes you laugh?",
+  "If you could live anywhere for a year, where would it be?",
+  "What's your favorite way to unwind after a long day?",
+];
+
+const WYR_PAIRS: [string, string][] = [
+  ["always have to sing instead of speak", "dance everywhere you walk"],
+  ["travel to the past", "travel to the future"],
+  ["have a personal chef", "have a personal driver"],
+  ["never use social media again", "never watch another movie"],
+  ["be able to fly", "be able to read minds"],
+  ["live by the beach", "live in the mountains"],
+  ["always be 10 minutes late", "always be 2 hours early"],
+  ["give up pizza forever", "give up coffee forever"],
+  ["have a rewind button for your life", "have a pause button"],
+  ["be famous", "be the best friend of someone famous"],
+  ["only eat breakfast food", "only eat dinner food"],
+  ["speak every language", "play every instrument"],
+];
+
+const WYR_PREFIX = "🎲 Would you rather ";
+
+// Simple deterministic hash so both people in a match see the same
+// icebreaker question on any given day.
+function dailyHash(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function IcebreakerBanner({
+  matchId,
+  onAsk,
+  disabled,
+}: {
+  matchId: number;
+  onAsk: (text: string) => void;
+  disabled: boolean;
+}) {
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const storageKey = `crush-icebreaker-${matchId}-${dateKey}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return !!localStorage.getItem(storageKey);
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed) return null;
+
+  const question = ICEBREAKERS[dailyHash(`${matchId}-${dateKey}`) % ICEBREAKERS.length];
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="flex-none px-4 py-2.5 bg-gradient-to-r from-primary/10 to-accent/10 border-b border-border flex items-center gap-2.5" data-testid="banner-icebreaker">
+      <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Today's icebreaker</p>
+        <p className="text-xs font-medium truncate" data-testid="text-icebreaker-question">{question}</p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs shrink-0"
+        disabled={disabled}
+        onClick={() => {
+          onAsk(`💡 ${question}`);
+          dismiss();
+        }}
+        data-testid="button-ask-icebreaker"
+      >
+        Ask it
+      </Button>
+      <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" data-testid="button-dismiss-icebreaker">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 interface CoachingData {
   tone: "great" | "good" | "needs_work";
@@ -340,6 +447,42 @@ export default function Chat() {
   const { partnerProfile } = matchData;
   const isTrialExpired = profile.trialEndsAt ? isPast(new Date(profile.trialEndsAt)) : false;
 
+  // Would You Rather: if the last message is a 🎲 question from my match,
+  // offer the two options as one-tap replies.
+  const lastMsg = messages && messages.length > 0 ? messages[messages.length - 1] : null;
+  let wyrOptions: [string, string] | null = null;
+  if (
+    lastMsg &&
+    lastMsg.senderId !== profile.userId &&
+    !lastMsg.voiceNoteUrl &&
+    lastMsg.content.startsWith(WYR_PREFIX)
+  ) {
+    const body = lastMsg.content.slice(WYR_PREFIX.length).replace(/\?\s*$/, "");
+    const parts = body.split(" or ");
+    if (parts.length === 2) {
+      wyrOptions = [parts[0].trim(), parts[1].trim()];
+    }
+  }
+
+  const sendQuickMessage = (text: string) => {
+    if (sending || isTrialExpired) return;
+    setError(null);
+    sendMessage(text, {
+      onError: (err: Error) => {
+        if (err.message.includes("TRIAL_EXPIRED")) {
+          setError("Your free trial has ended. Please subscribe to continue chatting.");
+        } else {
+          setError("Failed to send message");
+        }
+      },
+    });
+  };
+
+  const sendWyrQuestion = () => {
+    const [a, b] = WYR_PAIRS[Math.floor(Math.random() * WYR_PAIRS.length)];
+    sendQuickMessage(`${WYR_PREFIX}${a} or ${b}?`);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
       <header className="flex-none p-4 border-b border-border bg-card/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
@@ -520,6 +663,15 @@ export default function Chat() {
         </div>
       )}
 
+      {!isTrialExpired && (
+        <IcebreakerBanner
+          key={`icebreaker-${matchId}-${new Date().toISOString().slice(0, 10)}`}
+          matchId={matchId}
+          onAsk={sendQuickMessage}
+          disabled={sending}
+        />
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/5">
         {loadingMessages ? (
           <div className="flex justify-center p-4">
@@ -589,6 +741,27 @@ export default function Chat() {
       />
 
       <div className="flex-none p-4 bg-background border-t border-border">
+        {wyrOptions && !isTrialExpired && (
+          <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="chips-wyr-options">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Dices className="w-3.5 h-3.5" />
+              Your pick:
+            </span>
+            {wyrOptions.map((option, i) => (
+              <Button
+                key={i}
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs rounded-full"
+                disabled={sending}
+                onClick={() => sendQuickMessage(`🎲 I'd rather ${option}!`)}
+                data-testid={`button-wyr-option-${i}`}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+        )}
         {error && (
            <div className="mb-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex flex-col items-center gap-2 text-center animate-in slide-in-from-bottom-2">
              <p>{error}</p>
@@ -635,16 +808,29 @@ export default function Chat() {
               data-testid="input-message"
             />
             {!inputValue.trim() && !isTrialExpired ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsRecordingVoice(true)}
-                disabled={sending}
-                data-testid="button-start-voice-note"
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={sendWyrQuestion}
+                  disabled={sending}
+                  title="Play Would You Rather"
+                  data-testid="button-play-wyr"
+                >
+                  <Dices className="w-5 h-5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsRecordingVoice(true)}
+                  disabled={sending}
+                  data-testid="button-start-voice-note"
+                >
+                  <Mic className="w-5 h-5" />
+                </Button>
+              </>
             ) : null}
             <Button 
               type="submit" 

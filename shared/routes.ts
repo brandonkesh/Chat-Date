@@ -95,6 +95,7 @@ export const api = {
         200: z.array(z.object({
           match: z.custom<typeof matches.$inferSelect>(),
           partnerProfile: z.custom<typeof profiles.$inferSelect>(),
+          lastMessageAt: z.string().nullable().optional(),
         })),
       },
     },

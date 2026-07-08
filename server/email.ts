@@ -333,6 +333,59 @@ export async function sendAppLockChangedEmail(userId: string): Promise<void> {
 }
 
 /**
+ * Date check-in safety email: lets a trusted friend know about an upcoming
+ * date. Best-effort — errors are logged and swallowed by sendEmail.
+ */
+export async function sendDateCheckinEmail(
+  userId: string,
+  checkin: {
+    friendEmail: string;
+    dateName: string;
+    location: string;
+    dateTime: Date;
+    notes?: string | null;
+  },
+): Promise<void> {
+  const contact = await getRecipientContact(userId);
+  const senderName = contact?.name || "A Crush member";
+  const when = new Date(checkin.dateTime).toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const safeName = escapeHtml(senderName);
+  const safeDateName = escapeHtml(checkin.dateName);
+  const safeLocation = escapeHtml(checkin.location);
+  const safeWhen = escapeHtml(when);
+  const safeNotes = checkin.notes ? escapeHtml(checkin.notes) : "";
+  await sendEmail({
+    logLabel: "date-checkin",
+    to: checkin.friendEmail,
+    subject: `${senderName} shared their date plans with you 🛡️`,
+    text:
+      `Hi,\n\n` +
+      `${senderName} is using Crush's date check-in safety feature and chose you as their trusted contact.\n\n` +
+      `Who: ${checkin.dateName}\n` +
+      `Where: ${checkin.location}\n` +
+      `When: ${when}\n` +
+      (checkin.notes ? `Notes: ${checkin.notes}\n` : "") +
+      `\nIf you don't hear from them after the date, consider checking in on them.\n\n` +
+      `The Crush Team`,
+    html: shell(
+      `${safeName} shared their date plans 🛡️`,
+      `<p><strong>${safeName}</strong> is using Crush's date check-in safety feature and chose you as their trusted contact.</p>` +
+        `<p><strong>Who:</strong> ${safeDateName}<br/>` +
+        `<strong>Where:</strong> ${safeLocation}<br/>` +
+        `<strong>When:</strong> ${safeWhen}</p>` +
+        (safeNotes ? `<p><strong>Notes:</strong> ${safeNotes}</p>` : "") +
+        `<p>If you don't hear from them after the date, consider checking in on them.</p>`,
+    ),
+  });
+}
+
+/**
  * Two-factor login code email. Returns true if Resend accepted it. Used for
  * both enabling email 2FA and the login challenge.
  */

@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageCircle, UserX } from "lucide-react";
+import { Loader2, MessageCircle, UserX, Hand, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -56,7 +56,13 @@ export default function Matches() {
       <h1 className="text-3xl font-display font-bold mb-6">Matches ({matches.length})</h1>
       
       <div className="grid gap-4">
-        {matches.map(({ match, partnerProfile }) => (
+        {matches.map(({ match, partnerProfile, lastMessageAt }: any) => {
+          const noMessages = !lastMessageAt;
+          const staleDays = lastMessageAt
+            ? (Date.now() - new Date(lastMessageAt).getTime()) / (1000 * 60 * 60 * 24)
+            : 0;
+          const isStale = !noMessages && staleDays > 3;
+          return (
           <div key={match.id} className="group flex items-center gap-4 p-4 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:border-primary/20 transition-all">
             <Link href={`/chat/${match.id}`} className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer">
               <img 
@@ -74,9 +80,21 @@ export default function Matches() {
                     {match.createdAt ? formatDistanceToNow(new Date(match.createdAt), { addSuffix: true }) : 'recently'}
                   </span>
                 </div>
-                <p className="text-muted-foreground truncate text-sm">
-                  Click to start chatting...
-                </p>
+                {noMessages ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1" data-testid={`nudge-say-hi-${match.id}`}>
+                    <Hand className="w-3.5 h-3.5" />
+                    Say hi 👋 — break the ice!
+                  </span>
+                ) : isStale ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-full px-2.5 py-1" data-testid={`nudge-stale-${match.id}`}>
+                    <Clock className="w-3.5 h-3.5" />
+                    It's been a while — send a message!
+                  </span>
+                ) : (
+                  <p className="text-muted-foreground truncate text-sm">
+                    Last message {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: true })}
+                  </p>
+                )}
               </div>
             </Link>
 
@@ -93,7 +111,8 @@ export default function Matches() {
               <UserX className="w-5 h-5 text-muted-foreground" />
             </Button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {confirmMatchId !== null && confirmMatch && (

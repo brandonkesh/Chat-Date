@@ -32,6 +32,8 @@ import MicroDate from "@/pages/MicroDate";
 import AppLock from "@/pages/AppLock";
 import { Redirect } from "wouter";
 import SavedProfiles from "@/pages/SavedProfiles";
+import SecondChance from "@/pages/SecondChance";
+import DateCheckin from "@/pages/DateCheckin";
 import AIAdvisor from "@/pages/AIAdvisor";
 import Feedback from "@/pages/Feedback";
 import AdminFeedback from "@/pages/AdminFeedback";
@@ -219,6 +221,14 @@ function Router() {
 
         <Route path="/saved">
           <ProtectedRoute component={SavedProfiles} />
+        </Route>
+
+        <Route path="/second-chance">
+          <ProtectedRoute component={SecondChance} />
+        </Route>
+
+        <Route path="/date-checkin">
+          <ProtectedRoute component={DateCheckin} />
         </Route>
 
         <Route path="/ai-advisor">

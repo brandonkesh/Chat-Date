@@ -12,13 +12,14 @@ import {
   sendAppLockBackupCodesEmail,
   sendAppLockChangedEmail,
   sendLoginCodeEmail,
+  sendDateCheckinEmail,
 } from "./email";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
-import { matches, profiles, users, swipes } from "@shared/schema";
+import { matches, profiles, users, swipes, insertDateCheckinSchema } from "@shared/schema";
 import { eq, or, and, ne, notInArray } from "drizzle-orm";
 import {
   ensurePaypalPlans,
@@ -870,6 +871,99 @@ export async function registerRoutes(
     const userId = req.user.claims.sub;
     const profiles = await storage.getCrushPicks(userId);
     res.json(profiles.map(sanitizeProfile));
+  });
+
+  // === TOP PICKS OF THE DAY ===
+  app.get("/api/top-picks", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const picks = await storage.getCrushPicks(userId);
+    res.json(picks.slice(0, 3).map(sanitizeProfile));
+  });
+
+  // === SECOND CHANCE (review people you passed on) ===
+  app.get("/api/second-chance", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const passedProfiles = await storage.getSecondChanceProfiles(userId);
+    res.json(passedProfiles.map(sanitizeProfile));
+  });
+
+  app.post("/api/second-chance/undo", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = z.object({ userId: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+    const ok = await storage.undoPass(userId, parsed.data.userId);
+    if (!ok) {
+      return res.status(404).json({ message: "No pass found for that person" });
+    }
+    res.json({ success: true });
+  });
+
+  // === PROFILE BOOST (Pro/Elite perk) ===
+  app.post("/api/boost", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    if (profile.membershipTier !== "pro" && profile.membershipTier !== "elite") {
+      return res.status(403).json({ message: "Profile Boost is available on Pro and Elite plans." });
+    }
+    if (profile.boostedUntil && new Date(profile.boostedUntil) > new Date()) {
+      return res.status(409).json({
+        message: "You're already boosted!",
+        boostedUntil: profile.boostedUntil,
+      });
+    }
+    const until = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    const updated = await storage.setBoost(userId, until);
+    res.json({ success: true, boostedUntil: updated.boostedUntil });
+  });
+
+  // === DATE CHECK-INS (safety feature) ===
+  app.get("/api/date-checkins", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const checkins = await storage.getDateCheckins(userId);
+    res.json(checkins);
+  });
+
+  app.post("/api/date-checkins", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = insertDateCheckinSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Please fill in all required fields correctly." });
+    }
+    const checkin = await storage.createDateCheckin(userId, parsed.data);
+    // Best-effort email to the trusted friend — never blocks the response.
+    sendDateCheckinEmail(userId, checkin).catch(() => {});
+    res.status(201).json(checkin);
+  });
+
+  app.post("/api/date-checkins/:id/safe", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: "Invalid check-in" });
+    }
+    const updated = await storage.markDateCheckinSafe(id, userId);
+    if (!updated) {
+      return res.status(404).json({ message: "Check-in not found" });
+    }
+    res.json(updated);
+  });
+
+  app.delete("/api/date-checkins/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: "Invalid check-in" });
+    }
+    const ok = await storage.deleteDateCheckin(id, userId);
+    if (!ok) {
+      return res.status(404).json({ message: "Check-in not found" });
+    }
+    res.json({ success: true });
   });
 
   // === AI PROFILE FEEDBACK & OPTIMIZER ===
@@ -1755,9 +1849,11 @@ Guidelines:
   app.get(api.matches.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const results = await storage.getMatches(userId);
-    res.json(results.map((r: any) => ({
-      ...r,
-      partnerProfile: sanitizeProfile(r.partnerProfile),
+    res.json(results.map(({ partnerProfile, lastMessageAt, ...match }: any) => ({
+      ...match,
+      match,
+      partnerProfile: sanitizeProfile(partnerProfile),
+      lastMessageAt: lastMessageAt ? new Date(lastMessageAt).toISOString() : null,
     })));
   });
 

@@ -1,16 +1,20 @@
 import { useFeed, useSwipe, useMyProfile, useHideProfile, useSaveProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, EyeOff, Bookmark, Mic, Sparkles, Crown } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, EyeOff, Bookmark, Mic, Sparkles, Crown, Rocket, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Profile } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { AdBanner } from "@/components/AdBanner";
 import { ReportDialog } from "@/components/ReportDialog";
+import { WelcomeTour } from "@/components/WelcomeTour";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { api } from "@shared/routes";
 
 export default function Feed() {
   const { data: profiles, isLoading, isError } = useFeed();
@@ -19,8 +23,46 @@ export default function Feed() {
   const { mutate: hideProfile } = useHideProfile();
   const { mutate: saveProfile } = useSaveProfile();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   const [reportOpen, setReportOpen] = useState(false);
+
+  const canBoost = myProfile?.membershipTier === 'pro' || myProfile?.membershipTier === 'elite';
+  const boostActive = !!(myProfile?.boostedUntil && new Date(myProfile.boostedUntil) > new Date());
+
+  const { mutate: boost, isPending: boosting } = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/boost");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.profiles.me.get.path] });
+      toast({
+        title: "Boost activated! 🚀",
+        description: "Your profile will be shown first for the next 30 minutes.",
+        className: "bg-gradient-to-r from-primary to-accent text-white border-none",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Boost",
+        description: err.message.includes("already boosted")
+          ? "You're already boosted! Enjoy the spotlight ✨"
+          : "Couldn't start your boost. Please try again.",
+      });
+      queryClient.invalidateQueries({ queryKey: [api.profiles.me.get.path] });
+    },
+  });
+
+  const handleBoost = () => {
+    if (!canBoost) {
+      toast({ title: "Profile Boost 🚀", description: "Boost is a Pro & Elite perk. Upgrade to get seen first!" });
+      setLocation("/premium");
+      return;
+    }
+    if (boostActive || boosting) return;
+    boost();
+  };
   
   // Local state to manage the stack of profiles
   // We pop them off locally for instant UI update, then invalidate query on idle
@@ -125,8 +167,28 @@ export default function Feed() {
         </Link>
       )}
 
+      <WelcomeTour />
+
       {/* Quick Actions - Fixed at top right */}
       <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBoost}
+          disabled={boosting}
+          className={`w-11 h-11 rounded-full backdrop-blur-md shadow-md border hover-elevate relative ${
+            boostActive
+              ? 'bg-gradient-to-r from-primary to-accent border-transparent'
+              : 'bg-card/80 dark:bg-black/80 border-border'
+          }`}
+          data-testid="button-boost"
+          title={boostActive ? "Boost active!" : "Boost your profile"}
+        >
+          <Rocket className={`w-5 h-5 ${boostActive ? 'text-white' : canBoost ? 'text-primary' : 'text-muted-foreground'}`} />
+          {!canBoost && (
+            <Crown className="w-3 h-3 text-amber-500 absolute -top-0.5 -right-0.5" />
+          )}
+        </Button>
         {(() => {
           const canVideo = myProfile?.membershipTier === 'pro' || myProfile?.membershipTier === 'elite';
           return (
@@ -182,9 +244,17 @@ export default function Feed() {
               </div>
               <h3 className="text-2xl font-display font-bold mb-2">No more profiles</h3>
               <p className="text-muted-foreground mb-6">You've seen everyone nearby. Check back later for new people!</p>
-              <Button onClick={() => window.location.reload()} variant="outline">
-                Refresh Feed
-              </Button>
+              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                <Button onClick={() => window.location.reload()} variant="outline" data-testid="button-refresh-feed">
+                  Refresh Feed
+                </Button>
+                <Link href="/second-chance">
+                  <Button variant="ghost" className="w-full gap-2 text-primary" data-testid="link-second-chance">
+                    <RotateCcw className="w-4 h-4" />
+                    Review people you passed
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
