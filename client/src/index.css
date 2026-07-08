@@ -121,4 +121,14 @@
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  .feed-viewport {
+    height: calc(100vh - 64px);
+  }
+
+  @supports (height: 100dvh) {
+    .feed-viewport {
+      height: calc(100dvh - 64px);
+    }
+  }
 }

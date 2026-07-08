@@ -70,7 +70,7 @@ export default function Feed() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center">
+      <div className="feed-viewport flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
         <p className="text-muted-foreground animate-pulse">Finding matches...</p>
       </div>
@@ -79,7 +79,7 @@ export default function Feed() {
 
   if (isError) {
     return (
-      <div className="h-[calc(100vh-64px)] flex items-center justify-center p-6 text-center">
+      <div className="feed-viewport flex items-center justify-center p-6 text-center">
         <div>
           <h3 className="text-xl font-bold mb-2">Something went wrong</h3>
           <p className="text-muted-foreground">Unable to load profiles. Please try again later.</p>
@@ -89,10 +89,10 @@ export default function Feed() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex flex-col items-center justify-center p-4 overflow-hidden relative max-w-md mx-auto">
+    <div className="feed-viewport w-full flex flex-col items-center justify-center p-4 pt-3 overflow-hidden relative max-w-md mx-auto">
       
       {/* AI Advisor Banner - shown at top */}
-      <Link href="/ai-advisor" className="w-full mb-3 block" data-testid="link-ai-advisor-banner">
+      <Link href="/ai-advisor" className="w-full mb-3 block shrink-0" data-testid="link-ai-advisor-banner">
         <Card className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-ai-advisor-banner">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
@@ -109,7 +109,7 @@ export default function Feed() {
 
       {/* Verification Banner - shown for unverified users */}
       {myProfile && !myProfile.isVerified && myProfile.verificationStatus !== 'pending' && (
-        <Link href="/verification" className="w-full mb-4 block" data-testid="link-verification-banner">
+        <Link href="/verification" className="w-full mb-4 block shrink-0" data-testid="link-verification-banner">
           <Card className="p-3 bg-gradient-to-r from-primary to-blue-600 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-verification-banner">
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
@@ -163,7 +163,7 @@ export default function Feed() {
         </Link>
       </div>
 
-      <div className="w-full h-[500px] sm:h-[600px] relative">
+      <div className="w-full flex-1 min-h-0 max-h-[600px] relative">
         <AnimatePresence>
           {stack.length > 0 ? (
             <ProfileCard 
@@ -192,7 +192,7 @@ export default function Feed() {
 
       {/* Manual Controls */}
       {stack.length > 0 && (
-        <div className="flex items-center gap-6 mt-8">
+        <div className="flex items-center gap-4 sm:gap-6 mt-4 sm:mt-6 shrink-0">
           <Button 
             size="icon" 
             variant="outline"
