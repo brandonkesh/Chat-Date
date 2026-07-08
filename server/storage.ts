@@ -84,7 +84,7 @@ export interface IStorage {
   enableTwoFactor(userId: string, secret: string): Promise<Profile>;
   disableTwoFactor(userId: string): Promise<Profile>;
   getTwoFactorSecret(userId: string): Promise<string | null>;
-  enableTwoFactorDelivery(userId: string, method: "email" | "sms", phoneNumber?: string | null): Promise<Profile>;
+  enableTwoFactorDelivery(userId: string, method: "email"): Promise<Profile>;
   setLoginOtp(userId: string, code: string, expiry: Date): Promise<Profile>;
   clearLoginOtp(userId: string): Promise<Profile>;
 
@@ -819,18 +819,14 @@ export class DatabaseStorage implements IStorage {
     return profile?.twoFactorSecret ?? null;
   }
 
-  async enableTwoFactorDelivery(
-    userId: string,
-    method: "email" | "sms",
-    phoneNumber?: string | null,
-  ): Promise<Profile> {
+  async enableTwoFactorDelivery(userId: string, method: "email"): Promise<Profile> {
     const [updated] = await db
       .update(profiles)
       .set({
         twoFactorEnabled: true,
         twoFactorMethod: method,
         twoFactorSecret: null,
-        phoneNumber: method === "sms" ? (phoneNumber ?? null) : null,
+        phoneNumber: null,
         loginOtpCode: null,
         loginOtpExpiry: null,
       })

@@ -54,18 +54,13 @@ function maskEmail(email: string): string {
   return `${visible}${"*".repeat(Math.max(local.length - 1, 1))}@${domain}`;
 }
 
-function unusedMaskPhonePlaceholder(phone: string): string {
-  const last4 = phone.slice(-4);
-  return `•••• •••• ${last4}`;
-}
-
 // When true, every user is required to have 2FA. Off by default so it stays
 // opt-in for test users; flip REQUIRE_2FA=true to enforce for everyone later.
 function twoFactorRequiredForAll(): boolean {
   return process.env.REQUIRE_2FA === "true";
 }
 
-// Validate a delivered email/SMS one-time code against the stored value.
+// Validate a delivered email one-time code against the stored value.
 async function verifyLoginOtp(
   userId: string,
   code: unknown,
@@ -362,14 +357,12 @@ export async function registerRoutes(
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     let destination: string | null = null;
     if (method === "email" && user?.email) destination = maskEmail(user.email);
-    if (method === "sms" && profile.phoneNumber) destination = maskPhone(profile.phoneNumber);
     res.json({
       enabled: profile.twoFactorEnabled ?? false,
       verified: (req.session as any).twoFactorVerified ?? false,
       method,
       destination,
       hasEmail: !!user?.email,
-      smsConfigured: isSmsConfigured(),
       required: twoFactorRequiredForAll(),
     });
   });
@@ -462,66 +455,10 @@ export async function registerRoutes(
     res.json({ success: true, message: "Email two-step verification enabled." });
   });
 
-  // --- SMS-based 2FA setup ---
-  // Send a code to a phone number to begin enabling SMS 2FA.
-  app.post("/api/2fa/sms/setup", isAuthenticated, async (req: any, res) => {
-    const userId = req.user.claims.sub;
-    const profile = await storage.getProfile(userId);
-    if (!profile) return res.status(404).json({ message: "Profile not found" });
-    if (profile.twoFactorEnabled) {
-      return res.status(400).json({ message: "Two-step verification is already enabled." });
-    }
-    if (!isSmsConfigured()) {
-      return res.status(400).json({ message: "Text messaging isn't set up on this app yet." });
-    }
-    const { phoneNumber } = req.body;
-    if (!phoneNumber || typeof phoneNumber !== "string" || !isValidPhoneNumber(phoneNumber)) {
-      return res.status(400).json({ message: "Enter a valid phone number with country code, e.g. +14155551234." });
-    }
-    const phone = normalizePhoneNumber(phoneNumber);
-    const code = generateOtpCode();
-    await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
-    (req.session as any).pendingTwoFactorMethod = "sms";
-    (req.session as any).pendingTwoFactorPhone = phone;
-    resetSecondaryAuthAttempts(`2fa:${userId}`);
-    void sendSms({ to: phone, body: `Your Crush verification code is ${code}. It expires in 10 minutes.`, logLabel: "sms-2fa-setup" });
-    res.json({ success: true, destination: maskPhone(phone) });
-  });
-
-  // Verify the texted code and turn on SMS 2FA.
-  app.post("/api/2fa/sms/enable", isAuthenticated, async (req: any, res) => {
-    const userId = req.user.claims.sub;
-    const { code } = req.body;
-    const rateLimitKey = `2fa:${userId}`;
-    const rateCheck = checkSecondaryAuthRateLimit(rateLimitKey);
-    if (!rateCheck.allowed) {
-      const retryAfterSec = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
-      return res.status(429).json({ message: `Too many failed attempts. Try again in ${retryAfterSec} seconds.` });
-    }
-    if ((req.session as any).pendingTwoFactorMethod !== "sms") {
-      return res.status(400).json({ message: "Please start text-message setup first." });
-    }
-    const phone = (req.session as any).pendingTwoFactorPhone;
-    if (!phone) {
-      return res.status(400).json({ message: "Please start text-message setup first." });
-    }
-    const check = await verifyLoginOtp(userId, code);
-    if (!check.ok) {
-      if (check.status === 400) recordSecondaryAuthFailure(rateLimitKey);
-      return res.status(check.status).json({ message: check.message });
-    }
-    resetSecondaryAuthAttempts(rateLimitKey);
-    await storage.enableTwoFactorDelivery(userId, "sms", phone);
-    delete (req.session as any).pendingTwoFactorMethod;
-    delete (req.session as any).pendingTwoFactorPhone;
-    (req.session as any).twoFactorVerified = true;
-    res.json({ success: true, message: "Text-message two-step verification enabled." });
-  });
-
-  // --- Login challenge: (re)send a code for email/SMS users ---
+  // --- Login challenge: (re)send a code for email users ---
   app.post("/api/2fa/challenge/send", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    // Cap how often a user can request a fresh code to prevent email/SMS spam
+    // Cap how often a user can request a fresh code to prevent email spam
     // and cost amplification (5 sends per 10 minutes, durable across restarts).
     const withinQuota = await checkAiRateLimit(userId, "2fa-challenge-send", 5, 10 * 60 * 1000);
     if (!withinQuota) {
@@ -529,21 +466,15 @@ export async function registerRoutes(
     }
     const profile = await storage.getProfile(userId);
     const method = effectiveTwoFactorMethod(profile);
-    if (method !== "email" && method !== "sms") {
+    if (method !== "email") {
       return res.status(400).json({ message: "No code-based two-step verification is enabled." });
     }
     const code = generateOtpCode();
     await storage.setLoginOtp(userId, code, new Date(Date.now() + 10 * 60 * 1000));
-    if (method === "email") {
-      const [user] = await db.select().from(users).where(eq(users.id, userId));
-      if (!user?.email) return res.status(400).json({ message: "No email address on file." });
-      void sendLoginCodeEmail(userId, code);
-      return res.json({ success: true, method, destination: maskEmail(user.email) });
-    }
-    if (!profile?.phoneNumber) return res.status(400).json({ message: "No phone number on file." });
-    if (!isSmsConfigured()) return res.status(400).json({ message: "Text messaging isn't set up on this app yet." });
-    void sendSms({ to: profile.phoneNumber, body: `Your Crush verification code is ${code}. It expires in 10 minutes.`, logLabel: "sms-2fa-challenge" });
-    res.json({ success: true, method, destination: maskPhone(profile.phoneNumber) });
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user?.email) return res.status(400).json({ message: "No email address on file." });
+    void sendLoginCodeEmail(userId, code);
+    res.json({ success: true, method, destination: maskEmail(user.email) });
   });
 
   // Disable 2FA (method-aware)

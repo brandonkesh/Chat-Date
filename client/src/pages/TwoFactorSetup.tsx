@@ -3,9 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Shield, ArrowLeft, Loader2, Copy, Check, Mail, MessageSquare, Smartphone } from "lucide-react";
+import { Shield, ArrowLeft, Loader2, Copy, Check, Mail, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
@@ -14,20 +13,18 @@ type SetupData = { qrCode: string; secret: string };
 type TwoFactorStatus = {
   enabled: boolean;
   verified: boolean;
-  method: "totp" | "email" | "sms" | null;
+  method: "totp" | "email" | null;
   destination: string | null;
   hasEmail: boolean;
-  smsConfigured: boolean;
   required: boolean;
 };
 
-type Method = "totp" | "email" | "sms";
+type Method = "totp" | "email";
 
 export default function TwoFactorSetup() {
   const [chosen, setChosen] = useState<Method | null>(null);
   const [code, setCode] = useState("");
   const [disableCode, setDisableCode] = useState("");
-  const [phone, setPhone] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -46,7 +43,6 @@ export default function TwoFactorSetup() {
   const reset = () => {
     setChosen(null);
     setCode("");
-    setPhone("");
     setSentTo(null);
   };
 
@@ -92,24 +88,6 @@ export default function TwoFactorSetup() {
       toast({ title: "Verification Failed", description: e.message.includes("Invalid") ? "That code is incorrect." : e.message, variant: "destructive" }),
   });
 
-  // --- SMS ---
-  const smsSetup = useMutation({
-    mutationFn: async (p: string) => (await apiRequest("POST", "/api/2fa/sms/setup", { phoneNumber: p })).json() as Promise<{ destination: string }>,
-    onSuccess: (d) => setSentTo(d.destination),
-    onError: (e: Error) => toast({ title: "Couldn't send text", description: e.message, variant: "destructive" }),
-  });
-
-  const smsEnable = useMutation({
-    mutationFn: async (c: string) => (await apiRequest("POST", "/api/2fa/sms/enable", { code: c })).json(),
-    onSuccess: () => {
-      toast({ title: "Text Verification Enabled", description: "We'll text you a code when you sign in." });
-      refresh();
-      reset();
-    },
-    onError: (e: Error) =>
-      toast({ title: "Verification Failed", description: e.message.includes("Invalid") ? "That code is incorrect." : e.message, variant: "destructive" }),
-  });
-
   // --- Disable ---
   const disable = useMutation({
     mutationFn: async (c: string) => (await apiRequest("POST", "/api/2fa/disable", { code: c })).json(),
@@ -147,8 +125,8 @@ export default function TwoFactorSetup() {
   // ===================== ENABLED VIEW (disable flow) =====================
   if (status?.enabled) {
     const m = status.method;
-    const isDelivery = m === "email" || m === "sms";
-    const label = m === "email" ? "email" : m === "sms" ? "text message" : "authenticator app";
+    const isDelivery = m === "email";
+    const label = m === "email" ? "email" : "authenticator app";
     return (
       <div className="min-h-screen bg-secondary/30 p-4 pb-24">
         <div className="max-w-lg mx-auto">
@@ -228,21 +206,6 @@ export default function TwoFactorSetup() {
               </button>
 
               <button
-                onClick={() => setChosen("sms")}
-                disabled={!status?.smsConfigured}
-                className="flex items-center gap-3 p-4 rounded-lg border bg-card text-left hover-elevate disabled:opacity-50"
-                data-testid="button-choose-sms"
-              >
-                <MessageSquare className="w-5 h-5 text-primary shrink-0" />
-                <div>
-                  <div className="font-medium">Text message (SMS)</div>
-                  <div className="text-sm text-muted-foreground">
-                    {status?.smsConfigured ? "Get a code texted to your phone." : "Not set up on this app yet."}
-                  </div>
-                </div>
-              </button>
-
-              <button
                 onClick={() => setChosen("totp")}
                 className="flex items-center gap-3 p-4 rounded-lg border bg-card text-left hover-elevate"
                 data-testid="button-choose-totp"
@@ -271,10 +234,10 @@ export default function TwoFactorSetup() {
         <Card className="border-none shadow-lg">
           <CardHeader className="text-center pb-4">
             <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              {chosen === "email" ? <Mail className="w-7 h-7 text-primary" /> : chosen === "sms" ? <MessageSquare className="w-7 h-7 text-primary" /> : <Smartphone className="w-7 h-7 text-primary" />}
+              {chosen === "email" ? <Mail className="w-7 h-7 text-primary" /> : <Smartphone className="w-7 h-7 text-primary" />}
             </div>
             <CardTitle className="text-xl">
-              {chosen === "email" ? "Email Verification" : chosen === "sms" ? "Text Message Verification" : "Authenticator App"}
+              {chosen === "email" ? "Email Verification" : "Authenticator App"}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-5 pb-6">
@@ -298,41 +261,6 @@ export default function TwoFactorSetup() {
                       Turn On
                     </Button>
                     <Button variant="ghost" className="text-sm" onClick={() => { setCode(""); emailSetup.mutate(); }} disabled={emailSetup.isPending} data-testid="button-resend-email">
-                      Resend code
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* SMS */}
-            {chosen === "sms" && (
-              <>
-                {!sentTo ? (
-                  <>
-                    <p className="text-sm text-muted-foreground text-center">Enter your phone number with country code (e.g. +1 415 555 1234).</p>
-                    <Input
-                      type="tel"
-                      placeholder="+14155551234"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="max-w-xs text-center"
-                      data-testid="input-phone-number"
-                    />
-                    <Button onClick={() => phone.trim() && smsSetup.mutate(phone.trim())} disabled={!phone.trim() || smsSetup.isPending} className="w-full max-w-xs" data-testid="button-send-sms-code">
-                      {smsSetup.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                      Send code
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code we texted to {sentTo}.</p>
-                    <OtpInput value={code} onChange={setCode} testId="input-sms-code" />
-                    <Button onClick={() => code.length === 6 && smsEnable.mutate(code)} disabled={code.length !== 6 || smsEnable.isPending} className="w-full max-w-xs" data-testid="button-enable-sms">
-                      {smsEnable.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                      Turn On
-                    </Button>
-                    <Button variant="ghost" className="text-sm" onClick={() => { setCode(""); smsSetup.mutate(phone.trim()); }} disabled={smsSetup.isPending} data-testid="button-resend-sms">
                       Resend code
                     </Button>
                   </>

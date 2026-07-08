@@ -4,13 +4,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Shield, Loader2, Mail, MessageSquare } from "lucide-react";
+import { Shield, Loader2, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type TwoFactorStatus = {
   enabled: boolean;
   verified: boolean;
-  method: "totp" | "email" | "sms" | null;
+  method: "totp" | "email" | null;
   destination: string | null;
 };
 
@@ -26,7 +26,7 @@ export default function TwoFactorChallenge() {
   });
 
   const method = status?.method ?? null;
-  const isDelivery = method === "email" || method === "sms";
+  const isDelivery = method === "email";
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -67,7 +67,7 @@ export default function TwoFactorChallenge() {
     },
   });
 
-  // For email/SMS, automatically send a code once when the screen loads.
+  // For email, automatically send a code once when the screen loads.
   useEffect(() => {
     if (isDelivery && !autoSent.current) {
       autoSent.current = true;
@@ -81,7 +81,7 @@ export default function TwoFactorChallenge() {
     }
   };
 
-  const Icon = method === "email" ? Mail : method === "sms" ? MessageSquare : Shield;
+  const Icon = method === "email" ? Mail : Shield;
 
   const description = isDelivery
     ? sentTo
