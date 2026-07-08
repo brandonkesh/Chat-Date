@@ -35,6 +35,11 @@ import {
   dateCheckins,
   type DateCheckin,
   type InsertDateCheckin,
+  successStories,
+  type SuccessStory,
+  type InsertSuccessStory,
+  datingTips,
+  type DatingTip,
 } from "@shared/schema";
 import { eq, and, ne, notInArray, inArray, like, desc, or, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth";
@@ -129,6 +134,18 @@ export interface IStorage {
   getDateCheckins(userId: string): Promise<DateCheckin[]>;
   markDateCheckinSafe(id: number, userId: string): Promise<DateCheckin | undefined>;
   deleteDateCheckin(id: number, userId: string): Promise<boolean>;
+  setDateCheckinFeedback(id: number, userId: string, rating: number, feedbackNote: string | null): Promise<DateCheckin | undefined>;
+
+  // Daily rewards
+  claimDailyReward(userId: string): Promise<{ alreadyClaimed: boolean; profile: Profile } | undefined>;
+
+  // Success stories
+  getSuccessStories(): Promise<SuccessStory[]>;
+  createSuccessStory(userId: string, story: InsertSuccessStory): Promise<SuccessStory>;
+
+  // Dating tips (weekly cache)
+  getDatingTipsForWeek(weekKey: string): Promise<DatingTip | undefined>;
+  saveDatingTips(weekKey: string, tips: string[]): Promise<DatingTip>;
 
   // Micro Dates
   createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate>;
@@ -657,7 +674,7 @@ export class DatabaseStorage implements IStorage {
     return { ...dailyMatch, partnerProfile };
   }
 
-  async getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile; lastMessageAt: Date | null })[]> {
+  async getMatches(userId: string): Promise<(typeof matches.$inferSelect & { partnerProfile: Profile; lastMessageAt: Date | null; lastMessageSenderId: string | null })[]> {
     const userMatches = await db
       .select()
       .from(matches)
@@ -666,20 +683,23 @@ export class DatabaseStorage implements IStorage {
         eq(matches.isDailyMatch, false)
       ));
 
-    // Last message time per match (one query for all)
+    // Latest message (time + sender) per match, one query for all
     const matchIds = userMatches.map(m => m.id);
-    const lastMessageByMatch = new Map<number, Date>();
+    const lastMessageByMatch = new Map<number, { at: Date; senderId: string }>();
     if (matchIds.length > 0) {
-      const lastMessages = await db
-        .select({
-          matchId: messages.matchId,
-          lastAt: sql<string>`max(${messages.createdAt})`,
-        })
-        .from(messages)
-        .where(inArray(messages.matchId, matchIds))
-        .groupBy(messages.matchId);
-      for (const row of lastMessages) {
-        if (row.lastAt) lastMessageByMatch.set(row.matchId, new Date(row.lastAt));
+      const result = await db.execute(
+        sql`SELECT DISTINCT ON (match_id) match_id, sender_id, created_at
+            FROM messages
+            WHERE match_id IN (${sql.join(matchIds.map(id => sql`${id}`), sql`, `)})
+            ORDER BY match_id, created_at DESC`
+      );
+      for (const row of result.rows as any[]) {
+        if (row.created_at) {
+          lastMessageByMatch.set(Number(row.match_id), {
+            at: new Date(row.created_at),
+            senderId: String(row.sender_id),
+          });
+        }
       }
     }
 
@@ -690,7 +710,13 @@ export class DatabaseStorage implements IStorage {
       if (blocked) continue;
       const partnerProfile = await this.getProfile(partnerId);
       if (partnerProfile) {
-        results.push({ ...match, partnerProfile, lastMessageAt: lastMessageByMatch.get(match.id) ?? null });
+        const last = lastMessageByMatch.get(match.id);
+        results.push({
+          ...match,
+          partnerProfile,
+          lastMessageAt: last?.at ?? null,
+          lastMessageSenderId: last?.senderId ?? null,
+        });
       }
     }
     return results;
@@ -1148,6 +1174,69 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(dateCheckins.id, id), eq(dateCheckins.userId, userId)))
       .returning({ id: dateCheckins.id });
     return result.length > 0;
+  }
+
+  async setDateCheckinFeedback(id: number, userId: string, rating: number, feedbackNote: string | null): Promise<DateCheckin | undefined> {
+    const [updated] = await db
+      .update(dateCheckins)
+      .set({ rating, feedbackNote })
+      .where(and(eq(dateCheckins.id, id), eq(dateCheckins.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async claimDailyReward(userId: string): Promise<{ alreadyClaimed: boolean; profile: Profile } | undefined> {
+    const profile = await this.getProfile(userId);
+    if (!profile) return undefined;
+
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+    const lastAt = profile.lastRewardAt ? new Date(profile.lastRewardAt) : null;
+    const lastKey = lastAt ? lastAt.toISOString().slice(0, 10) : null;
+
+    if (lastKey === todayKey) {
+      return { alreadyClaimed: true, profile };
+    }
+
+    const yesterdayKey = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const newStreak = lastKey === yesterdayKey ? (profile.rewardStreak ?? 0) + 1 : 1;
+
+    const [updated] = await db
+      .update(profiles)
+      .set({ rewardStreak: newStreak, lastRewardAt: now })
+      .where(eq(profiles.userId, userId))
+      .returning();
+    return { alreadyClaimed: false, profile: updated };
+  }
+
+  async getSuccessStories(): Promise<SuccessStory[]> {
+    return db
+      .select()
+      .from(successStories)
+      .orderBy(desc(successStories.createdAt))
+      .limit(50);
+  }
+
+  async createSuccessStory(userId: string, story: InsertSuccessStory): Promise<SuccessStory> {
+    const [created] = await db
+      .insert(successStories)
+      .values({ ...story, userId })
+      .returning();
+    return created;
+  }
+
+  async getDatingTipsForWeek(weekKey: string): Promise<DatingTip | undefined> {
+    const [row] = await db.select().from(datingTips).where(eq(datingTips.weekKey, weekKey));
+    return row || undefined;
+  }
+
+  async saveDatingTips(weekKey: string, tips: string[]): Promise<DatingTip> {
+    const [created] = await db
+      .insert(datingTips)
+      .values({ weekKey, tips })
+      .onConflictDoUpdate({ target: datingTips.weekKey, set: { tips } })
+      .returning();
+    return created;
   }
 
   async createMicroDate(matchId: number, inviterId: string, inviteeId: string, activities: string): Promise<MicroDate> {

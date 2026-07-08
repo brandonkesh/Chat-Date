@@ -17,8 +17,9 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Shield, CheckCircle2, Trash2, MapPin, CalendarClock, Mail } from "lucide-react";
+import { Loader2, Shield, CheckCircle2, Trash2, MapPin, CalendarClock, Mail, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const formSchema = z.object({
   dateName: z.string().min(1, "Who are you meeting?"),
@@ -86,6 +87,22 @@ export default function DateCheckin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/date-checkins"] });
       toast({ title: "Deleted", description: "Date plan removed." });
+    },
+  });
+
+  const { mutate: saveFeedback, isPending: savingFeedback } = useMutation({
+    mutationFn: async ({ id, rating, feedbackNote }: { id: number; rating: number; feedbackNote?: string }) => {
+      await apiRequest("POST", `/api/date-checkins/${id}/feedback`, {
+        rating,
+        feedbackNote: feedbackNote || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/date-checkins"] });
+      toast({ title: "Thanks for the feedback! 💫", description: "We saved how your date went." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Couldn't save your feedback. Please try again.", variant: "destructive" });
     },
   });
 
@@ -244,10 +261,94 @@ export default function DateCheckin() {
                   </Button>
                 </div>
               </div>
+
+              <DateFeedback
+                checkin={c}
+                saving={savingFeedback}
+                onSave={(rating, feedbackNote) => saveFeedback({ id: c.id, rating, feedbackNote })}
+              />
             </Card>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DateFeedback({
+  checkin,
+  saving,
+  onSave,
+}: {
+  checkin: DateCheckinType;
+  saving: boolean;
+  onSave: (rating: number, feedbackNote?: string) => void;
+}) {
+  const hasRating = checkin.rating != null;
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
+  const [note, setNote] = useState("");
+
+  if (hasRating) {
+    return (
+      <div className="mt-3 pt-3 border-t border-border" data-testid={`feedback-done-${checkin.id}`}>
+        <p className="text-sm font-medium mb-1.5">How it went</p>
+        <div className="flex items-center gap-1 mb-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Star
+              key={n}
+              className={`w-5 h-5 ${n <= (checkin.rating as number) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+              data-testid={`star-readonly-${checkin.id}-${n}`}
+            />
+          ))}
+        </div>
+        {checkin.feedbackNote && (
+          <p className="text-sm text-muted-foreground" data-testid={`text-feedback-note-${checkin.id}`}>
+            {checkin.feedbackNote}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border" data-testid={`feedback-form-${checkin.id}`}>
+      <p className="text-sm font-medium mb-1.5">How did it go?</p>
+      <div className="flex items-center gap-1 mb-2">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setRating(n)}
+            onMouseEnter={() => setHover(n)}
+            onMouseLeave={() => setHover(0)}
+            className="p-0.5"
+            data-testid={`star-${checkin.id}-${n}`}
+          >
+            <Star
+              className={`w-6 h-6 transition-colors ${
+                n <= (hover || rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+      <Input
+        placeholder="Add a quick note (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        className="mb-2"
+        data-testid={`input-feedback-note-${checkin.id}`}
+      />
+      <Button
+        size="sm"
+        disabled={rating === 0 || saving}
+        onClick={() => onSave(rating, note.trim() || undefined)}
+        data-testid={`button-save-feedback-${checkin.id}`}
+      >
+        {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+        Save
+      </Button>
     </div>
   );
 }

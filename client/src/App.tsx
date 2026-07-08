@@ -37,6 +37,10 @@ import DateCheckin from "@/pages/DateCheckin";
 import AIAdvisor from "@/pages/AIAdvisor";
 import Feedback from "@/pages/Feedback";
 import AdminFeedback from "@/pages/AdminFeedback";
+import PersonalityQuiz from "@/pages/PersonalityQuiz";
+import DateBingo from "@/pages/DateBingo";
+import SuccessStories from "@/pages/SuccessStories";
+import DatingTips from "@/pages/DatingTips";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -241,6 +245,22 @@ function Router() {
 
         <Route path="/admin/feedback">
           <ProtectedRoute component={AdminFeedback} />
+        </Route>
+
+        <Route path="/personality-quiz">
+          <ProtectedRoute component={PersonalityQuiz} />
+        </Route>
+
+        <Route path="/date-bingo">
+          <ProtectedRoute component={DateBingo} />
+        </Route>
+
+        <Route path="/success-stories">
+          <ProtectedRoute component={SuccessStories} />
+        </Route>
+
+        <Route path="/tips">
+          <ProtectedRoute component={DatingTips} />
         </Route>
         
         <Route component={NotFound} />

@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown, Dices } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown, Dices, Gamepad2, Drama, Clapperboard, CalendarHeart, PartyPopper } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -53,6 +53,8 @@ const WYR_PAIRS: [string, string][] = [
 ];
 
 const WYR_PREFIX = "🎲 Would you rather ";
+const TTAL_PREFIX = "🎭 Two Truths and a Lie:";
+const EMOJI_STORY_PREFIX = "🎬 Emoji Story: ";
 
 // Simple deterministic hash so both people in a match see the same
 // icebreaker question on any given day.
@@ -115,6 +117,80 @@ function IcebreakerBanner({
         Ask it
       </Button>
       <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" data-testid="button-dismiss-icebreaker">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function AnniversaryBanner({
+  matchId,
+  createdAt,
+  onCelebrate,
+  disabled,
+}: {
+  matchId: number;
+  createdAt: string | Date;
+  onCelebrate: (text: string) => void;
+  disabled: boolean;
+}) {
+  const matched = new Date(createdAt);
+  const now = new Date();
+  const daysMatched = Math.floor((now.getTime() - matched.getTime()) / 86400000);
+
+  let milestone: string | null = null;
+  if (daysMatched === 7) {
+    milestone = "1 week";
+  } else if (daysMatched >= 28 && now.getDate() === matched.getDate()) {
+    const months =
+      (now.getFullYear() - matched.getFullYear()) * 12 +
+      (now.getMonth() - matched.getMonth());
+    if (months >= 1) {
+      milestone = months === 12 ? "1 year" : `${months} month${months > 1 ? "s" : ""}`;
+    }
+  }
+
+  const storageKey = `crush-anniv-${matchId}-${milestone}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return !!localStorage.getItem(storageKey);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!milestone || dismissed) return null;
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="flex-none px-4 py-2.5 bg-gradient-to-r from-pink-500/10 to-amber-500/10 border-b border-border flex items-center gap-2.5" data-testid="banner-anniversary">
+      <PartyPopper className="w-4 h-4 text-pink-500 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Match anniversary</p>
+        <p className="text-xs font-medium truncate" data-testid="text-anniversary-milestone">
+          It's been {milestone} since you two matched! 🎉
+        </p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs shrink-0"
+        disabled={disabled}
+        onClick={() => {
+          onCelebrate(`🎉 Happy ${milestone} matchiversary to us!`);
+          dismiss();
+        }}
+        data-testid="button-celebrate-anniversary"
+      >
+        Celebrate
+      </Button>
+      <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" data-testid="button-dismiss-anniversary">
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -283,6 +359,12 @@ export default function Chat() {
   const [reportOpen, setReportOpen] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
+  const [gamesOpen, setGamesOpen] = useState(false);
+  const [ttalOpen, setTtalOpen] = useState(false);
+  const [ttalStatements, setTtalStatements] = useState(["", "", ""]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiText, setEmojiText] = useState("");
+  const [dateIdeasOpen, setDateIdeasOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ callerName: string; callerPhoto: string | null } | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -322,6 +404,19 @@ export default function Chat() {
       } else {
         toast({ title: "Failed to start micro-date", variant: "destructive" });
       }
+    },
+  });
+
+  const {
+    data: dateIdeas,
+    mutate: fetchDateIdeas,
+    isPending: loadingIdeas,
+    error: dateIdeasError,
+    reset: resetDateIdeas,
+  } = useMutation<{ ideas: { title: string; description: string }[] }>({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/date-ideas", { matchId });
+      return res.json();
     },
   });
 
@@ -464,6 +559,14 @@ export default function Chat() {
     }
   }
 
+  // Two Truths and a Lie: if the last message is a 🎭 game from my match,
+  // offer one-tap guess chips.
+  const showTtalGuess =
+    !!lastMsg &&
+    lastMsg.senderId !== profile.userId &&
+    !lastMsg.voiceNoteUrl &&
+    lastMsg.content.startsWith(TTAL_PREFIX);
+
   const sendQuickMessage = (text: string) => {
     if (sending || isTrialExpired) return;
     setError(null);
@@ -481,6 +584,22 @@ export default function Chat() {
   const sendWyrQuestion = () => {
     const [a, b] = WYR_PAIRS[Math.floor(Math.random() * WYR_PAIRS.length)];
     sendQuickMessage(`${WYR_PREFIX}${a} or ${b}?`);
+  };
+
+  const sendTtal = () => {
+    const [a, b, c] = ttalStatements.map(s => s.trim());
+    if (!a || !b || !c) return;
+    sendQuickMessage(`${TTAL_PREFIX}\n1. ${a}\n2. ${b}\n3. ${c}\n\nWhich one is the lie? 🤔`);
+    setTtalStatements(["", "", ""]);
+    setTtalOpen(false);
+  };
+
+  const sendEmojiStory = () => {
+    const story = emojiText.trim();
+    if (!story) return;
+    sendQuickMessage(`${EMOJI_STORY_PREFIX}${story}\n\nCan you guess what it means? 🍿`);
+    setEmojiText("");
+    setEmojiOpen(false);
   };
 
   return (
@@ -672,6 +791,15 @@ export default function Chat() {
         />
       )}
 
+      {!isTrialExpired && matchData.match.createdAt && (
+        <AnniversaryBanner
+          matchId={matchId}
+          createdAt={matchData.match.createdAt}
+          onCelebrate={sendQuickMessage}
+          disabled={sending}
+        />
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/5">
         {loadingMessages ? (
           <div className="flex justify-center p-4">
@@ -741,6 +869,27 @@ export default function Chat() {
       />
 
       <div className="flex-none p-4 bg-background border-t border-border">
+        {showTtalGuess && !isTrialExpired && (
+          <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="chips-ttal-guess">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Drama className="w-3.5 h-3.5" />
+              Which is the lie?
+            </span>
+            {[1, 2, 3].map((n) => (
+              <Button
+                key={n}
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs rounded-full"
+                disabled={sending}
+                onClick={() => sendQuickMessage(`🎭 My guess: #${n} is the lie!`)}
+                data-testid={`button-ttal-guess-${n}`}
+              >
+                #{n}
+              </Button>
+            ))}
+          </div>
+        )}
         {wyrOptions && !isTrialExpired && (
           <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="chips-wyr-options">
             <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -813,12 +962,12 @@ export default function Chat() {
                   type="button"
                   size="icon"
                   variant="ghost"
-                  onClick={sendWyrQuestion}
+                  onClick={() => setGamesOpen(true)}
                   disabled={sending}
-                  title="Play Would You Rather"
-                  data-testid="button-play-wyr"
+                  title="Play a chat game"
+                  data-testid="button-open-games"
                 >
-                  <Dices className="w-5 h-5" />
+                  <Gamepad2 className="w-5 h-5" />
                 </Button>
                 <Button
                   type="button"
@@ -843,6 +992,201 @@ export default function Chat() {
           </form>
         )}
       </div>
+
+      {gamesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setGamesOpen(false)} data-testid="modal-games">
+          <div className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 space-y-3 shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Gamepad2 className="w-5 h-5 text-primary" />
+                Chat Games
+              </h3>
+              <button onClick={() => setGamesOpen(false)} className="text-muted-foreground hover:text-foreground" data-testid="button-close-games">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover-elevate text-left"
+              onClick={() => { setGamesOpen(false); setTtalOpen(true); }}
+              data-testid="button-game-ttal"
+            >
+              <Drama className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Two Truths and a Lie 🎭</p>
+                <p className="text-xs text-muted-foreground">Share 3 things — they guess the lie!</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover-elevate text-left"
+              onClick={() => { setGamesOpen(false); setEmojiOpen(true); }}
+              data-testid="button-game-emoji"
+            >
+              <Clapperboard className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Emoji Story 🎬</p>
+                <p className="text-xs text-muted-foreground">Tell a story in emojis — they decode it!</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover-elevate text-left"
+              onClick={() => { setGamesOpen(false); sendWyrQuestion(); }}
+              data-testid="button-game-wyr"
+            >
+              <Dices className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Would You Rather 🎲</p>
+                <p className="text-xs text-muted-foreground">Send a random this-or-that question</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover-elevate text-left"
+              onClick={() => {
+                setGamesOpen(false);
+                setDateIdeasOpen(true);
+                if (!dateIdeas) fetchDateIdeas();
+              }}
+              data-testid="button-game-date-ideas"
+            >
+              <CalendarHeart className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">AI Date Ideas 💡</p>
+                <p className="text-xs text-muted-foreground">Get 3 date ideas based on your interests</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ttalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setTtalOpen(false)} data-testid="modal-ttal">
+          <div className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 space-y-3 shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Drama className="w-5 h-5 text-primary" />
+                Two Truths and a Lie
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Write two true things and one lie (in any order). {partnerProfile.displayName} will guess which is the lie!</p>
+            </div>
+            {ttalStatements.map((s, i) => (
+              <Input
+                key={i}
+                value={s}
+                onChange={(e) => setTtalStatements(prev => prev.map((p, j) => (j === i ? e.target.value : p)))}
+                placeholder={`Statement ${i + 1}`}
+                maxLength={120}
+                data-testid={`input-ttal-${i + 1}`}
+              />
+            ))}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setTtalOpen(false)} data-testid="button-cancel-ttal">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={sendTtal}
+                disabled={sending || ttalStatements.some(s => !s.trim())}
+                data-testid="button-send-ttal"
+              >
+                Send it 🎭
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {emojiOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setEmojiOpen(false)} data-testid="modal-emoji-story">
+          <div className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 space-y-3 shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Clapperboard className="w-5 h-5 text-primary" />
+                Emoji Story
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Describe a movie, your day, or a dream date using only emojis. {partnerProfile.displayName} has to guess it!</p>
+            </div>
+            <Input
+              value={emojiText}
+              onChange={(e) => setEmojiText(e.target.value)}
+              placeholder="e.g. 🍕🎬🌙✨"
+              maxLength={80}
+              data-testid="input-emoji-story"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setEmojiOpen(false)} data-testid="button-cancel-emoji">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={sendEmojiStory}
+                disabled={sending || !emojiText.trim()}
+                data-testid="button-send-emoji-story"
+              >
+                Send it 🎬
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dateIdeasOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setDateIdeasOpen(false)} data-testid="modal-date-ideas">
+          <div className="bg-card rounded-lg p-6 max-w-sm w-full mx-4 space-y-3 shadow-xl border border-border max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <CalendarHeart className="w-5 h-5 text-primary" />
+                Date Ideas for You Two
+              </h3>
+              <button onClick={() => setDateIdeasOpen(false)} className="text-muted-foreground hover:text-foreground" data-testid="button-close-date-ideas">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {loadingIdeas ? (
+              <div className="flex items-center gap-2 py-4 justify-center">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Dreaming up date ideas...</span>
+              </div>
+            ) : dateIdeasError ? (
+              <div className="space-y-2 text-center py-2">
+                <p className="text-sm text-muted-foreground">{(dateIdeasError as Error).message.replace(/^\d+:\s*/, "") || "Couldn't get ideas right now."}</p>
+                <Button size="sm" variant="outline" onClick={() => fetchDateIdeas()} data-testid="button-retry-date-ideas">
+                  Try again
+                </Button>
+              </div>
+            ) : dateIdeas?.ideas?.length ? (
+              <div className="space-y-2">
+                {dateIdeas.ideas.map((idea, i) => (
+                  <div key={i} className="p-3 rounded-lg border border-border space-y-1.5" data-testid={`card-date-idea-${i}`}>
+                    <p className="text-sm font-semibold">{idea.title}</p>
+                    <p className="text-xs text-muted-foreground">{idea.description}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={sending}
+                      onClick={() => {
+                        sendQuickMessage(`💡 Date idea: ${idea.title} — ${idea.description}`);
+                        setDateIdeasOpen(false);
+                        toast({ title: "Date idea sent! 💌" });
+                      }}
+                      data-testid={`button-suggest-idea-${i}`}
+                    >
+                      Suggest this
+                    </Button>
+                  </div>
+                ))}
+                <Button size="sm" variant="ghost" className="w-full text-xs" disabled={loadingIdeas} onClick={() => { resetDateIdeas(); fetchDateIdeas(); }} data-testid="button-more-ideas">
+                  <Sparkles className="w-3.5 h-3.5 mr-1" />
+                  More ideas
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       <ReportDialog
         open={reportOpen}

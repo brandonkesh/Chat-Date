@@ -96,6 +96,7 @@ export const api = {
           match: z.custom<typeof matches.$inferSelect>(),
           partnerProfile: z.custom<typeof profiles.$inferSelect>(),
           lastMessageAt: z.string().nullable().optional(),
+          lastMessageSenderId: z.string().nullable().optional(),
         })),
       },
     },

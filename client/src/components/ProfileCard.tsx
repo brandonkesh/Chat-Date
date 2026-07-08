@@ -5,6 +5,7 @@ import { VoiceIntroPlayer } from "@/components/VoiceIntro";
 import { IntroVideoModal } from "@/components/IntroVideo";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { currentWeekKey, currentWeeklyQuestion, PERSONALITY_BADGES } from "@/lib/weekly";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -157,6 +158,45 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
         <p className="text-muted-foreground line-clamp-2 leading-relaxed">
           {profile.bio || "No bio yet..."}
         </p>
+
+        {/* Question of the Week (only shown while this week's answer is fresh) */}
+        {profile.weeklyAnswer && profile.weeklyQuestionKey === currentWeekKey() && (
+          <div className="mt-2 rounded-lg bg-primary/5 border border-primary/15 px-2.5 py-1.5" data-testid="card-weekly-answer">
+            <p className="text-[11px] font-semibold text-primary/80">💬 {currentWeeklyQuestion().question}</p>
+            <p className="text-xs text-foreground line-clamp-2">"{profile.weeklyAnswer}"</p>
+          </div>
+        )}
+
+        {/* Profile prompt */}
+        {profile.promptQuestion && profile.promptAnswer && (
+          <div className="mt-2 rounded-lg bg-accent/5 border border-accent/15 px-2.5 py-1.5" data-testid="card-prompt-answer">
+            <p className="text-[11px] font-semibold text-accent-foreground/70">{profile.promptQuestion}</p>
+            <p className="text-xs text-foreground line-clamp-2">"{profile.promptAnswer}"</p>
+          </div>
+        )}
+
+        {/* Song of the day */}
+        {profile.songOfTheDay && (
+          <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground" data-testid="card-song-of-day">
+            <span>🎵</span>
+            <span className="truncate italic">{profile.songOfTheDay}</span>
+          </div>
+        )}
+
+        {/* Personality badges */}
+        {profile.personalityBadges && profile.personalityBadges.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2" data-testid="card-personality-badges">
+            {profile.personalityBadges.slice(0, 3).map((key) => {
+              const badge = PERSONALITY_BADGES[key];
+              if (!badge) return null;
+              return (
+                <Badge key={key} variant="outline" className="text-xs border-primary/30">
+                  {badge.emoji} {badge.label}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
 
         {/* What I'm Looking For */}
         {(profile.relationshipGoal || profile.familyPlans || profile.lookingForDescription) && (

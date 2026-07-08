@@ -30,6 +30,18 @@ import { IntroVideo } from "@/components/IntroVideo";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Link } from "wouter";
+import { currentWeekKey, currentWeeklyQuestion } from "@/lib/weekly";
+
+const PROFILE_PROMPTS = [
+  "My perfect weekend involves...",
+  "The way to my heart is...",
+  "I'm weirdly proud of...",
+  "My most controversial food opinion is...",
+  "Two truths about me...",
+  "I'll never stop talking about...",
+  "My love language is...",
+  "The best trip I ever took was...",
+];
 
 function EditProfileForm({ profile }: { profile: Profile }) {
   const [, setLocation] = useLocation();
@@ -73,6 +85,11 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       politicalViews: profile.politicalViews || "",
       astrologicalSign: profile.astrologicalSign || "",
       zipCode: profile.zipCode || "",
+      // Fun extras
+      weeklyAnswer: profile.weeklyQuestionKey === currentWeekKey() ? profile.weeklyAnswer || "" : "",
+      songOfTheDay: profile.songOfTheDay || "",
+      promptQuestion: profile.promptQuestion || "",
+      promptAnswer: profile.promptAnswer || "",
     },
   });
 
@@ -119,7 +136,10 @@ function EditProfileForm({ profile }: { profile: Profile }) {
 
   const onSubmit = async (data: InsertProfile) => {
     try {
-      await updateProfile(data);
+      await updateProfile({
+        ...data,
+        weeklyQuestionKey: data.weeklyAnswer?.trim() ? currentWeekKey() : null,
+      });
       setLocation("/feed");
     } catch (error) {
       // Error handled by hook toast
@@ -383,6 +403,115 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                     </div>
                   )}
                 </FormItem>
+
+                {/* Fun Extras Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Star className="w-5 h-5" />
+                    Fun Extras
+                  </h3>
+
+                  <FormField
+                    control={form.control}
+                    name="weeklyAnswer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>💬 Question of the Week: {currentWeeklyQuestion().question}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Your answer shows on your card all week!"
+                            data-testid="input-weekly-answer"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">A fresh question every week — answers expire when the week ends.</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="songOfTheDay"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>🎵 Song of the Day</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. Golden Hour — JVKE"
+                            data-testid="input-song-of-day"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="promptQuestion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>✍️ Profile Prompt</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-prompt-question">
+                              <SelectValue placeholder="Pick a prompt..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {PROFILE_PROMPTS.map((p) => (
+                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("promptQuestion") && (
+                    <FormField
+                      control={form.control}
+                      name="promptAnswer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Your answer</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Finish the sentence..."
+                              className="min-h-[80px] rounded-xl resize-none"
+                              data-testid="input-prompt-answer"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <Link href="/personality-quiz">
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-border hover-elevate cursor-pointer" data-testid="link-personality-quiz">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🏅</span>
+                        <div>
+                          <p className="text-sm font-medium">Personality Badges</p>
+                          <p className="text-xs text-muted-foreground">
+                            {profile.personalityBadges?.length
+                              ? `You have ${profile.personalityBadges.length} badges — retake the quiz anytime`
+                              : "Take the quick quiz to earn badges for your card"}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </Link>
+                </div>
 
                 {/* Lifestyle Section */}
                 <div className="space-y-4">

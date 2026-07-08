@@ -1,7 +1,7 @@
 import { useFeed, useSwipe, useMyProfile, useHideProfile, useSaveProfile } from "@/hooks/use-dating";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
-import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, EyeOff, Bookmark, Mic, Sparkles, Crown, Rocket, RotateCcw } from "lucide-react";
+import { X, Heart, Loader2, Pencil, ShieldCheck, ChevronRight, Video, Flag, EyeOff, Bookmark, Mic, Sparkles, Crown, Rocket, RotateCcw, Gift, Flame } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -51,6 +51,34 @@ export default function Feed() {
           : "Couldn't start your boost. Please try again.",
       });
       queryClient.invalidateQueries({ queryKey: [api.profiles.me.get.path] });
+    },
+  });
+
+  // Daily login reward: claimed today (UTC) already?
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const claimedToday = !!myProfile?.lastRewardAt &&
+    new Date(myProfile.lastRewardAt).toISOString().slice(0, 10) === todayKey;
+
+  const { mutate: claimReward, isPending: claiming } = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/daily-reward");
+      return res.json();
+    },
+    onSuccess: (data: { alreadyClaimed: boolean; rewardStreak: number }) => {
+      queryClient.invalidateQueries({ queryKey: [api.profiles.me.get.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/top-picks"] });
+      if (data.alreadyClaimed) {
+        toast({ title: "Already claimed today! ✨", description: `Your streak is ${data.rewardStreak} day${data.rewardStreak === 1 ? "" : "s"} — come back tomorrow!` });
+      } else {
+        toast({
+          title: `Daily reward claimed! 🎁`,
+          description: `🔥 ${data.rewardStreak}-day streak! You unlocked an extra Top Pick today.`,
+          className: "bg-gradient-to-r from-amber-500 to-orange-500 text-white border-none",
+        });
+      }
+    },
+    onError: () => {
+      toast({ title: "Hmm, that didn't work", description: "Couldn't claim your reward. Please try again.", variant: "destructive" });
     },
   });
 
@@ -148,6 +176,50 @@ export default function Feed() {
           </div>
         </Card>
       </Link>
+
+      {/* Daily Reward Banner */}
+      {myProfile && (
+        claimedToday ? (
+          <div className="w-full mb-3 shrink-0">
+            <Card className="p-3 border-amber-500/30 bg-amber-500/5" data-testid="card-daily-reward-claimed">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center">
+                  <Flame className="w-5 h-5 text-amber-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm" data-testid="text-reward-streak">
+                    {myProfile.rewardStreak || 1}-day streak! 🔥
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">Reward claimed — extra Top Pick unlocked today</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="w-full mb-3 block shrink-0 text-left"
+            onClick={() => claimReward()}
+            disabled={claiming}
+            data-testid="button-claim-daily-reward"
+          >
+            <Card className="p-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white border-none shadow-lg cursor-pointer hover-elevate" data-testid="card-daily-reward">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  {claiming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Gift className="w-5 h-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">Claim your daily reward 🎁</p>
+                  <p className="text-xs text-white/80 truncate">
+                    {myProfile.rewardStreak ? `Keep your ${myProfile.rewardStreak}-day streak going!` : "Check in daily for an extra Top Pick"}
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 flex-shrink-0" />
+              </div>
+            </Card>
+          </button>
+        )
+      )}
 
       {/* Verification Banner - shown for unverified users */}
       {myProfile && !myProfile.isVerified && myProfile.verificationStatus !== 'pending' && (

@@ -94,6 +94,19 @@ export const profiles = pgTable("profiles", {
   emailVerificationExpiry: timestamp("email_verification_expiry"),
   // Profile boost (premium perk): shown first in the feed until this time
   boostedUntil: timestamp("boosted_until"),
+  // Question of the week: answer + the week it was answered for (e.g. "2026-W28")
+  weeklyAnswer: text("weekly_answer"),
+  weeklyQuestionKey: text("weekly_question_key"),
+  // Personality badges from the fun quiz (e.g. "Early Bird", "Foodie")
+  personalityBadges: text("personality_badges").array(),
+  // Song of the day pinned to the profile
+  songOfTheDay: text("song_of_the_day"),
+  // Profile prompt shown on swipe cards
+  promptQuestion: text("prompt_question"),
+  promptAnswer: text("prompt_answer"),
+  // Daily login rewards
+  rewardStreak: integer("reward_streak").default(0),
+  lastRewardAt: timestamp("last_reward_at"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -121,6 +134,8 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   emailVerificationCode: true,
   emailVerificationExpiry: true,
   boostedUntil: true,
+  rewardStreak: true,
+  lastRewardAt: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;
@@ -240,6 +255,8 @@ export const dateCheckins = pgTable("date_checkins", {
   notes: text("notes"), // Optional extra details
   friendEmail: text("friend_email").notNull(), // Trusted contact
   checkedIn: boolean("checked_in").default(false), // "I'm safe" pressed
+  rating: integer("rating"), // Post-date feedback: 1-5 stars
+  feedbackNote: text("feedback_note"), // Post-date private note
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -254,6 +271,38 @@ export const insertDateCheckinSchema = createInsertSchema(dateCheckins)
   });
 export type InsertDateCheckin = z.infer<typeof insertDateCheckinSchema>;
 export type DateCheckin = typeof dateCheckins.$inferSelect;
+
+export const dateFeedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  feedbackNote: z.string().max(1000).optional().nullable(),
+});
+
+// === SUCCESS STORIES ===
+export const successStories = pgTable("success_stories", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  coupleNames: text("couple_names").notNull(), // e.g. "Sarah & Mike"
+  story: text("story").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSuccessStorySchema = createInsertSchema(successStories)
+  .omit({ id: true, userId: true, createdAt: true })
+  .extend({
+    coupleNames: z.string().min(1).max(100),
+    story: z.string().min(20, "Tell us a little more! (at least 20 characters)").max(2000),
+  });
+export type InsertSuccessStory = z.infer<typeof insertSuccessStorySchema>;
+export type SuccessStory = typeof successStories.$inferSelect;
+
+// === DATING TIPS (weekly AI-generated, cached) ===
+export const datingTips = pgTable("dating_tips", {
+  id: serial("id").primaryKey(),
+  weekKey: text("week_key").notNull().unique(), // e.g. "2026-W28"
+  tips: text("tips").array().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type DatingTip = typeof datingTips.$inferSelect;
 
 // === FEEDBACK ===
 export const feedbackCategories = ['bug', 'suggestion', 'other'] as const;

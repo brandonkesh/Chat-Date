@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox, RotateCcw, Shield } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox, RotateCcw, Shield, Award, LayoutGrid, HeartHandshake, Lightbulb } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -124,6 +124,30 @@ export function Navbar() {
                     Date Check-In
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/personality-quiz">
+                  <DropdownMenuItem data-testid="button-personality-quiz">
+                    <Award className="w-4 h-4 mr-2" />
+                    Personality Quiz
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/date-bingo">
+                  <DropdownMenuItem data-testid="button-date-bingo">
+                    <LayoutGrid className="w-4 h-4 mr-2" />
+                    First Date Bingo
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/success-stories">
+                  <DropdownMenuItem data-testid="button-success-stories">
+                    <HeartHandshake className="w-4 h-4 mr-2" />
+                    Success Stories
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/tips">
+                  <DropdownMenuItem data-testid="button-dating-tips">
+                    <Lightbulb className="w-4 h-4 mr-2" />
+                    Dating Tips
+                  </DropdownMenuItem>
+                </Link>
                 <Link href="/help">
                   <DropdownMenuItem data-testid="button-help">
                     <HelpCircle className="w-4 h-4 mr-2" />
@@ -216,6 +240,30 @@ export function Navbar() {
                 <DropdownMenuItem data-testid="button-date-checkin-mobile">
                   <Shield className="w-4 h-4 mr-2" />
                   Date Check-In
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/personality-quiz">
+                <DropdownMenuItem data-testid="button-personality-quiz-mobile">
+                  <Award className="w-4 h-4 mr-2" />
+                  Personality Quiz
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/date-bingo">
+                <DropdownMenuItem data-testid="button-date-bingo-mobile">
+                  <LayoutGrid className="w-4 h-4 mr-2" />
+                  First Date Bingo
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/success-stories">
+                <DropdownMenuItem data-testid="button-success-stories-mobile">
+                  <HeartHandshake className="w-4 h-4 mr-2" />
+                  Success Stories
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/tips">
+                <DropdownMenuItem data-testid="button-dating-tips-mobile">
+                  <Lightbulb className="w-4 h-4 mr-2" />
+                  Dating Tips
                 </DropdownMenuItem>
               </Link>
               <Link href="/help">

@@ -19,7 +19,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { db } from "./db";
-import { matches, profiles, users, swipes, insertDateCheckinSchema } from "@shared/schema";
+import { matches, profiles, users, swipes, insertDateCheckinSchema, dateFeedbackSchema, insertSuccessStorySchema } from "@shared/schema";
 import { eq, or, and, ne, notInArray } from "drizzle-orm";
 import {
   ensurePaypalPlans,
@@ -162,6 +162,17 @@ function resetSecondaryAuthAttempts(key: string): void {
  */
 async function checkAiRateLimit(userId: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
   return storage.checkRateLimit(`${userId}:${endpoint}`, limit, windowMs);
+}
+
+// ISO week key like "2026-W28" — used for weekly dating tips cache.
+function currentWeekKey(): string {
+  const now = new Date();
+  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
 export async function registerRoutes(
@@ -876,8 +887,30 @@ export async function registerRoutes(
   // === TOP PICKS OF THE DAY ===
   app.get("/api/top-picks", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
-    const picks = await storage.getCrushPicks(userId);
-    res.json(picks.slice(0, 3).map(sanitizeProfile));
+    const [picks, me] = await Promise.all([
+      storage.getCrushPicks(userId),
+      storage.getProfile(userId),
+    ]);
+    // Daily reward perk: an extra top pick on days you claimed your reward
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const claimedToday = me?.lastRewardAt
+      ? new Date(me.lastRewardAt).toISOString().slice(0, 10) === todayKey
+      : false;
+    res.json(picks.slice(0, claimedToday ? 4 : 3).map(sanitizeProfile));
+  });
+
+  // === DAILY LOGIN REWARD ===
+  app.post("/api/daily-reward", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const result = await storage.claimDailyReward(userId);
+    if (!result) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    res.json({
+      alreadyClaimed: result.alreadyClaimed,
+      rewardStreak: result.profile.rewardStreak ?? 0,
+      lastRewardAt: result.profile.lastRewardAt,
+    });
   });
 
   // === SECOND CHANCE (review people you passed on) ===
@@ -964,6 +997,136 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Check-in not found" });
     }
     res.json({ success: true });
+  });
+
+  // Post-date feedback (private rating + note)
+  app.post("/api/date-checkins/:id/feedback", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: "Invalid check-in" });
+    }
+    const parsed = dateFeedbackSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Please provide a rating from 1 to 5." });
+    }
+    const updated = await storage.setDateCheckinFeedback(id, userId, parsed.data.rating, parsed.data.feedbackNote ?? null);
+    if (!updated) {
+      return res.status(404).json({ message: "Check-in not found" });
+    }
+    res.json(updated);
+  });
+
+  // === SUCCESS STORIES ===
+  app.get("/api/success-stories", isAuthenticated, async (req: any, res) => {
+    const stories = await storage.getSuccessStories();
+    // Only expose what the page needs — not the author's userId
+    res.json(stories.map(s => ({ id: s.id, coupleNames: s.coupleNames, story: s.story, createdAt: s.createdAt })));
+  });
+
+  app.post("/api/success-stories", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = insertSuccessStorySchema.safeParse(req.body);
+    if (!parsed.success) {
+      const msg = parsed.error.errors[0]?.message || "Please fill in both fields.";
+      return res.status(400).json({ message: msg });
+    }
+    if (!(await checkAiRateLimit(userId, "success-story", 3, 24 * 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "You can share up to 3 stories per day." });
+    }
+    const story = await storage.createSuccessStory(userId, parsed.data);
+    res.status(201).json({ id: story.id, coupleNames: story.coupleNames, story: story.story, createdAt: story.createdAt });
+  });
+
+  // === WEEKLY DATING TIPS (AI-generated, cached per week) ===
+  app.get("/api/dating-tips", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const weekKey = currentWeekKey();
+    const cached = await storage.getDatingTipsForWeek(weekKey);
+    if (cached) {
+      return res.json({ weekKey, tips: cached.tips });
+    }
+    // Not cached yet — generate once (rate-limit generation attempts)
+    if (!(await checkAiRateLimit(userId, "dating-tips-gen", 3, 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "Tips are being prepared. Please check back in a bit!" });
+    }
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a warm, practical dating coach. Reply ONLY with a JSON object: {\"tips\": [\"...\"]} containing exactly 5 short, actionable dating tips (each 1-2 sentences, friendly tone, no numbering).",
+          },
+          { role: "user", content: `Give me this week's 5 best dating tips. Week: ${weekKey}. Make them fresh and varied: conversation, first dates, profiles, confidence, safety.` },
+        ],
+        response_format: { type: "json_object" },
+      });
+      const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+      const tips: string[] = Array.isArray(parsed.tips) ? parsed.tips.map((t: any) => String(t)).slice(0, 5) : [];
+      if (tips.length === 0) {
+        return res.status(500).json({ message: "Could not generate tips right now. Please try again." });
+      }
+      const saved = await storage.saveDatingTips(weekKey, tips);
+      res.json({ weekKey, tips: saved.tips });
+    } catch (err) {
+      console.error("dating-tips generation failed:", err);
+      res.status(500).json({ message: "Could not generate tips right now. Please try again." });
+    }
+  });
+
+  // === AI DATE IDEA GENERATOR ===
+  app.post("/api/date-ideas", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = z.object({ matchId: z.number().int() }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+    const match = await storage.getMatch(parsed.data.matchId);
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+    const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    if (await storage.isBlockedEither(userId, partnerId)) {
+      return res.status(403).json({ message: "Access not allowed" });
+    }
+    if (!(await checkAiRateLimit(userId, "date-ideas", 10, 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "You've hit the limit for date ideas. Try again in an hour!" });
+    }
+    const [me, partner] = await Promise.all([
+      storage.getProfile(userId),
+      storage.getProfile(partnerId),
+    ]);
+    if (!me || !partner) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a creative date planner. Reply ONLY with JSON: {\"ideas\": [{\"title\": \"...\", \"description\": \"...\"}]} containing exactly 3 date ideas. Keep each description to 1-2 friendly sentences. Ideas should be realistic and budget-friendly.",
+          },
+          {
+            role: "user",
+            content: `Suggest 3 date ideas for two people.\nPerson A interests: ${(me.interests || []).join(", ") || "unknown"}. Location: ${me.locationName || "unknown"}.\nPerson B interests: ${(partner.interests || []).join(", ") || "unknown"}.\nBlend their shared interests where possible.`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+      const parsedIdeas = JSON.parse(response.choices[0]?.message?.content || "{}");
+      const ideas = Array.isArray(parsedIdeas.ideas)
+        ? parsedIdeas.ideas.slice(0, 3).map((i: any) => ({ title: String(i.title || ""), description: String(i.description || "") }))
+        : [];
+      if (ideas.length === 0) {
+        return res.status(500).json({ message: "Could not generate ideas right now. Please try again." });
+      }
+      res.json({ ideas });
+    } catch (err) {
+      console.error("date-ideas generation failed:", err);
+      res.status(500).json({ message: "Could not generate ideas right now. Please try again." });
+    }
   });
 
   // === AI PROFILE FEEDBACK & OPTIMIZER ===
@@ -1849,11 +2012,12 @@ Guidelines:
   app.get(api.matches.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const results = await storage.getMatches(userId);
-    res.json(results.map(({ partnerProfile, lastMessageAt, ...match }: any) => ({
+    res.json(results.map(({ partnerProfile, lastMessageAt, lastMessageSenderId, ...match }: any) => ({
       ...match,
       match,
       partnerProfile: sanitizeProfile(partnerProfile),
       lastMessageAt: lastMessageAt ? new Date(lastMessageAt).toISOString() : null,
+      lastMessageSenderId: lastMessageSenderId ?? null,
     })));
   });
 
