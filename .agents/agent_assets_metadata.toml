@@ -6,3 +6,9 @@ id = "ZVRUfoF6kpMHA11cis5Hw"
 uri = "file://attached_assets/crush_deck.pptx"
 type = "slides"
 title = "Crush Dating App — Slide Deck"
+
+[[outputs]]
+id = "fuxRsyaJ2AxZYi-SaCqjI"
+uri = "file://exports/Crush-Dating-App.pptx"
+type = "slides"
+title = "Crush Dating App — Presentation"
