@@ -1,6 +1,6 @@
 import { log } from "./index";
 import { getOwnerNotificationEmail } from "./ownerUsers";
-import { getResendApiKey } from "./email";
+import { getResendApiKey, formatEmailTime } from "./email";
 import type { Feedback } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
@@ -14,17 +14,7 @@ import type { Feedback } from "@shared/schema";
 
 function formatSubmittedTime(createdAt: Feedback["createdAt"]): string {
   if (!createdAt) return "just now";
-  return (
-    new Date(createdAt).toLocaleString("en-US", {
-      timeZone: process.env.FEEDBACK_TIMEZONE || "America/Los_Angeles",
-      month: "numeric",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZoneName: "short",
-    })
-  );
+  return formatEmailTime(new Date(createdAt));
 }
 
 function categoryLabel(category: string): string {

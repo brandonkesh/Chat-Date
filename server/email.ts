@@ -17,6 +17,27 @@ import { getOwnerNotificationEmail } from "./ownerUsers";
 // deliver to the Resend account owner's own email. To email all users, verify a
 // domain in Resend and set EMAIL_FROM to an address on that domain.
 
+/** Timezone used for all human-readable times in emails (owner is Pacific). */
+export const EMAIL_TIMEZONE =
+  process.env.EMAIL_TIMEZONE || "America/Los_Angeles";
+
+/** Format a date/time for display in emails, in the app's timezone. */
+export function formatEmailTime(
+  date: Date,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  return date.toLocaleString("en-US", {
+    timeZone: EMAIL_TIMEZONE,
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    ...options,
+  });
+}
+
 let connectionSettings: any;
 
 /**
@@ -180,12 +201,12 @@ export async function sendNewMemberAlertToOwner(userId: string): Promise<void> {
       `Good news — a new member just joined Crush.\n\n` +
       `Name: ${name}\n` +
       `Email: ${memberEmail}\n` +
-      `Joined: ${new Date().toLocaleString()}\n`,
+      `Joined: ${formatEmailTime(new Date())}\n`,
     html: shell(
       `A new member just joined! 🎉`,
       `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` +
         `<p><strong>Email:</strong> ${escapeHtml(memberEmail)}</p>` +
-        `<p><strong>Joined:</strong> ${escapeHtml(new Date().toLocaleString())}</p>`,
+        `<p><strong>Joined:</strong> ${escapeHtml(formatEmailTime(new Date()))}</p>`,
     ),
   });
 }
@@ -348,12 +369,11 @@ export async function sendDateCheckinEmail(
 ): Promise<void> {
   const contact = await getRecipientContact(userId);
   const senderName = contact?.name || "A Crush member";
-  const when = new Date(checkin.dateTime).toLocaleString("en-US", {
+  const when = formatEmailTime(new Date(checkin.dateTime), {
     weekday: "long",
     month: "long",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    year: undefined,
   });
   const safeName = escapeHtml(senderName);
   const safeDateName = escapeHtml(checkin.dateName);
