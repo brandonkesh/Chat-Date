@@ -110,17 +110,27 @@ export function IntroVideo({ introVideoUrl, editable = false }: IntroVideoProps)
     if (!recordedBlob) return;
     setIsUploading(true);
     try {
-      const res = await apiRequest("POST", "/api/uploads/intro-video");
+      const mimeType = recordedBlob.type || "video/webm";
+      const res = await apiRequest("POST", "/api/uploads/intro-video", {
+        size: recordedBlob.size,
+        contentType: mimeType,
+      });
       const { uploadURL, objectPath } = await res.json();
 
       const uploadRes = await fetch(uploadURL, {
         method: "PUT",
         body: recordedBlob,
-        headers: { "Content-Type": "video/webm" },
+        headers: { "Content-Type": mimeType },
       });
 
       if (!uploadRes.ok) {
         throw new Error("Upload failed");
+      }
+
+      const verifyRes = await apiRequest("POST", "/api/uploads/verify", { objectPath });
+      if (!verifyRes.ok) {
+        const verifyData = await verifyRes.json().catch(() => ({}));
+        throw new Error((verifyData as any).error || "Upload verification failed");
       }
 
       await apiRequest("PUT", "/api/profiles/intro-video", {

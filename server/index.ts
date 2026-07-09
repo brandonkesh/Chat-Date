@@ -6,6 +6,7 @@ import { ensurePaypalPlans } from './paypalService';
 import { PaypalWebhookHandler } from './paypalWebhookHandler';
 import { backfillMediaAcls } from './mediaAclBackfill';
 import { sweepOrphanedUploads } from './uploadSweep';
+import { pool } from './db';
 
 const app = express();
 const httpServer = createServer(app);
@@ -107,6 +108,19 @@ async function initPaypal() {
     next();
   });
 
+  // Ensure the pending_uploads table exists. This table is added to the Drizzle
+  // schema in shared/schema.ts; running CREATE TABLE IF NOT EXISTS here means
+  // the table is available on any environment without a separate drizzle-kit push.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pending_uploads (
+      object_path TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      allowed_type_prefix TEXT NOT NULL,
+      max_size_bytes INTEGER NOT NULL,
+      issued_at BIGINT NOT NULL
+    )
+  `);
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -159,11 +173,13 @@ async function initPaypal() {
       sweepOrphanedUploads().catch((err) => {
         log(`Upload sweep error: ${err?.message}`, "security");
       });
+      // Run every 2 minutes so non-compliant/unbound uploads are cleaned up
+      // quickly and cannot persist in the bucket as a file sink.
       const sweepTimer = setInterval(() => {
         sweepOrphanedUploads().catch((err) => {
           log(`Upload sweep error: ${err?.message}`, "security");
         });
-      }, 6 * 60 * 60 * 1000);
+      }, 2 * 60 * 1000);
       sweepTimer.unref();
     },
   );

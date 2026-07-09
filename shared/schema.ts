@@ -348,6 +348,23 @@ export const rateLimits = pgTable("rate_limits", {
   windowStart: bigint("window_start", { mode: "number" }).notNull(),
 });
 
+// === PENDING UPLOADS ===
+// Tracks signed upload URLs issued to users so post-upload verification can
+// confirm ownership and immediately delete non-compliant objects (wrong type
+// or oversized) before they can persist in the bucket. Records are deleted
+// when the upload is verified successfully or when the sweep removes expired
+// records along with their GCS objects.
+export const pendingUploads = pgTable("pending_uploads", {
+  objectPath: text("object_path").primaryKey(),
+  userId: text("user_id").notNull(),
+  // MIME type prefix the uploaded object must match (e.g. "audio/", "video/", "image/")
+  allowedTypePrefix: text("allowed_type_prefix").notNull(),
+  maxSizeBytes: integer("max_size_bytes").notNull(),
+  issuedAt: bigint("issued_at", { mode: "number" }).notNull(),
+});
+
+export type PendingUpload = typeof pendingUploads.$inferSelect;
+
 export type RateLimit = typeof rateLimits.$inferSelect;
 
 // === MICRO DATES ===

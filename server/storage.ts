@@ -14,6 +14,8 @@ import {
   microDateResponses,
   feedback,
   rateLimits,
+  pendingUploads,
+  type PendingUpload,
   type Feedback,
   type InsertFeedback,
   type User,
@@ -164,6 +166,20 @@ export interface IStorage {
 
   // Rate limiting (durable, shared fixed-window)
   checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean>;
+  // Byte-level quota tracking (same table as checkRateLimit; `incrementBytes` is
+  // added to the window total and checked against `limitBytes`). Returns true
+  // when the request is within quota (i.e. the new total does not exceed the limit).
+  checkBytesQuota(key: string, incrementBytes: number, limitBytes: number, windowMs: number): Promise<boolean>;
+
+  // Pending upload tracking: record signed upload URLs issued to users so that
+  // post-upload verification can confirm ownership and enforce type/size limits
+  // against the REAL stored object metadata immediately after the PUT.
+  createPendingUpload(objectPath: string, userId: string, allowedTypePrefix: string, maxSizeBytes: number): Promise<void>;
+  getPendingUpload(objectPath: string): Promise<import("@shared/schema").PendingUpload | undefined>;
+  deletePendingUpload(objectPath: string): Promise<void>;
+  // Deletes all pending upload records older than `maxAgeMs` and returns their
+  // object paths so the caller can delete the corresponding GCS objects.
+  deleteExpiredPendingUploads(maxAgeMs: number): Promise<string[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1405,6 +1421,56 @@ export class DatabaseStorage implements IStorage {
       })
       .returning({ count: rateLimits.count });
     return row.count <= limit;
+  }
+
+  async checkBytesQuota(key: string, incrementBytes: number, limitBytes: number, windowMs: number): Promise<boolean> {
+    const now = Date.now();
+    // Same fixed-window pattern as checkRateLimit but accumulates bytes
+    // instead of request counts. Uses the same rate_limits table with the
+    // bytes total stored in the `count` column.
+    const [row] = await db
+      .insert(rateLimits)
+      .values({ key, count: incrementBytes, windowStart: now })
+      .onConflictDoUpdate({
+        target: rateLimits.key,
+        set: {
+          count: sql`CASE WHEN ${now} - ${rateLimits.windowStart} >= ${windowMs} THEN ${incrementBytes} ELSE ${rateLimits.count} + ${incrementBytes} END`,
+          windowStart: sql`CASE WHEN ${now} - ${rateLimits.windowStart} >= ${windowMs} THEN ${now} ELSE ${rateLimits.windowStart} END`,
+        },
+      })
+      .returning({ count: rateLimits.count });
+    return row.count <= limitBytes;
+  }
+
+  async createPendingUpload(objectPath: string, userId: string, allowedTypePrefix: string, maxSizeBytes: number): Promise<void> {
+    await db
+      .insert(pendingUploads)
+      .values({ objectPath, userId, allowedTypePrefix, maxSizeBytes, issuedAt: Date.now() })
+      .onConflictDoUpdate({
+        target: pendingUploads.objectPath,
+        set: { userId, allowedTypePrefix, maxSizeBytes, issuedAt: Date.now() },
+      });
+  }
+
+  async getPendingUpload(objectPath: string): Promise<PendingUpload | undefined> {
+    const [row] = await db
+      .select()
+      .from(pendingUploads)
+      .where(eq(pendingUploads.objectPath, objectPath));
+    return row;
+  }
+
+  async deletePendingUpload(objectPath: string): Promise<void> {
+    await db.delete(pendingUploads).where(eq(pendingUploads.objectPath, objectPath));
+  }
+
+  async deleteExpiredPendingUploads(maxAgeMs: number): Promise<string[]> {
+    const cutoff = Date.now() - maxAgeMs;
+    const rows = await db
+      .delete(pendingUploads)
+      .where(sql`${pendingUploads.issuedAt} < ${cutoff}`)
+      .returning({ objectPath: pendingUploads.objectPath });
+    return rows.map((r) => r.objectPath);
   }
 }
 

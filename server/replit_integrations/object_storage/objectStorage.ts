@@ -170,13 +170,38 @@ export class ObjectStorageService {
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
-    // Sign URL for PUT method with TTL
+    // Sign URL for PUT method with a short TTL. 5 minutes is enough for
+    // the client to start the upload immediately after requesting the URL.
+    // A shorter window limits how long a stolen or leaked URL remains usable.
     return signObjectURL({
       bucketName,
       objectName,
       method: "PUT",
-      ttlSec: 900,
+      ttlSec: 300,
     });
+  }
+
+  // Allocates a new upload slot (UUID-based object path) without signing a
+  // GCS URL. Callers should direct the client to PUT to
+  // /api/uploads/media/:uuid on the app server instead, which enforces
+  // content-type and byte-limit constraints before writing to GCS.
+  createObjectEntityPath(): string {
+    return `/objects/uploads/${randomUUID()}`;
+  }
+
+  // Returns the raw GCS File reference for an upload slot without requiring
+  // the object to already exist. Used by the server-side upload proxy to
+  // write validated client data directly to GCS (bypassing signed URLs).
+  getObjectEntitySlotFile(objectPath: string): File {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    const entityId = objectPath.slice("/objects/".length);
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+    const fullPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    return objectStorageClient.bucket(bucketName).file(objectName);
   }
 
   // Gets the object entity file from the object path.

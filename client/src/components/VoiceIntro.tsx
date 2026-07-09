@@ -130,17 +130,29 @@ export function VoiceIntro({ voiceIntroUrl, editable = false }: VoiceIntroProps)
     if (!recordedBlob) return;
     setIsUploading(true);
     try {
-      const res = await apiRequest("POST", "/api/uploads/voice-intro");
+      const mimeType = recordedBlob.type || "audio/webm";
+      const res = await apiRequest("POST", "/api/uploads/voice-intro", {
+        size: recordedBlob.size,
+        contentType: mimeType,
+      });
       const { uploadURL, objectPath } = await res.json();
 
       const uploadRes = await fetch(uploadURL, {
         method: "PUT",
         body: recordedBlob,
-        headers: { "Content-Type": "audio/webm" },
+        headers: { "Content-Type": mimeType },
       });
 
       if (!uploadRes.ok) {
         throw new Error("Upload failed");
+      }
+
+      // Verify the uploaded object server-side. The server reads the REAL
+      // GCS metadata and deletes the object immediately if it is non-compliant.
+      const verifyRes = await apiRequest("POST", "/api/uploads/verify", { objectPath });
+      if (!verifyRes.ok) {
+        const verifyData = await verifyRes.json().catch(() => ({}));
+        throw new Error((verifyData as any).error || "Upload verification failed");
       }
 
       await apiRequest("PUT", "/api/profiles/voice-intro", {

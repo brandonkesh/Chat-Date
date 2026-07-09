@@ -90,10 +90,29 @@ export function registerObjectStorageRoutes(app: Express): void {
         });
       }
 
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      // Per-user byte quota: limits total declared upload volume per window,
+      // capping the storage-abuse blast radius even if a client lies about
+      // individual file sizes.
+      const withinBytesQuota = await storage.checkBytesQuota(
+        `${userId}:upload-request-url-bytes`,
+        size,
+        50 * 1024 * 1024, // 50MB per hour
+        UPLOAD_URL_RATE_WINDOW_MS,
+      );
+      if (!withinBytesQuota) {
+        return res.status(429).json({
+          error: "Upload quota exceeded. Please try again later.",
+        });
+      }
 
-      // Extract object path from the presigned URL for later reference
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      // Allocate a server-controlled upload slot instead of a signed GCS URL.
+      // The client PUTs to /api/uploads/media/:uuid on our server, which
+      // enforces content-type and byte limits at ingest time.
+      const objectPath = objectStorageService.createObjectEntityPath();
+      const uuid = objectPath.split("/").pop()!;
+      const uploadURL = `/api/uploads/media/${uuid}`;
+
+      await storage.createPendingUpload(objectPath, userId, "image/", MAX_FILE_SIZE);
 
       res.json({
         uploadURL,

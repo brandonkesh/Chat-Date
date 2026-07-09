@@ -1796,6 +1796,20 @@ Guidelines:
       // bucket and binds it to the submitter.
       const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
+      // Enforce server-issued origin: first-time binds require a pending upload record.
+      // Re-binds where the user already owns the object (existing ACL) are allowed.
+      const normalizedForCheck = objectStorageService.normalizeObjectEntityPath(photoUrl);
+      if (normalizedForCheck.startsWith("/objects/")) {
+        const pendingRec = await storage.getPendingUpload(normalizedForCheck);
+        if (!pendingRec || pendingRec.userId !== userId) {
+          const { getObjectAclPolicy: checkAcl } = await import("./replit_integrations/object_storage/objectAcl");
+          const existingFile = await objectStorageService.getObjectEntityFile(normalizedForCheck).catch(() => null);
+          const existingAcl = existingFile ? await checkAcl(existingFile).catch(() => null) : null;
+          if (!existingAcl || existingAcl.owner !== userId) {
+            return res.status(400).json({ message: "Upload was not issued through the app's secure upload flow" });
+          }
+        }
+      }
       let normalizedPath: string;
       try {
         normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
@@ -1813,6 +1827,8 @@ Guidelines:
       if (!normalizedPath.startsWith("/objects/")) {
         return res.status(400).json({ message: "Verification photo must be uploaded through the app" });
       }
+      // Delete pending record after successful bind.
+      await storage.deletePendingUpload(normalizedForCheck).catch(() => {});
 
       // Submit for review. Verification stays in 'pending' until reviewed by a
       // trusted operator — the verified badge is a trust signal that other
@@ -1837,10 +1853,40 @@ Guidelines:
       if (!(await checkAiRateLimit(userId, "upload-voice-intro", 10, 60 * 60 * 1000))) {
         return res.status(429).json({ error: "Too many uploads. Please try again later." });
       }
+
+      const { size, contentType } = req.body;
+      if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+        return res.status(400).json({ error: "Missing or invalid required field: size" });
+      }
+      if (size > AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes) {
+        return res.status(400).json({ error: `File too large. Maximum size is ${AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes / (1024 * 1024)}MB.` });
+      }
+      if (typeof contentType !== "string" || !contentType.toLowerCase().startsWith("audio/")) {
+        return res.status(400).json({ error: "Invalid file type. Only audio files are allowed." });
+      }
+
+      // Per-user byte quota: cap total declared upload bytes in this window
+      // so a malicious client cannot request many URLs each claiming a small
+      // size and then PUT much larger blobs to each one.
+      const withinBytesQuota = await storage.checkBytesQuota(
+        `${userId}:upload-voice-intro-bytes`,
+        size,
+        50 * 1024 * 1024, // 50MB per hour
+        60 * 60 * 1000,
+      );
+      if (!withinBytesQuota) {
+        return res.status(429).json({ error: "Upload quota exceeded. Please try again later." });
+      }
+
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      // Allocate a server-controlled upload slot. The client PUTs to our own
+      // proxy endpoint (/api/uploads/media/:uuid) instead of a GCS signed URL,
+      // so the server can enforce content-type and byte limits at ingest time.
+      const objectPath = objectStorageService.createObjectEntityPath();
+      const uuid = objectPath.split("/").pop()!;
+      const uploadURL = `/api/uploads/media/${uuid}`;
+      await storage.createPendingUpload(objectPath, userId, "audio/", AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes);
       res.json({ uploadURL, objectPath });
     } catch (error) {
       console.error("Error generating voice upload URL:", error);
@@ -1858,6 +1904,21 @@ Guidelines:
       if (voiceIntroUrl) {
         const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
+        // Enforce server-issued origin: first-time binds require a pending upload record
+        // (proof the path was issued by our server to this user). Re-binds where the user
+        // already owns the object (existing ACL) are allowed without a pending record.
+        const normalizedForCheck = objectStorageService.normalizeObjectEntityPath(voiceIntroUrl);
+        if (normalizedForCheck.startsWith("/objects/")) {
+          const pendingRec = await storage.getPendingUpload(normalizedForCheck);
+          if (!pendingRec || pendingRec.userId !== userId) {
+            const { getObjectAclPolicy: checkAcl } = await import("./replit_integrations/object_storage/objectAcl");
+            const existingFile = await objectStorageService.getObjectEntityFile(normalizedForCheck).catch(() => null);
+            const existingAcl = existingFile ? await checkAcl(existingFile).catch(() => null) : null;
+            if (!existingAcl || existingAcl.owner !== userId) {
+              return res.status(400).json({ message: "Upload was not issued through the app's secure upload flow" });
+            }
+          }
+        }
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             voiceIntroUrl,
@@ -1874,6 +1935,8 @@ Guidelines:
         if (!resolvedUrl.startsWith("/objects/")) {
           return res.status(400).json({ message: "Voice intro must be uploaded through the app" });
         }
+        // Delete pending record after successful bind (record is no longer needed).
+        await storage.deletePendingUpload(normalizedForCheck).catch(() => {});
       }
 
       const profile = await storage.updateProfile(userId, { voiceIntroUrl: resolvedUrl });
@@ -1894,10 +1957,34 @@ Guidelines:
       if (!(await checkAiRateLimit(userId, "upload-intro-video", 10, 60 * 60 * 1000))) {
         return res.status(429).json({ error: "Too many uploads. Please try again later." });
       }
+
+      const { size, contentType } = req.body;
+      if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+        return res.status(400).json({ error: "Missing or invalid required field: size" });
+      }
+      if (size > VIDEO_UPLOAD_CONSTRAINTS.maxSizeBytes) {
+        return res.status(400).json({ error: `File too large. Maximum size is ${VIDEO_UPLOAD_CONSTRAINTS.maxSizeBytes / (1024 * 1024)}MB.` });
+      }
+      if (typeof contentType !== "string" || !contentType.toLowerCase().startsWith("video/")) {
+        return res.status(400).json({ error: "Invalid file type. Only video files are allowed." });
+      }
+
+      const withinBytesQuota = await storage.checkBytesQuota(
+        `${userId}:upload-intro-video-bytes`,
+        size,
+        200 * 1024 * 1024, // 200MB per hour
+        60 * 60 * 1000,
+      );
+      if (!withinBytesQuota) {
+        return res.status(429).json({ error: "Upload quota exceeded. Please try again later." });
+      }
+
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const objectPath = objectStorageService.createObjectEntityPath();
+      const uuid = objectPath.split("/").pop()!;
+      const uploadURL = `/api/uploads/media/${uuid}`;
+      await storage.createPendingUpload(objectPath, userId, "video/", VIDEO_UPLOAD_CONSTRAINTS.maxSizeBytes);
       res.json({ uploadURL, objectPath });
     } catch (error) {
       console.error("Error generating intro video upload URL:", error);
@@ -1915,6 +2002,20 @@ Guidelines:
       if (introVideoUrl) {
         const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
+        // Enforce server-issued origin: first-time binds require a pending upload record.
+        // Re-binds where the user already owns the object (existing ACL) are allowed.
+        const normalizedForCheck = objectStorageService.normalizeObjectEntityPath(introVideoUrl);
+        if (normalizedForCheck.startsWith("/objects/")) {
+          const pendingRec = await storage.getPendingUpload(normalizedForCheck);
+          if (!pendingRec || pendingRec.userId !== userId) {
+            const { getObjectAclPolicy: checkAcl } = await import("./replit_integrations/object_storage/objectAcl");
+            const existingFile = await objectStorageService.getObjectEntityFile(normalizedForCheck).catch(() => null);
+            const existingAcl = existingFile ? await checkAcl(existingFile).catch(() => null) : null;
+            if (!existingAcl || existingAcl.owner !== userId) {
+              return res.status(400).json({ message: "Upload was not issued through the app's secure upload flow" });
+            }
+          }
+        }
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             introVideoUrl,
@@ -1931,6 +2032,8 @@ Guidelines:
         if (!resolvedUrl.startsWith("/objects/")) {
           return res.status(400).json({ message: "Intro video must be uploaded through the app" });
         }
+        // Delete pending record after successful bind.
+        await storage.deletePendingUpload(normalizedForCheck).catch(() => {});
       }
 
       const profile = await storage.updateProfile(userId, { introVideoUrl: resolvedUrl });
@@ -1951,14 +2054,209 @@ Guidelines:
       if (!(await checkAiRateLimit(userId, "upload-voice-note", 60, 60 * 60 * 1000))) {
         return res.status(429).json({ error: "Too many uploads. Please try again later." });
       }
+
+      const { size, contentType } = req.body;
+      if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+        return res.status(400).json({ error: "Missing or invalid required field: size" });
+      }
+      if (size > AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes) {
+        return res.status(400).json({ error: `File too large. Maximum size is ${AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes / (1024 * 1024)}MB.` });
+      }
+      if (typeof contentType !== "string" || !contentType.toLowerCase().startsWith("audio/")) {
+        return res.status(400).json({ error: "Invalid file type. Only audio files are allowed." });
+      }
+
+      const withinBytesQuota = await storage.checkBytesQuota(
+        `${userId}:upload-voice-note-bytes`,
+        size,
+        100 * 1024 * 1024, // 100MB per hour
+        60 * 60 * 1000,
+      );
+      if (!withinBytesQuota) {
+        return res.status(429).json({ error: "Upload quota exceeded. Please try again later." });
+      }
+
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const objectPath = objectStorageService.createObjectEntityPath();
+      const uuid = objectPath.split("/").pop()!;
+      const uploadURL = `/api/uploads/media/${uuid}`;
+      await storage.createPendingUpload(objectPath, userId, "audio/", AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes);
       res.json({ uploadURL, objectPath });
     } catch (error) {
       console.error("Error generating voice note upload URL:", error);
       res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // === POST-UPLOAD VERIFICATION ===
+  // Called by the client immediately after the signed PUT completes. Reads the
+  // REAL stored object metadata from GCS and deletes the object right away if
+  // it violates size or content-type constraints. This closes the gap between
+  // URL issuance (where only declared metadata is available) and binding (where
+  // authoritative enforcement also happens via trySetObjectEntityAclPolicy).
+  app.post("/api/uploads/verify", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { objectPath } = req.body;
+
+    if (!objectPath || typeof objectPath !== "string") {
+      return res.status(400).json({ error: "Missing required field: objectPath" });
+    }
+
+    // Look up the pending upload record to confirm:
+    //  1. The path was actually issued by the server (not injected by the client)
+    //  2. The requesting user is the one who requested the upload URL
+    const pending = await storage.getPendingUpload(objectPath);
+    if (!pending) {
+      return res.status(404).json({ error: "No pending upload record for this path" });
+    }
+    if (pending.userId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    try {
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+
+      let objectFile;
+      try {
+        objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      } catch {
+        // Object was never uploaded — clean up the pending record.
+        await storage.deletePendingUpload(objectPath);
+        return res.status(400).json({ error: "Object not found in storage; upload may have failed" });
+      }
+
+      // Read the REAL metadata from GCS (not client-declared).
+      const [metadata] = await objectFile.getMetadata();
+      const actualSize = Number(metadata.size ?? 0);
+      const rawType = String(metadata.contentType ?? "");
+      const actualType = rawType.toLowerCase().split(";")[0].trim();
+
+      let violation: string | null = null;
+      if (!Number.isFinite(actualSize) || actualSize <= 0) {
+        violation = "Uploaded file is empty or has an unreadable size";
+      } else if (actualSize > pending.maxSizeBytes) {
+        const maxMb = Math.round(pending.maxSizeBytes / (1024 * 1024));
+        violation = `Uploaded file is too large (maximum ${maxMb}MB)`;
+      } else if (!actualType.startsWith(pending.allowedTypePrefix)) {
+        violation = `Uploaded file has an unsupported type (expected ${pending.allowedTypePrefix}*)`;
+      }
+
+      if (violation) {
+        // Delete the non-compliant object immediately — do not wait for the sweep.
+        try { await objectFile.delete(); } catch (err) {
+          console.error(`Failed to delete non-compliant upload ${objectPath}:`, err);
+        }
+        await storage.deletePendingUpload(objectPath);
+        return res.status(400).json({ error: violation });
+      }
+
+      // Object is valid. Keep the pending record so the bind endpoint can verify
+      // server-issued origin. The bind endpoint deletes the record after success.
+      res.json({ verified: true, size: actualSize, contentType: actualType });
+    } catch (error) {
+      console.error("Upload verify error:", error);
+      res.status(500).json({ error: "Failed to verify upload" });
+    }
+  });
+
+  // === SERVER-MEDIATED UPLOAD PROXY ===
+  // The client PUTs the raw file body directly to this endpoint instead of a
+  // GCS signed URL. Unlike a signed PUT URL, this endpoint can enforce
+  // content-type and byte-count constraints at ingest time — before any bytes
+  // are written to the bucket — solving the core signed-URL limitation.
+  //
+  // Auth: the pending_uploads record proves this UUID was issued by the server
+  // to the requesting user, so the proxy doubles as an origin check.
+  app.put("/api/uploads/media/:uuid", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { uuid } = req.params;
+
+    // Validate UUID format defensively (must be a server-generated v4 UUID).
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)) {
+      return res.status(400).json({ error: "Invalid upload ID" });
+    }
+
+    const objectPath = `/objects/uploads/${uuid}`;
+
+    // Verify ownership: the pending record is proof this slot was issued by
+    // the server to this exact user.
+    const pending = await storage.getPendingUpload(objectPath);
+    if (!pending || pending.userId !== userId) {
+      req.resume(); // drain body to avoid connection hang
+      return res.status(404).json({ error: "Invalid or expired upload slot" });
+    }
+
+    // Validate Content-Type header before reading any body bytes.
+    const rawContentType = (req.headers["content-type"] || "").toLowerCase().split(";")[0].trim();
+    if (!rawContentType || !rawContentType.startsWith(pending.allowedTypePrefix)) {
+      req.resume();
+      return res.status(400).json({
+        error: `Invalid content type. Expected ${pending.allowedTypePrefix}* file`,
+      });
+    }
+
+    // Early size rejection from Content-Length header when present.
+    const declaredLength = Number(req.headers["content-length"] || 0);
+    if (declaredLength > 0 && declaredLength > pending.maxSizeBytes) {
+      req.resume();
+      return res.status(413).json({
+        error: `File too large. Maximum is ${Math.round(pending.maxSizeBytes / (1024 * 1024))}MB`,
+      });
+    }
+
+    try {
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+
+      // Read body into memory with a hard byte cap.
+      // Bounds: audio ≤10MB, video ≤50MB, image ≤5MB — manageable in-process.
+      const maxBytes = pending.maxSizeBytes;
+      const chunks: Buffer[] = [];
+      let totalBytes = 0;
+      let tooLarge = false;
+
+      await new Promise<void>((resolve, reject) => {
+        req.on("data", (chunk: Buffer) => {
+          totalBytes += chunk.length;
+          if (totalBytes > maxBytes) {
+            tooLarge = true;
+            req.destroy(); // stop reading — triggers 'close' or 'error'
+            resolve();
+            return;
+          }
+          chunks.push(chunk);
+        });
+        req.on("end", resolve);
+        req.on("error", (err: Error) => {
+          if (tooLarge) resolve(); // expected destroy, not a real error
+          else reject(err);
+        });
+        req.on("close", () => { if (tooLarge) resolve(); });
+      });
+
+      if (tooLarge) {
+        return res.status(413).json({
+          error: `File too large. Maximum is ${Math.round(maxBytes / (1024 * 1024))}MB`,
+        });
+      }
+      if (totalBytes === 0) {
+        return res.status(400).json({ error: "File is empty" });
+      }
+
+      // Write validated bytes to GCS via the SDK — no signed URL involved.
+      const body = Buffer.concat(chunks);
+      const gcsFile = objectStorageService.getObjectEntitySlotFile(objectPath);
+      await gcsFile.save(body, {
+        metadata: { contentType: rawContentType },
+        resumable: false,
+      });
+
+      res.json({ objectPath, verified: true, size: totalBytes, contentType: rawContentType });
+    } catch (error) {
+      console.error("Proxy upload error:", error);
+      res.status(500).json({ error: "Failed to write upload to storage" });
     }
   });
 
@@ -2294,6 +2592,20 @@ Guidelines:
       if (resolvedVoiceNoteUrl) {
         const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
+        // Enforce server-issued origin: first-time binds require a pending upload record.
+        // Re-binds where the user already owns the object (existing ACL) are allowed.
+        const normalizedForCheck = objectStorageService.normalizeObjectEntityPath(resolvedVoiceNoteUrl);
+        if (normalizedForCheck.startsWith("/objects/")) {
+          const pendingRec = await storage.getPendingUpload(normalizedForCheck);
+          if (!pendingRec || pendingRec.userId !== userId) {
+            const { getObjectAclPolicy: checkAcl } = await import("./replit_integrations/object_storage/objectAcl");
+            const existingFile = await objectStorageService.getObjectEntityFile(normalizedForCheck).catch(() => null);
+            const existingAcl = existingFile ? await checkAcl(existingFile).catch(() => null) : null;
+            if (!existingAcl || existingAcl.owner !== userId) {
+              return res.status(400).json({ message: "Upload was not issued through the app's secure upload flow" });
+            }
+          }
+        }
         try {
           resolvedVoiceNoteUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             resolvedVoiceNoteUrl,
@@ -2310,6 +2622,8 @@ Guidelines:
         if (!resolvedVoiceNoteUrl.startsWith("/objects/")) {
           return res.status(400).json({ message: "Voice note must be uploaded through the app" });
         }
+        // Delete pending record after successful bind.
+        await storage.deletePendingUpload(normalizedForCheck).catch(() => {});
       }
 
       const msg = await storage.createMessage({
