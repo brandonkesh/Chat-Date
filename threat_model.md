@@ -4,6 +4,8 @@
 
 Crush is a dating app with a React frontend and an Express/TypeScript backend backed by PostgreSQL. It stores user profiles, private messages, matches, uploaded media, account security settings, and subscription state. Production authentication is handled through Replit OIDC sessions, while the app adds its own 2FA, app-lock, verification, object-storage, PayPal, and AI-powered features on top.
 
+The current production deployment is password-gated at the platform edge, which reduces unauthenticated internet reachability. Authenticated-user abuse, stale-access bugs after blocks, webhook misuse, and any server-side trust of client-controlled premium or media state remain in scope.
+
 ## Assets
 
 - **User accounts and sessions** -- Replit-authenticated sessions, refresh tokens in session state, and any app-level security state such as 2FA/app-lock verification flags. Compromise allows account access.
@@ -25,8 +27,8 @@ Crush is a dating app with a React frontend and an Express/TypeScript backend ba
 ## Scan Anchors
 
 - **Production entry points:** `server/index.ts`, `server/routes.ts`, `server/replit_integrations/auth/replitAuth.ts`, `server/replit_integrations/object_storage/routes.ts`, `server/paypalWebhookHandler.ts`
-- **Highest-risk areas:** auth/session enforcement, path-based `/api` gate exemptions, profile/media ACL binding, shared profile write schemas in `shared/schema.ts` / `shared/routes.ts`, payment/subscription routes, WebSocket signaling, and any route returning private user data
-- **Public vs authenticated:** most app APIs are authenticated; PayPal webhook and object-serving paths are special boundaries that need explicit review; match-scoped APIs must still enforce block and ownership rules after authentication
+- **Highest-risk areas:** auth/session enforcement, path-based `/api` gate exemptions, profile/media ACL binding, shared profile write schemas in `shared/schema.ts` / `shared/routes.ts`, payment/subscription routes, premium-entitlement mutation routes, WebSocket signaling, and any route returning private user data
+- **Public vs authenticated:** most app APIs are authenticated; PayPal webhook and object-serving paths are special boundaries that need explicit review; match-scoped and saved-profile APIs must still enforce block and ownership rules after authentication
 - **Dev-only / usually ignore unless proven reachable:** unregistered integration route files under `server/replit_integrations/chat`, `audio/routes.ts`, and `image/routes.ts`; Vite/dev tooling; mockup sandbox assumptions
 
 ## Threat Categories
@@ -48,6 +50,7 @@ Required guarantees:
 - Sensitive account state MUST be derived or confirmed server-side, not trusted from the client.
 - Uploaded media references MUST be tied to the authenticated user before being attached to profiles or verification records.
 - Payment and subscription state MUST only change based on trusted server-side events.
+- Paid-feature entitlements MUST NOT be grantable from a client-chosen tier alone.
 
 ### Information Disclosure
 
@@ -56,6 +59,7 @@ This app handles especially sensitive dating and safety data. Private uploads, m
 Required guarantees:
 - Private media MUST not be retrievable without appropriate authentication and authorization.
 - Blocked users MUST stay excluded from any API that exposes profile data if the product promises profile hiding.
+- Blocked relationships MUST be re-checked on alternate data surfaces such as saved-profile, AI-assist, and historical-match routes.
 - Secrets and sensitive account-recovery material MUST NOT be written to logs or returned to unnecessary clients.
 - API responses SHOULD be sanitized to the minimum needed by the client.
 
