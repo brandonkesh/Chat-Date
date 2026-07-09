@@ -1055,6 +1055,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(savedProfiles.userId, userId));
     const profiles: Profile[] = [];
     for (const s of saved) {
+      // Enforce blocks at read time: profiles saved before a block (in either
+      // direction) must no longer be visible through the saved list.
+      if (await this.isBlockedEither(userId, s.savedUserId)) continue;
       const profile = await this.getProfile(s.savedUserId);
       if (profile) profiles.push(profile);
     }

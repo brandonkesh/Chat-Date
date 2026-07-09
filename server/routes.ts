@@ -1310,6 +1310,14 @@ Be encouraging but honest. Give specific, actionable suggestions. Score fairly b
     }
 
     const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    // Blocked users must not keep deriving data from each other's profiles,
+    // even through AI features on a historical match.
+    const coachBlocked = await storage.isBlockedEither(userId, otherUserId);
+    if (coachBlocked) {
+      return res.status(403).json({ message: "Access not allowed" });
+    }
+
     const otherProfile = await storage.getProfile(otherUserId);
 
     if (!coachProfile || !otherProfile) {
@@ -2265,6 +2273,11 @@ Guidelines:
   app.post("/api/profiles/save/:id", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const savedUserId = req.params.id;
+    // Never allow saving a profile across a block relationship.
+    const saveBlocked = await storage.isBlockedEither(userId, savedUserId);
+    if (saveBlocked) {
+      return res.status(403).json({ message: "Access not allowed" });
+    }
     await storage.saveProfile(userId, savedUserId);
     res.json({ success: true });
   });
