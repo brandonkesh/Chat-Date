@@ -12,6 +12,21 @@ import type { Feedback } from "@shared/schema";
 // success. Credentials come from the Replit Resend connector at runtime — never
 // cache the client because the access token expires.
 
+function formatSubmittedTime(createdAt: Feedback["createdAt"]): string {
+  if (!createdAt) return "just now";
+  return (
+    new Date(createdAt).toLocaleString("en-US", {
+      timeZone: process.env.FEEDBACK_TIMEZONE || "America/New_York",
+      month: "numeric",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    })
+  );
+}
+
 function categoryLabel(category: string): string {
   switch (category) {
     case "bug":
