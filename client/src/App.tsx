@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { apiRequest, queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -134,6 +134,42 @@ function ProtectedRoute({ component: Component, skip2FA = false }: { component: 
   return <Component />;
 }
 
+// Fire-and-forget: report the device's auto-detected timezone so email
+// timestamps are correct for members in any state or country. Retries on the
+// next profile load if a POST fails (e.g. behind the 2FA/app-lock gate) and
+// tracks success per user so account switches still sync.
+let timezoneSyncedForUser: string | null = null;
+let timezoneSyncInFlight = false;
+function TimezoneSync() {
+  const { user } = useAuth();
+  const { data: profile } = useMyProfile();
+
+  useEffect(() => {
+    const userId = (user as any)?.id;
+    if (!userId || !profile || timezoneSyncInFlight) return;
+    if (timezoneSyncedForUser === userId) return;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!timezone) return;
+    if ((profile as any).timezone === timezone) {
+      timezoneSyncedForUser = userId;
+      return;
+    }
+    timezoneSyncInFlight = true;
+    apiRequest("POST", "/api/profiles/me/timezone", { timezone })
+      .then(() => {
+        timezoneSyncedForUser = userId;
+      })
+      .catch(() => {
+        // best-effort only — will retry when the profile query updates
+      })
+      .finally(() => {
+        timezoneSyncInFlight = false;
+      });
+  }, [user, profile]);
+
+  return null;
+}
+
 function Router() {
   const { user, isLoading } = useAuth();
 
@@ -141,6 +177,7 @@ function Router() {
 
   return (
     <>
+      <TimezoneSync />
       <Switch>
         <Route path="/">
           {user ? <ProtectedRoute component={Feed} /> : <Landing />}

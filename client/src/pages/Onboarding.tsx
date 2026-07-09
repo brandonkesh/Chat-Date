@@ -98,7 +98,8 @@ export default function Onboarding() {
       return;
     }
     try {
-      await createProfile({ ...data, age });
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await createProfile({ ...data, age, timezone });
       if (selectedPlan !== "free") {
         await apiRequest("POST", "/api/select-plan", { tier: selectedPlan });
         queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });

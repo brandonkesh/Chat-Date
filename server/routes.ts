@@ -356,6 +356,32 @@ export async function registerRoutes(
     }
   });
 
+  // Auto-detected timezone sync (fire-and-forget from the client on load).
+  // Keeps email timestamps correct for members in other states/countries.
+  app.post("/api/profiles/me/timezone", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = z
+      .object({ timezone: z.string().min(1).max(64) })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid timezone" });
+    }
+    const tz = parsed.data.timezone;
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    } catch {
+      return res.status(400).json({ message: "Invalid timezone" });
+    }
+    const existing = await storage.getProfile(userId);
+    if (!existing) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    if (existing.timezone !== tz) {
+      await storage.updateProfile(userId, { timezone: tz });
+    }
+    res.json({ success: true });
+  });
+
   // === TWO-FACTOR AUTHENTICATION ===
 
   // Get 2FA status

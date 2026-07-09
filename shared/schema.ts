@@ -107,6 +107,8 @@ export const profiles = pgTable("profiles", {
   // Daily login rewards
   rewardStreak: integer("reward_streak").default(0),
   lastRewardAt: timestamp("last_reward_at"),
+  // IANA timezone auto-detected from the user's device (e.g. "America/Chicago")
+  timezone: text("timezone"),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 

@@ -1,6 +1,7 @@
 import { log } from "./index";
 import { getOwnerNotificationEmail } from "./ownerUsers";
-import { getResendApiKey, formatEmailTime } from "./email";
+import { getResendApiKey, formatEmailTimeDual } from "./email";
+import { storage } from "./storage";
 import type { Feedback } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
@@ -12,9 +13,18 @@ import type { Feedback } from "@shared/schema";
 // success. Credentials come from the Replit Resend connector at runtime — never
 // cache the client because the access token expires.
 
-function formatSubmittedTime(createdAt: Feedback["createdAt"]): string {
+async function formatSubmittedTime(
+  createdAt: Feedback["createdAt"],
+  userId: string,
+): Promise<string> {
   if (!createdAt) return "just now";
-  return formatEmailTime(new Date(createdAt));
+  let submitterTimezone: string | null = null;
+  try {
+    submitterTimezone = (await storage.getProfile(userId))?.timezone ?? null;
+  } catch {
+    // best-effort — fall back to app timezone only
+  }
+  return formatEmailTimeDual(new Date(createdAt), submitterTimezone);
 }
 
 function categoryLabel(category: string): string {
@@ -70,6 +80,7 @@ export async function sendFeedbackNotification(
     const safeMessage = escapeHtml(item.message);
     const safeWho = escapeHtml(who);
     const safeEmail = submitter.email ? escapeHtml(submitter.email) : "";
+    const submittedAt = await formatSubmittedTime(item.createdAt, item.userId);
 
     await resend.emails.send({
       from: `Crush Feedback <${fromEmail}>`,
@@ -79,13 +90,13 @@ export async function sendFeedbackNotification(
         `New feedback submitted on Crush.\n\n` +
         `Category: ${label}\n` +
         `From: ${who}${submitter.email ? ` (${submitter.email})` : ""}\n` +
-        `Submitted: ${formatSubmittedTime(item.createdAt)}\n\n` +
+        `Submitted: ${submittedAt}\n\n` +
         `Message:\n${item.message}\n`,
       html:
         `<h2>New feedback submitted on Crush</h2>` +
         `<p><strong>Category:</strong> ${label}</p>` +
         `<p><strong>From:</strong> ${safeWho}${safeEmail ? ` (${safeEmail})` : ""}</p>` +
-        `<p><strong>Submitted:</strong> ${formatSubmittedTime(item.createdAt)}</p>` +
+        `<p><strong>Submitted:</strong> ${escapeHtml(submittedAt)}</p>` +
         `<p><strong>Message:</strong></p>` +
         `<p style="white-space:pre-wrap">${safeMessage}</p>`,
     });

@@ -21,12 +21,23 @@ import { getOwnerNotificationEmail } from "./ownerUsers";
 export const EMAIL_TIMEZONE =
   process.env.EMAIL_TIMEZONE || "America/Los_Angeles";
 
+/** Return the given IANA timezone if it is valid, otherwise null. */
+export function safeTimezone(tz?: string | null): string | null {
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
 /** Format a date/time for display in emails, in the app's timezone. */
 export function formatEmailTime(
   date: Date,
   options?: Intl.DateTimeFormatOptions,
 ): string {
-  return date.toLocaleString("en-US", {
+  const opts: Intl.DateTimeFormatOptions = {
     timeZone: EMAIL_TIMEZONE,
     month: "numeric",
     day: "numeric",
@@ -35,7 +46,29 @@ export function formatEmailTime(
     minute: "2-digit",
     timeZoneName: "short",
     ...options,
-  });
+  };
+  try {
+    return date.toLocaleString("en-US", opts);
+  } catch {
+    // Invalid timezone override — fall back to the app default.
+    return date.toLocaleString("en-US", { ...opts, timeZone: EMAIL_TIMEZONE });
+  }
+}
+
+/**
+ * Format a time for owner-facing emails: always shows the app timezone
+ * (Pacific), and appends the person's own local time when they are in a
+ * different timezone (other states/countries).
+ */
+export function formatEmailTimeDual(
+  date: Date,
+  personTimezone?: string | null,
+): string {
+  const base = formatEmailTime(date);
+  const tz = safeTimezone(personTimezone);
+  if (!tz || tz === EMAIL_TIMEZONE) return base;
+  const local = formatEmailTime(date, { timeZone: tz });
+  return local === base ? base : `${base} — ${local} their local time`;
 }
 
 let connectionSettings: any;
@@ -193,6 +226,13 @@ export async function sendNewMemberAlertToOwner(userId: string): Promise<void> {
   const contact = await getRecipientContact(userId);
   const name = contact?.name ?? "Someone";
   const memberEmail = contact?.email ?? "unknown";
+  let memberTimezone: string | null = null;
+  try {
+    memberTimezone = (await storage.getProfile(userId))?.timezone ?? null;
+  } catch {
+    // best-effort — fall back to app timezone only
+  }
+  const joined = formatEmailTimeDual(new Date(), memberTimezone);
   await sendEmail({
     logLabel: "new-member-alert",
     to,
@@ -201,12 +241,12 @@ export async function sendNewMemberAlertToOwner(userId: string): Promise<void> {
       `Good news — a new member just joined Crush.\n\n` +
       `Name: ${name}\n` +
       `Email: ${memberEmail}\n` +
-      `Joined: ${formatEmailTime(new Date())}\n`,
+      `Joined: ${joined}\n`,
     html: shell(
       `A new member just joined! 🎉`,
       `<p><strong>Name:</strong> ${escapeHtml(name)}</p>` +
         `<p><strong>Email:</strong> ${escapeHtml(memberEmail)}</p>` +
-        `<p><strong>Joined:</strong> ${escapeHtml(formatEmailTime(new Date()))}</p>`,
+        `<p><strong>Joined:</strong> ${escapeHtml(joined)}</p>`,
     ),
   });
 }
@@ -369,11 +409,20 @@ export async function sendDateCheckinEmail(
 ): Promise<void> {
   const contact = await getRecipientContact(userId);
   const senderName = contact?.name || "A Crush member";
+  // Show the date's time in the sender's own timezone (auto-detected from
+  // their device) so the trusted contact sees the time where the date happens.
+  let senderTimezone: string | null = null;
+  try {
+    senderTimezone = (await storage.getProfile(userId))?.timezone ?? null;
+  } catch {
+    // best-effort — fall back to app timezone
+  }
   const when = formatEmailTime(new Date(checkin.dateTime), {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: undefined,
+    timeZone: safeTimezone(senderTimezone) ?? undefined,
   });
   const safeName = escapeHtml(senderName);
   const safeDateName = escapeHtml(checkin.dateName);
