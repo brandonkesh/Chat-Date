@@ -138,6 +138,10 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   boostedUntil: true,
   rewardStreak: true,
   lastRewardAt: true,
+  // Media bound via dedicated validated endpoints only — never through the
+  // generic profile update (which would bypass type/size validation and ACLs).
+  voiceIntroUrl: true,
+  introVideoUrl: true,
 });
 
 export type Profile = typeof profiles.$inferSelect;

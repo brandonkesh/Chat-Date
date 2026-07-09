@@ -164,6 +164,22 @@ async function checkAiRateLimit(userId: string, endpoint: string, limit: number,
   return storage.checkRateLimit(`${userId}:${endpoint}`, limit, windowMs);
 }
 
+// Server-side media upload constraints, enforced against the REAL object
+// metadata at bind time (see trySetObjectEntityAclPolicy). The signed upload
+// URL cannot carry size/type limits, so these are the authoritative checks.
+const IMAGE_UPLOAD_CONSTRAINTS = {
+  maxSizeBytes: 5 * 1024 * 1024, // 5MB — matches /api/uploads/request-url
+  allowedContentTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+};
+const AUDIO_UPLOAD_CONSTRAINTS = {
+  maxSizeBytes: 10 * 1024 * 1024, // 10MB — short voice recordings
+  allowedContentTypes: ["audio/"],
+};
+const VIDEO_UPLOAD_CONSTRAINTS = {
+  maxSizeBytes: 50 * 1024 * 1024, // 50MB — short intro videos
+  allowedContentTypes: ["video/"],
+};
+
 // ISO week key like "2026-W28" — used for weekly dating tips cache.
 function currentWeekKey(): string {
   const now = new Date();
@@ -282,6 +298,35 @@ export async function registerRoutes(
     try {
       const input = api.profiles.me.update.input.parse(req.body);
       const existing = await storage.getProfile(userId);
+
+      // Profile photos uploaded to object storage must be validated and
+      // ACL-bound like every other media type. Without this, an attacker
+      // could park an arbitrary oversized blob as their photoUrl (making it
+      // DB-referenced and immune to the orphan sweep). Photos are bound as
+      // "public" so other authenticated members can view them via the
+      // /objects serving route. Only newly-changed /objects/ paths are
+      // validated, so existing profiles keep saving without re-checks.
+      if (
+        input.photoUrl &&
+        input.photoUrl.startsWith("/objects/") &&
+        input.photoUrl !== existing?.photoUrl
+      ) {
+        const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
+        const objectStorageService = new ObjectStorageService();
+        try {
+          input.photoUrl = await objectStorageService.trySetObjectEntityAclPolicy(
+            input.photoUrl,
+            { owner: userId, visibility: "public" },
+            userId,
+            IMAGE_UPLOAD_CONSTRAINTS,
+          );
+        } catch (err) {
+          if (err instanceof ObjectValidationError) {
+            return res.status(400).json({ message: err.message, field: "photoUrl" });
+          }
+          return res.status(400).json({ message: "Invalid photo reference", field: "photoUrl" });
+        }
+      }
 
       let ageVerified = existing?.ageVerified ?? false;
       if (input.dateOfBirth) {
@@ -1749,7 +1794,7 @@ Guidelines:
       // authenticated user), not arbitrary external URLs. Setting an ACL with
       // the requesting user as owner both confirms the object exists in our
       // bucket and binds it to the submitter.
-      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
       let normalizedPath: string;
       try {
@@ -1757,8 +1802,12 @@ Guidelines:
           photoUrl,
           { owner: userId, visibility: "private" },
           userId,
+          IMAGE_UPLOAD_CONSTRAINTS,
         );
-      } catch {
+      } catch (err) {
+        if (err instanceof ObjectValidationError) {
+          return res.status(400).json({ message: err.message });
+        }
         return res.status(400).json({ message: "Invalid verification photo reference" });
       }
       if (!normalizedPath.startsWith("/objects/")) {
@@ -1784,6 +1833,10 @@ Guidelines:
 
   app.post("/api/uploads/voice-intro", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      if (!(await checkAiRateLimit(userId, "upload-voice-intro", 10, 60 * 60 * 1000))) {
+        return res.status(429).json({ error: "Too many uploads. Please try again later." });
+      }
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -1803,15 +1856,19 @@ Guidelines:
 
       let resolvedUrl = voiceIntroUrl;
       if (voiceIntroUrl) {
-        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             voiceIntroUrl,
             { owner: userId, visibility: "private" },
             userId,
+            AUDIO_UPLOAD_CONSTRAINTS,
           );
-        } catch {
+        } catch (err) {
+          if (err instanceof ObjectValidationError) {
+            return res.status(400).json({ message: err.message });
+          }
           return res.status(400).json({ message: "Invalid voice intro reference" });
         }
         if (!resolvedUrl.startsWith("/objects/")) {
@@ -1833,6 +1890,10 @@ Guidelines:
   // === INTRO VIDEO UPLOAD ===
   app.post("/api/uploads/intro-video", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      if (!(await checkAiRateLimit(userId, "upload-intro-video", 10, 60 * 60 * 1000))) {
+        return res.status(429).json({ error: "Too many uploads. Please try again later." });
+      }
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -1852,15 +1913,19 @@ Guidelines:
 
       let resolvedUrl = introVideoUrl;
       if (introVideoUrl) {
-        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
         try {
           resolvedUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             introVideoUrl,
             { owner: userId, visibility: "private" },
             userId,
+            VIDEO_UPLOAD_CONSTRAINTS,
           );
-        } catch {
+        } catch (err) {
+          if (err instanceof ObjectValidationError) {
+            return res.status(400).json({ message: err.message });
+          }
           return res.status(400).json({ message: "Invalid intro video reference" });
         }
         if (!resolvedUrl.startsWith("/objects/")) {
@@ -1882,6 +1947,10 @@ Guidelines:
   // === VOICE NOTE UPLOAD (for chat messages) ===
   app.post("/api/uploads/voice-note", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      if (!(await checkAiRateLimit(userId, "upload-voice-note", 60, 60 * 60 * 1000))) {
+        return res.status(429).json({ error: "Too many uploads. Please try again later." });
+      }
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -2223,15 +2292,19 @@ Guidelines:
       // match membership and block state before serving the object.
       let resolvedVoiceNoteUrl = input.voiceNoteUrl || null;
       if (resolvedVoiceNoteUrl) {
-        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const { ObjectStorageService, ObjectValidationError } = await import("./replit_integrations/object_storage");
         const objectStorageService = new ObjectStorageService();
         try {
           resolvedVoiceNoteUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             resolvedVoiceNoteUrl,
             { owner: userId, visibility: "private" },
             userId,
+            AUDIO_UPLOAD_CONSTRAINTS,
           );
-        } catch {
+        } catch (err) {
+          if (err instanceof ObjectValidationError) {
+            return res.status(400).json({ message: err.message });
+          }
           return res.status(400).json({ message: "Invalid voice note reference" });
         }
         if (!resolvedVoiceNoteUrl.startsWith("/objects/")) {

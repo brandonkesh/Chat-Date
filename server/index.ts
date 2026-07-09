@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { ensurePaypalPlans } from './paypalService';
 import { PaypalWebhookHandler } from './paypalWebhookHandler';
 import { backfillMediaAcls } from './mediaAclBackfill';
+import { sweepOrphanedUploads } from './uploadSweep';
 
 const app = express();
 const httpServer = createServer(app);
@@ -151,6 +152,19 @@ async function initPaypal() {
       backfillMediaAcls().catch((err) => {
         log(`Media ACL backfill error: ${err?.message}`, "security");
       });
+      // Sweep orphaned uploads on startup and every 6 hours. Unbound uploads
+      // are unusable to the app; removing them stops the private bucket from
+      // being used as an arbitrary file sink (the signed upload URL cannot
+      // enforce size/type limits, so cleanup is the backstop).
+      sweepOrphanedUploads().catch((err) => {
+        log(`Upload sweep error: ${err?.message}`, "security");
+      });
+      const sweepTimer = setInterval(() => {
+        sweepOrphanedUploads().catch((err) => {
+          log(`Upload sweep error: ${err?.message}`, "security");
+        });
+      }, 6 * 60 * 60 * 1000);
+      sweepTimer.unref();
     },
   );
 })();

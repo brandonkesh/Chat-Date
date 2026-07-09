@@ -38,6 +38,31 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
+// Thrown when an uploaded object fails size/type validation at bind time.
+// The offending object is deleted (best effort) before this is thrown.
+export class ObjectValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ObjectValidationError";
+    Object.setPrototypeOf(this, ObjectValidationError.prototype);
+  }
+}
+
+// Server-side constraints enforced against the object's REAL stored metadata
+// (not client-declared values). Entries in allowedContentTypes may be exact
+// MIME types ("image/png") or prefixes ending in "/" ("audio/").
+export interface UploadConstraints {
+  maxSizeBytes: number;
+  allowedContentTypes: string[];
+}
+
+function contentTypeAllowed(contentType: string, allowed: string[]): boolean {
+  const normalized = contentType.toLowerCase().split(";")[0].trim();
+  return allowed.some((entry) =>
+    entry.endsWith("/") ? normalized.startsWith(entry) : normalized === entry
+  );
+}
+
 // The object storage service is used to interact with the object storage service.
 export class ObjectStorageService {
   constructor() {}
@@ -210,10 +235,18 @@ export class ObjectStorageService {
   // If the object already has an ACL, the requestingUserId must match the existing
   // owner. This prevents one user from hijacking another user's uploaded object by
   // submitting its path to a media-binding endpoint.
+  //
+  // When `constraints` are provided, the object's REAL stored metadata (size and
+  // content type as recorded by object storage) is validated before the ACL is
+  // set. The signed upload URL cannot enforce limits, so this bind-time check is
+  // the authoritative enforcement point. Objects that fail validation are
+  // deleted (best effort) and an ObjectValidationError is thrown, so oversized
+  // or mistyped uploads can never be attached to app media features.
   async trySetObjectEntityAclPolicy(
     rawPath: string,
     aclPolicy: ObjectAclPolicy,
-    requestingUserId: string
+    requestingUserId: string,
+    constraints?: UploadConstraints
   ): Promise<string> {
     const normalizedPath = this.normalizeObjectEntityPath(rawPath);
     if (!normalizedPath.startsWith("/")) {
@@ -228,8 +261,69 @@ export class ObjectStorageService {
       throw new Error("Object is already owned by another user");
     }
 
+    if (constraints) {
+      const [metadata] = await objectFile.getMetadata();
+      const actualSize = Number(metadata.size ?? 0);
+      const actualType = String(metadata.contentType ?? "");
+
+      let violation: string | null = null;
+      if (!Number.isFinite(actualSize) || actualSize <= 0) {
+        violation = "Uploaded file is empty or has an unreadable size";
+      } else if (actualSize > constraints.maxSizeBytes) {
+        const maxMb = Math.round(constraints.maxSizeBytes / (1024 * 1024));
+        violation = `Uploaded file is too large (maximum ${maxMb}MB)`;
+      } else if (!actualType || !contentTypeAllowed(actualType, constraints.allowedContentTypes)) {
+        violation = "Uploaded file has an unsupported type";
+      }
+
+      if (violation) {
+        // Only delete when the requester has PROVEN ownership via an existing
+        // ACL. Objects with no ACL must not be deleted here: object paths can
+        // leak (e.g. profile photo URLs are visible to other users), and an
+        // attacker could otherwise destroy someone else's not-yet-bound or
+        // legacy ACL-less object by submitting its path to an endpoint with
+        // mismatched constraints. Unowned orphans are cleaned up by the
+        // periodic upload sweep instead.
+        if (existingAcl && existingAcl.owner === requestingUserId) {
+          try {
+            await objectFile.delete();
+          } catch (err) {
+            console.error(`Failed to delete invalid upload ${normalizedPath}:`, err);
+          }
+        }
+        throw new ObjectValidationError(violation);
+      }
+    }
+
     await setObjectAclPolicy(objectFile, aclPolicy);
     return normalizedPath;
+  }
+
+  // Lists all objects in the private uploads area. Used by the periodic
+  // security sweep that removes orphaned (never-bound) uploads.
+  async listUploadEntityFiles(): Promise<File[]> {
+    let dir = this.getPrivateObjectDir();
+    if (!dir.endsWith("/")) {
+      dir = `${dir}/`;
+    }
+    const { bucketName, objectName } = parseObjectPath(`${dir}uploads/`);
+    const [files] = await objectStorageClient
+      .bucket(bucketName)
+      .getFiles({ prefix: objectName });
+    return files;
+  }
+
+  // Converts an uploads-area File back to its public "/objects/..." path.
+  getEntityPathForFile(file: File): string {
+    let dir = this.getPrivateObjectDir();
+    if (!dir.endsWith("/")) {
+      dir = `${dir}/`;
+    }
+    const { objectName: dirObjectName } = parseObjectPath(dir);
+    const name = file.name.startsWith(dirObjectName)
+      ? file.name.slice(dirObjectName.length)
+      : file.name;
+    return `/objects/${name}`;
   }
 
   // Checks if the user can access the object entity.

@@ -2,9 +2,16 @@ import type { Express } from "express";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { isAuthenticated } from "../auth";
 import { canAccessObject, getObjectAclPolicy, ObjectPermission } from "./objectAcl";
+import { storage } from "../../storage";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+// Upload-URL issuance is rate limited per user. The signed PUT URL itself
+// cannot enforce size/type limits, so bounding how many URLs a user can mint
+// is the first line of defense against using the bucket as a file sink.
+const UPLOAD_URL_RATE_LIMIT = 30;
+const UPLOAD_URL_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Register object storage routes for file uploads.
@@ -40,25 +47,46 @@ export function registerObjectStorageRoutes(app: Express): void {
    * IMPORTANT: The client should NOT send the file to this endpoint.
    * Send JSON metadata only, then upload the file directly to uploadURL.
    */
-  app.post("/api/uploads/request-url", isAuthenticated, async (req, res) => {
+  app.post("/api/uploads/request-url", isAuthenticated, async (req: any, res) => {
     try {
       const { name, size, contentType } = req.body;
 
-      if (!name) {
+      if (!name || typeof name !== "string") {
         return res.status(400).json({
           error: "Missing required field: name",
         });
       }
 
-      if (size && size > MAX_FILE_SIZE) {
+      // size and contentType are REQUIRED. Omitting them must not bypass
+      // validation — the previous truthiness checks let a client skip both
+      // limits entirely by leaving the fields out.
+      if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+        return res.status(400).json({
+          error: "Missing or invalid required field: size",
+        });
+      }
+
+      if (size > MAX_FILE_SIZE) {
         return res.status(400).json({
           error: "File too large. Maximum size is 5MB.",
         });
       }
 
-      if (contentType && !ALLOWED_IMAGE_TYPES.includes(contentType)) {
+      if (typeof contentType !== "string" || !ALLOWED_IMAGE_TYPES.includes(contentType)) {
         return res.status(400).json({
           error: "Invalid file type. Only images (JPEG, PNG, GIF, WebP) are allowed.",
+        });
+      }
+
+      const userId = req.user?.claims?.sub;
+      const withinQuota = await storage.checkRateLimit(
+        `${userId}:upload-request-url`,
+        UPLOAD_URL_RATE_LIMIT,
+        UPLOAD_URL_RATE_WINDOW_MS,
+      );
+      if (!withinQuota) {
+        return res.status(429).json({
+          error: "Too many uploads. Please try again later.",
         });
       }
 

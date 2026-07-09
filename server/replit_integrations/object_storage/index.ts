@@ -1,8 +1,11 @@
 export {
   ObjectStorageService,
   ObjectNotFoundError,
+  ObjectValidationError,
   objectStorageClient,
 } from "./objectStorage";
+
+export type { UploadConstraints } from "./objectStorage";
 
 export type {
   ObjectAclPolicy,

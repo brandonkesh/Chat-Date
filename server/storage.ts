@@ -55,7 +55,7 @@ export interface IStorage {
   getProfile(userId: string): Promise<Profile | undefined>;
   getProfileById(id: number): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile & { userId: string; ageVerified?: boolean }): Promise<Profile>;
-  updateProfile(userId: string, profile: Partial<InsertProfile> & { ageVerified?: boolean }): Promise<Profile>;
+  updateProfile(userId: string, profile: Partial<InsertProfile> & { ageVerified?: boolean; voiceIntroUrl?: string | null; introVideoUrl?: string | null }): Promise<Profile>;
   getPotentialMatches(userId: string): Promise<Profile[]>;
   getRecommendedProfiles(userId: string): Promise<Profile[]>;
   getCrushPicks(userId: string): Promise<Profile[]>;
@@ -189,7 +189,7 @@ export class DatabaseStorage implements IStorage {
     return profile;
   }
 
-  async updateProfile(userId: string, updates: Partial<InsertProfile> & { ageVerified?: boolean }): Promise<Profile> {
+  async updateProfile(userId: string, updates: Partial<InsertProfile> & { ageVerified?: boolean; voiceIntroUrl?: string | null; introVideoUrl?: string | null }): Promise<Profile> {
     const [updated] = await db
       .update(profiles)
       .set(updates)
