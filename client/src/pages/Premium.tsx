@@ -155,17 +155,41 @@ export default function Premium() {
     queryKey: ['/api/products'],
   });
 
-  const selectPlanMutation = useMutation({
-    mutationFn: async (tier: MembershipTier) => {
-      const response = await apiRequest('POST', '/api/select-plan', { tier });
+  const checkoutMutation = useMutation({
+    mutationFn: async (priceId: string) => {
+      const response = await apiRequest('POST', '/api/checkout', { priceId });
+      return await response.json() as { url?: string; error?: string };
+    },
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast({
+          title: "Error",
+          description: data.error ?? "Failed to start checkout. Please try again.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to start checkout. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const downgradeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/select-plan', { tier: 'free' });
       return await response.json();
     },
-    onSuccess: (_data, tier) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/profiles/me'] });
-      const name = tiers.find(t => t.id === tier)?.name ?? 'your plan';
       toast({
         title: "Plan updated",
-        description: `${name} is now active. Enjoy!`,
+        description: "You have been switched to the free plan.",
       });
     },
     onError: () => {
@@ -213,7 +237,23 @@ export default function Premium() {
   const currentTier = (profile?.membershipTier || 'free') as MembershipTier;
 
   const handleSubscribe = (tier: TierInfo) => {
-    selectPlanMutation.mutate(tier.id);
+    if (tier.id === 'free') {
+      downgradeMutation.mutate();
+      return;
+    }
+    const product = products?.data.find(
+      (p) => p.metadata?.tier === tier.id,
+    );
+    const priceId = product?.prices?.[0]?.id;
+    if (!priceId) {
+      toast({
+        title: "Error",
+        description: "Plan not available right now. Please try again later.",
+        variant: "destructive",
+      });
+      return;
+    }
+    checkoutMutation.mutate(priceId);
   };
 
   const handleManageSubscription = () => {
@@ -348,10 +388,10 @@ export default function Premium() {
                       }`}
                       variant={isCurrentTier ? "outline" : tier.popular ? "default" : "secondary"}
                       onClick={() => handleSubscribe(tier)}
-                      disabled={selectPlanMutation.isPending || isCurrentTier}
+                      disabled={checkoutMutation.isPending || downgradeMutation.isPending || isCurrentTier}
                       data-testid={`button-subscribe-${tier.id}`}
                     >
-                      {selectPlanMutation.isPending ? (
+                      {(checkoutMutation.isPending || downgradeMutation.isPending) ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : isCurrentTier ? (
                         <>
@@ -375,7 +415,7 @@ export default function Premium() {
         <Card className="border-none shadow-lg">
           <CardContent className="p-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Every plan is free right now — switch or cancel anytime, no payment required.
+              Subscriptions are billed monthly via PayPal. Cancel anytime from your subscription settings.
             </p>
           </CardContent>
         </Card>

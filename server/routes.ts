@@ -2425,14 +2425,22 @@ Guidelines:
     }
   });
 
-  // Select a plan for free (no PayPal). Users choose their own tier and get it
-  // granted directly. Real PayPal subscribers manage their plan via PayPal.
+  // Downgrade to the free plan. Paid tiers are only granted through trusted
+  // PayPal billing events (webhook / subscription activation) — never by
+  // client choice alone.
   app.post("/api/select-plan", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     try {
       const { tier } = z
         .object({ tier: z.enum(["free", "basic", "pro", "elite"]) })
         .parse(req.body);
+
+      if (tier !== "free") {
+        return res.status(403).json({
+          message:
+            "Paid plans must be activated through PayPal checkout. Use POST /api/checkout to start a subscription.",
+        });
+      }
 
       const profile = await storage.getProfile(userId);
       if (!profile) {
@@ -2442,15 +2450,11 @@ Guidelines:
       if (profile.paypalSubscriptionId && profile.isPremium) {
         return res.status(400).json({
           message:
-            "You have an active PayPal subscription. Manage it from the subscription page.",
+            "You have an active PayPal subscription. Cancel it from the subscription page before switching to free.",
         });
       }
 
-      if (tier === "free") {
-        await storage.clearTestPremium(userId);
-      } else {
-        await storage.setTestPremium(userId, tier);
-      }
+      await storage.clearTestPremium(userId);
 
       const updated = (await storage.getProfile(userId)) ?? profile;
       res.json(sanitizeProfile(updated));

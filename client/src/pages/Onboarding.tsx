@@ -22,32 +22,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Heart, X, Plus, ShieldCheck, AlertCircle, Crown, Gem, Sparkles, Check } from "lucide-react";
+import { Heart, X, Plus, ShieldCheck, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { differenceInYears, parse, isValid } from "date-fns";
-import type { MembershipTier } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-
-const PLAN_OPTIONS: {
-  id: MembershipTier;
-  name: string;
-  price: string;
-  tagline: string;
-  icon: typeof Heart;
-  popular?: boolean;
-}[] = [
-  { id: "free", name: "Free", price: "$0", tagline: "Browse & match for free", icon: Heart },
-  { id: "basic", name: "Basic", price: "$4.99/mo", tagline: "More likes & see who viewed you", icon: Sparkles },
-  { id: "pro", name: "Pro", price: "$9.99/mo", tagline: "Unlimited likes & video calls", icon: Crown, popular: true },
-  { id: "elite", name: "Elite", price: "$19.99/mo", tagline: "Everything + top visibility", icon: Gem },
-];
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { mutateAsync: createProfile, isPending } = useUpdateProfile();
   const [newInterest, setNewInterest] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<MembershipTier>("free");
 
   const [dobError, setDobError] = useState("");
 
@@ -100,10 +83,6 @@ export default function Onboarding() {
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       await createProfile({ ...data, age, timezone });
-      if (selectedPlan !== "free") {
-        await apiRequest("POST", "/api/select-plan", { tier: selectedPlan });
-        queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
-      }
       setLocation("/feed");
     } catch (error) {
       // Error handled by hook toast
@@ -294,47 +273,6 @@ export default function Onboarding() {
                     ))}
                   </div>
                 )}
-              </FormItem>
-
-              <FormItem>
-                <FormLabel>Choose your plan</FormLabel>
-                <p className="text-xs text-muted-foreground -mt-1 mb-1">
-                  Pick what works for you — every plan is free right now, no payment needed. You can change it anytime.
-                </p>
-                <div className="grid grid-cols-2 gap-3" data-testid="plan-options">
-                  {PLAN_OPTIONS.map((plan) => {
-                    const PlanIcon = plan.icon;
-                    const isSelected = selectedPlan === plan.id;
-                    return (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        onClick={() => setSelectedPlan(plan.id)}
-                        className={`relative text-left rounded-xl border p-3 transition-colors ${
-                          isSelected
-                            ? "border-primary bg-primary/5 ring-2 ring-primary"
-                            : "border-border hover-elevate"
-                        }`}
-                        data-testid={`button-plan-${plan.id}`}
-                      >
-                        {plan.popular && (
-                          <Badge className="absolute -top-2 right-2 bg-primary text-[10px] px-1.5 py-0">
-                            Popular
-                          </Badge>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <PlanIcon className="w-4 h-4 text-primary" />
-                          <span className="font-semibold text-sm">{plan.name}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary ml-auto" />}
-                        </div>
-                        <div className="text-sm font-bold mt-1">{plan.price}</div>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">
-                          {plan.tagline}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
               </FormItem>
 
               <Button 

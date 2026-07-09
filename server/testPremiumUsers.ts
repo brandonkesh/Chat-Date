@@ -2,20 +2,18 @@ import { storage } from "./storage";
 import type { MembershipTier } from "@shared/schema";
 
 // ---------------------------------------------------------------------------
-// Private forced-tier overrides (NOT the public signup flow).
+// Private forced-tier overrides for internal testing only.
 // ---------------------------------------------------------------------------
-// Everyone now chooses their own plan during signup (or anytime on the Premium
-// page) and gets it for free — see POST /api/select-plan. That choice persists
-// across logins.
+// Paid plans in production are only granted through trusted PayPal billing
+// events (webhook/subscription activation) — never by client-side choice.
 //
-// This list is a way to FORCE a specific tier for an account on EVERY login,
-// overriding whatever the user picked. It exists only for special testing.
+// This list is a way to FORCE a specific tier for a named internal account on
+// EVERY login, bypassing billing. It exists only for development/QA testing.
 // Add an entry as { "<email-or-username>": "basic" | "pro" | "elite" }.
 // Matching is case-insensitive on the user's Replit username and email only.
 //
-// Leave it EMPTY so that owner/tester accounts can freely switch their own plan
-// like any other user and have the choice stick. Real PayPal subscribers are
-// never affected by this list.
+// Leave it EMPTY in production. Real PayPal subscribers are never affected
+// by this list.
 export const TEST_PREMIUM_USERS: Record<string, MembershipTier> = {};
 
 function normalize(value: unknown): string | null {
@@ -96,7 +94,8 @@ export async function applyTestPremiumIfNeeded(
     return;
   }
 
-  // Not on the allow-list. We do NOT revoke premium here: users now choose
-  // their own plan (granted for free, no PayPal), and that choice must persist
-  // across logins. Downgrades happen explicitly via the plan/cancel flow.
+  // Not on the allow-list. We do NOT revoke premium here: this account may
+  // have a legitimate PayPal-backed subscription that is separate from the
+  // test-override mechanism. Only the PayPal webhook flow grants/revokes
+  // paid tiers for normal users.
 }
