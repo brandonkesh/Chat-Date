@@ -16,7 +16,7 @@ function formatSubmittedTime(createdAt: Feedback["createdAt"]): string {
   if (!createdAt) return "just now";
   return (
     new Date(createdAt).toLocaleString("en-US", {
-      timeZone: process.env.FEEDBACK_TIMEZONE || "America/New_York",
+      timeZone: process.env.FEEDBACK_TIMEZONE || "America/Los_Angeles",
       month: "numeric",
       day: "numeric",
       year: "numeric",
@@ -89,13 +89,13 @@ export async function sendFeedbackNotification(
         `New feedback submitted on Crush.\n\n` +
         `Category: ${label}\n` +
         `From: ${who}${submitter.email ? ` (${submitter.email})` : ""}\n` +
-        `Submitted: ${item.createdAt ? new Date(item.createdAt).toLocaleString() : "just now"}\n\n` +
+        `Submitted: ${formatSubmittedTime(item.createdAt)}\n\n` +
         `Message:\n${item.message}\n`,
       html:
         `<h2>New feedback submitted on Crush</h2>` +
         `<p><strong>Category:</strong> ${label}</p>` +
         `<p><strong>From:</strong> ${safeWho}${safeEmail ? ` (${safeEmail})` : ""}</p>` +
-        `<p><strong>Submitted:</strong> ${item.createdAt ? new Date(item.createdAt).toLocaleString() : "just now"}</p>` +
+        `<p><strong>Submitted:</strong> ${formatSubmittedTime(item.createdAt)}</p>` +
         `<p><strong>Message:</strong></p>` +
         `<p style="white-space:pre-wrap">${safeMessage}</p>`,
     });
