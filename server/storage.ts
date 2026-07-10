@@ -250,9 +250,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProfile(profileData: InsertProfile & { userId: string; ageVerified?: boolean }): Promise<Profile> {
-    // Set trial ends at to 1 month from now
-    const trialEndsAt = new Date();
-    trialEndsAt.setMonth(trialEndsAt.getMonth() + 1);
+    // Only grant a free trial if this identity has never consumed one before.
+    // If the user deleted their account, trialConsumedAt is set on the users row
+    // and we set trialEndsAt to a past date so the paywall is enforced immediately.
+    const [userRow] = await db.select({ trialConsumedAt: users.trialConsumedAt }).from(users).where(eq(users.id, profileData.userId));
+    const trialAlreadyConsumed = !!userRow?.trialConsumedAt;
+
+    const trialEndsAt = trialAlreadyConsumed
+      ? new Date(0) // epoch — trial is immediately expired
+      : (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d; })();
 
     const [profile] = await db.insert(profiles).values({
       ...profileData,
@@ -884,9 +890,22 @@ export class DatabaseStorage implements IStorage {
       await tx
         .delete(sessions)
         .where(sql`${sessions.sess} -> 'passport' -> 'user' -> 'claims' ->> 'sub' = ${userId}`);
-      // 8. The profile itself, then the user row.
+      // 8. The profile itself, then tombstone the user row.
+      // We keep the users row (with the stable Replit sub as PK) so that
+      // trialConsumedAt survives re-registration and prevents a fresh trial
+      // being issued to the same identity after account deletion.
       await tx.delete(profiles).where(eq(profiles.userId, userId));
-      await tx.delete(users).where(eq(users.id, userId));
+      await tx
+        .update(users)
+        .set({
+          trialConsumedAt: new Date(),
+          email: null,
+          firstName: null,
+          lastName: null,
+          profileImageUrl: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
     });
     return mediaPaths;
   }

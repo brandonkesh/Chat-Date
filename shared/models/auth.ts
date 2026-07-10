@@ -23,6 +23,8 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  // Set when an account is deleted. Prevents re-creating a fresh trial after deletion.
+  trialConsumedAt: timestamp("trial_consumed_at"),
 });
 
 export type UpsertUser = typeof users.$inferInsert;

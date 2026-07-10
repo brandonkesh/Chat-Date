@@ -21,8 +21,14 @@ class AuthStorage implements IAuthStorage {
       .values(userData)
       .onConflictDoUpdate({
         target: users.id,
+        // Explicitly list updatable fields — trialConsumedAt is intentionally
+        // excluded so that a tombstoned (post-deletion) users row retains it
+        // through re-registration, preventing free-trial resets.
         set: {
-          ...userData,
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
           updatedAt: new Date(),
         },
       })
