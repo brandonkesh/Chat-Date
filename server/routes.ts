@@ -1179,6 +1179,10 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Match not found" });
     }
     const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    // Blocked pairs get no partner-derived data, even via historical matches.
+    if (await storage.isBlockedEither(userId, partnerId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
     const [alreadyGiven, partnerKudos] = await Promise.all([
       storage.hasGivenKudos(userId, partnerId),
       storage.getKudosCount(partnerId),
