@@ -95,6 +95,77 @@ function sanitizeProfile(profile: any) {
   };
 }
 
+// Allow-list of profile fields that are safe to expose to OTHER members.
+// This is a default-deny serializer: anything not listed here (exact location,
+// date of birth, PayPal identifiers, account-security state, reward/timezone
+// internals, etc.) is never returned on member-to-member surfaces. Any new
+// column added to the profiles table stays private unless explicitly added here.
+const PUBLIC_PROFILE_FIELDS = [
+  "id",
+  "userId",
+  "displayName",
+  "age",
+  "bio",
+  "gender",
+  "interestedIn",
+  "interests",
+  "isPremium",
+  "membershipTier",
+  "isVerified",
+  "ageVerified",
+  "verificationStatus",
+  "locationName",
+  "drinking",
+  "smoking",
+  "marijuana",
+  "exercise",
+  "diet",
+  "pets",
+  "kids",
+  "religion",
+  "education",
+  "jobTitle",
+  "company",
+  "relationshipGoal",
+  "familyPlans",
+  "livingSituation",
+  "lookingForDescription",
+  "languages",
+  "orientation",
+  "ethnicity",
+  "politicalViews",
+  "astrologicalSign",
+  "personalityBadges",
+  "songOfTheDay",
+  "promptQuestion",
+  "promptAnswer",
+  "weeklyAnswer",
+  "weeklyQuestionKey",
+  "dreamDateElements",
+] as const;
+
+// Serializer for another member's profile. Returns only allow-listed display
+// fields and rewrites media to block-aware proxy URLs. Sensitive fields
+// (dateOfBirth, latitude/longitude, zipCode, paypal*, twoFactor*, emailVerified,
+// phoneNumber, reward timing, timezone, etc.) are dropped entirely.
+function sanitizePublicProfile(profile: any) {
+  if (!profile) return profile;
+  const out: Record<string, any> = {};
+  for (const field of PUBLIC_PROFILE_FIELDS) {
+    if (profile[field] !== undefined) {
+      out[field] = profile[field];
+    }
+  }
+  out.photoUrl = profile.photoUrl ? `/api/media/photo/${profile.userId}` : null;
+  out.voiceIntroUrl = profile.voiceIntroUrl
+    ? `/api/media/voice-intro/${profile.userId}`
+    : null;
+  out.introVideoUrl = profile.introVideoUrl
+    ? `/api/media/intro-video/${profile.userId}`
+    : null;
+  return out;
+}
+
 function sanitizeMessage(message: any) {
   if (!message) return message;
   return {
@@ -940,21 +1011,21 @@ export async function registerRoutes(
   app.get(api.profiles.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getPotentialMatches(userId);
-    res.json(profiles.map(sanitizeProfile));
+    res.json(profiles.map(sanitizePublicProfile));
   });
 
   // Get recommended profiles (based on shared interests)
   app.get(api.profiles.recommended.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getRecommendedProfiles(userId);
-    res.json(profiles.map(sanitizeProfile));
+    res.json(profiles.map(sanitizePublicProfile));
   });
 
   // Get crush picks (verified & premium users)
   app.get(api.profiles.crushPicks.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getCrushPicks(userId);
-    res.json(profiles.map(sanitizeProfile));
+    res.json(profiles.map(sanitizePublicProfile));
   });
 
   // === TOP PICKS OF THE DAY ===
@@ -969,7 +1040,7 @@ export async function registerRoutes(
     const claimedToday = me?.lastRewardAt
       ? new Date(me.lastRewardAt).toISOString().slice(0, 10) === todayKey
       : false;
-    res.json(picks.slice(0, claimedToday ? 4 : 3).map(sanitizeProfile));
+    res.json(picks.slice(0, claimedToday ? 4 : 3).map(sanitizePublicProfile));
   });
 
   // === DAILY LOGIN REWARD ===
@@ -990,7 +1061,7 @@ export async function registerRoutes(
   app.get("/api/second-chance", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const passedProfiles = await storage.getSecondChanceProfiles(userId);
-    res.json(passedProfiles.map(sanitizeProfile));
+    res.json(passedProfiles.map(sanitizePublicProfile));
   });
 
   app.post("/api/second-chance/undo", isAuthenticated, async (req: any, res) => {
@@ -1318,7 +1389,7 @@ export async function registerRoutes(
       partner = p ? { firstName: p.displayName.trim().split(/\s+/)[0] } : null;
     } else if (partnerId && status === "revealed") {
       const p = await storage.getProfile(partnerId);
-      partner = p ? sanitizeProfile(p) : null;
+      partner = p ? sanitizePublicProfile(p) : null;
     }
     return {
       id: bd.id,
@@ -1743,7 +1814,7 @@ Guidelines:
     const results = await storage.getMatchmakingProfiles(userId);
     res.json(results.map(r => ({
       ...r,
-      profile: sanitizeProfile(r.profile),
+      profile: sanitizePublicProfile(r.profile),
     })));
   });
 
@@ -1763,7 +1834,7 @@ Guidelines:
             user2Id: target.userId,
             isDailyMatch: true,
             createdAt: new Date(),
-            partnerProfile: sanitizeProfile(target)
+            partnerProfile: sanitizePublicProfile(target)
           };
         }
       }
@@ -1877,7 +1948,7 @@ Guidelines:
       const enrichedMatches = aiResult.topMatches?.map((match: any) => {
         const profile = potentialMatches.find(p => p.id === match.candidateId);
         return {
-          profile: sanitizeProfile(profile),
+          profile: sanitizePublicProfile(profile),
           compatibilityScore: match.compatibilityScore,
           reason: match.reason
         };
@@ -1904,7 +1975,7 @@ Guidelines:
     if (blockedIds.includes(profile.userId)) {
       return res.status(404).json({ message: "Profile not found" });
     }
-    res.json(sanitizeProfile(profile));
+    res.json(sanitizePublicProfile(profile));
   });
 
   // === REPORTS ===
@@ -2059,7 +2130,7 @@ Guidelines:
     const blockedUsers = await storage.getBlockedUsers(userId);
     const sanitized = blockedUsers.map(({ block, profile }) => ({
       block,
-      profile: sanitizeProfile(profile),
+      profile: sanitizePublicProfile(profile),
     }));
     res.json(sanitized);
   });
@@ -2743,7 +2814,7 @@ Guidelines:
   app.get(api.swipes.likesReceived.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const likers = await storage.getLikesReceived(userId);
-    res.json(likers.map(sanitizeProfile));
+    res.json(likers.map(sanitizePublicProfile));
   });
 
   // === MATCHES ===
@@ -2753,7 +2824,7 @@ Guidelines:
     res.json(results.map(({ partnerProfile, lastMessageAt, lastMessageSenderId, ...match }: any) => ({
       ...match,
       match,
-      partnerProfile: sanitizeProfile(partnerProfile),
+      partnerProfile: sanitizePublicProfile(partnerProfile),
       lastMessageAt: lastMessageAt ? new Date(lastMessageAt).toISOString() : null,
       lastMessageSenderId: lastMessageSenderId ?? null,
     })));
@@ -2787,7 +2858,7 @@ Guidelines:
       return res.status(404).json({ message: "Partner profile not found" });
     }
 
-    res.json({ match, partnerProfile: sanitizeProfile(partnerProfile) });
+    res.json({ match, partnerProfile: sanitizePublicProfile(partnerProfile) });
   });
 
   // === UNMATCH / END CONVERSATION ===
@@ -2991,7 +3062,7 @@ Guidelines:
   app.get("/api/profiles/saved", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profiles = await storage.getSavedProfiles(userId);
-    res.json(profiles.map(sanitizeProfile));
+    res.json(profiles.map(sanitizePublicProfile));
   });
 
   app.post("/api/profiles/save/:id", isAuthenticated, async (req: any, res) => {
@@ -3322,8 +3393,8 @@ Guidelines:
       return res.json({
         ...updated,
         responses,
-        inviterProfile: sanitizeProfile(inviterProfile),
-        inviteeProfile: sanitizeProfile(inviteeProfile),
+        inviterProfile: sanitizePublicProfile(inviterProfile),
+        inviteeProfile: sanitizePublicProfile(inviteeProfile),
       });
     }
 
@@ -3333,8 +3404,8 @@ Guidelines:
     res.json({
       ...microDate,
       responses,
-      inviterProfile: sanitizeProfile(inviterProfile),
-      inviteeProfile: sanitizeProfile(inviteeProfile),
+      inviterProfile: sanitizePublicProfile(inviterProfile),
+      inviteeProfile: sanitizePublicProfile(inviteeProfile),
     });
   });
 
@@ -3428,8 +3499,8 @@ Guidelines:
     res.json({
       ...microDate,
       responses,
-      inviterProfile: sanitizeProfile(inviterProfile),
-      inviteeProfile: sanitizeProfile(inviteeProfile),
+      inviterProfile: sanitizePublicProfile(inviterProfile),
+      inviteeProfile: sanitizePublicProfile(inviteeProfile),
     });
   });
 
@@ -3672,7 +3743,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
         .sort((a, b) => b.score - a.score)
         .slice(0, 12)
         .map(sp => ({
-          ...sanitizeProfile(sp.profile),
+          ...sanitizePublicProfile(sp.profile),
           matchScore: sp.score,
           sharedInterests: sp.sharedInterests,
         }));
