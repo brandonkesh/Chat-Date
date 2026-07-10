@@ -3859,6 +3859,26 @@ Return ONLY valid JSON — no markdown, no code blocks.`
 
   app.post("/api/video-call/notify-token", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+
+    // Sweep expired tokens so unused entries can never accumulate forever.
+    // (Successful WS auth is otherwise the only deletion path.)
+    const now = new Date();
+    notifyTokens.forEach((data, t) => {
+      if (data.expiresAt < now) {
+        notifyTokens.delete(t);
+      }
+    });
+
+    // Bound each user to a single outstanding notify token. A client only ever
+    // needs its latest token, so drop any prior ones for this user before
+    // issuing a new one. This caps the map at ~one entry per user and blocks
+    // the memory-exhaustion abuse of requesting tokens in a tight loop.
+    notifyTokens.forEach((data, t) => {
+      if (data.userId === userId) {
+        notifyTokens.delete(t);
+      }
+    });
+
     const token = crypto.randomUUID();
     notifyTokens.set(token, { userId, expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
     res.json({ token });
