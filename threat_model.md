@@ -4,7 +4,7 @@
 
 Crush is a dating app with a React frontend and an Express/TypeScript backend backed by PostgreSQL. It stores user profiles, private messages, matches, uploaded media, account security settings, and subscription state. Production authentication is handled through Replit OIDC sessions, while the app adds its own 2FA, app-lock, verification, object-storage, PayPal, and AI-powered features on top.
 
-The current production deployment is password-gated at the platform edge, which reduces unauthenticated internet reachability. Authenticated-user abuse, stale-access bugs after blocks, webhook misuse, and any server-side trust of client-controlled premium or media state remain in scope.
+The current production deployment is password-gated at the platform edge, which reduces unauthenticated internet reachability. The deployment is also autoscaled, so any security control that depends on in-memory state, token caches, or per-process revocation can behave differently across instances. Authenticated-user abuse, stale-access bugs after blocks, webhook misuse, server-side trust of client-controlled premium or media state, and logout/session-revocation gaps for real-time channels remain in scope.
 
 ## Assets
 
@@ -19,6 +19,7 @@ The current production deployment is password-gated at the platform edge, which 
 
 - **Browser to API** -- every client request is untrusted and must be authenticated, authorized, and validated server-side.
 - **Authenticated session to app-level security gates** -- Replit login is not the same as app-level 2FA, app-lock, or verification state. Those controls must be enforced on the server if they are intended to protect server resources.
+- **HTTP session to long-lived real-time channels** -- WebSocket identity, notification tokens, and call tokens should be revocable when the underlying login session ends; otherwise access can survive logout.
 - **API to PostgreSQL** -- the backend can read and write all profile, messaging, payment, and safety data.
 - **API to object storage** -- uploaded media crosses into storage and later back out through media-serving routes. Ownership and ACL checks matter here.
 - **API to third parties** -- the server calls PayPal and OpenAI and must not trust client-controlled values when making those calls or processing callbacks.
@@ -27,7 +28,7 @@ The current production deployment is password-gated at the platform edge, which 
 ## Scan Anchors
 
 - **Production entry points:** `server/index.ts`, `server/routes.ts`, `server/replit_integrations/auth/replitAuth.ts`, `server/replit_integrations/object_storage/routes.ts`, `server/paypalWebhookHandler.ts`
-- **Highest-risk areas:** auth/session enforcement, path-based `/api` gate exemptions, profile/media ACL binding, shared profile write schemas in `shared/schema.ts` / `shared/routes.ts`, payment/subscription routes, premium-entitlement mutation routes, WebSocket signaling, and any route returning private user data
+- **Highest-risk areas:** auth/session enforcement, path-based `/api` gate exemptions, profile/media ACL binding, shared profile write schemas in `shared/schema.ts` / `shared/routes.ts`, payment/subscription routes, premium-entitlement mutation routes, account deletion/recreation effects on entitlements, WebSocket signaling/token revocation, and any route returning private user data
 - **Public vs authenticated:** most app APIs are authenticated; PayPal webhook and object-serving paths are special boundaries that need explicit review; match-scoped and saved-profile APIs must still enforce block and ownership rules after authentication
 - **Dev-only / usually ignore unless proven reachable:** unregistered integration route files under `server/replit_integrations/chat`, `audio/routes.ts`, and `image/routes.ts`; Vite/dev tooling; mockup sandbox assumptions
 
@@ -80,3 +81,4 @@ Required guarantees:
 - Authorization checks MUST be applied per route, not assumed from frontend navigation.
 - Block, match, and ownership rules MUST be enforced consistently across alternate APIs, including AI-assisted features.
 - Session-based controls like 2FA/app-lock MUST protect server resources, not just UI routes.
+- Logout SHOULD revoke or invalidate access to live real-time channels that were authenticated from the session.
