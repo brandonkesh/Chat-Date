@@ -85,10 +85,11 @@ async function verifyLoginOtp(
 
 function sanitizeProfile(profile: any) {
   if (!profile) return profile;
-  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, voiceIntroUrl, introVideoUrl, phoneNumber, loginOtpCode, loginOtpExpiry, ...safe } = profile;
+  const { twoFactorSecret, emailVerificationCode, emailVerificationExpiry, passwordHash, backupCodes, verificationPhotoUrl, voiceIntroUrl, introVideoUrl, phoneNumber, loginOtpCode, loginOtpExpiry, photoUrl, ...safe } = profile;
   return {
     ...safe,
     hasPassword: !!passwordHash,
+    photoUrl: photoUrl ? `/api/media/photo/${profile.userId}` : null,
     voiceIntroUrl: voiceIntroUrl ? `/api/media/voice-intro/${profile.userId}` : null,
     introVideoUrl: introVideoUrl ? `/api/media/intro-video/${profile.userId}` : null,
   };
@@ -303,9 +304,10 @@ export async function registerRoutes(
       // ACL-bound like every other media type. Without this, an attacker
       // could park an arbitrary oversized blob as their photoUrl (making it
       // DB-referenced and immune to the orphan sweep). Photos are bound as
-      // "public" so other authenticated members can view them via the
-      // /objects serving route. Only newly-changed /objects/ paths are
-      // validated, so existing profiles keep saving without re-checks.
+      // "private" so that access is controlled exclusively through the
+      // /api/media/photo/:userId proxy, which re-checks block/hide state at
+      // read time. Only newly-changed /objects/ paths are validated, so
+      // existing profiles keep saving without re-checks.
       if (
         input.photoUrl &&
         input.photoUrl.startsWith("/objects/") &&
@@ -316,7 +318,7 @@ export async function registerRoutes(
         try {
           input.photoUrl = await objectStorageService.trySetObjectEntityAclPolicy(
             input.photoUrl,
-            { owner: userId, visibility: "public" },
+            { owner: userId, visibility: "private" },
             userId,
             IMAGE_UPLOAD_CONSTRAINTS,
           );
@@ -1202,7 +1204,7 @@ export async function registerRoutes(
         profileId: p.id,
         isMe: p.userId === userId,
         displayName: p.displayName,
-        photoUrl: p.photoUrl,
+        photoUrl: p.photoUrl ? `/api/media/photo/${p.userId}` : null,
         answer: p.weeklyAnswer,
       })),
     });
@@ -2555,6 +2557,37 @@ Guidelines:
   // before streaming private media objects. Raw object paths are never exposed
   // to clients; all media is accessed exclusively through these proxies.
 
+  app.get("/api/media/photo/:targetUserId", isAuthenticated, async (req: any, res) => {
+    const requesterId = req.user.claims.sub;
+    const targetUserId = req.params.targetUserId;
+    try {
+      if (requesterId !== targetUserId) {
+        const blocked = await storage.isBlockedEither(requesterId, targetUserId);
+        if (blocked) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        const hidden = await storage.isHiddenEither(requesterId, targetUserId);
+        if (hidden) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
+      const profile = await storage.getProfile(targetUserId);
+      if (!profile?.photoUrl) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(profile.photoUrl);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      if (error?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "Not found" });
+      }
+      console.error("Photo proxy error:", error);
+      res.status(500).json({ error: "Failed to serve photo" });
+    }
+  });
+
   app.get("/api/media/voice-intro/:targetUserId", isAuthenticated, async (req: any, res) => {
     const requesterId = req.user.claims.sub;
     const targetUserId = req.params.targetUserId;
@@ -3687,15 +3720,16 @@ Return ONLY valid JSON — no markdown, no code blocks.`
       return res.status(403).json({ error: "Not authorized for this call" });
     }
 
+    const callerPhotoProxyUrl = userProfile.photoUrl ? `/api/media/photo/${userId}` : null;
     activeCallInvites.set(matchId, {
       callerId: userId,
       callerName: userProfile.displayName,
-      callerPhoto: userProfile.photoUrl,
+      callerPhoto: callerPhotoProxyUrl,
       createdAt: new Date(),
     });
 
     const targetUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
-    broadcastCallNotification(targetUserId, matchId, userProfile.displayName, userProfile.photoUrl);
+    broadcastCallNotification(targetUserId, matchId, userProfile.displayName, callerPhotoProxyUrl);
 
     setTimeout(() => {
       const invite = activeCallInvites.get(matchId);
@@ -4044,7 +4078,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
                   type: 'incoming-call',
                   userId: currentUserId,
                   callerName: callerProfile?.displayName || 'Someone',
-                  callerPhoto: callerProfile?.photoUrl || null,
+                  callerPhoto: callerProfile?.photoUrl ? `/api/media/photo/${currentUserId}` : null,
                 }));
                 socket.send(JSON.stringify({ type: 'user-joined', userId: currentUserId }));
               }

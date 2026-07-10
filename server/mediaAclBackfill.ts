@@ -12,12 +12,13 @@ function log(message: string) {
 /**
  * Re-ACL all existing user media objects from "public" to "private".
  *
- * Voice intros, intro videos, and chat voice notes were previously stored
- * with visibility: "public", which allowed any authenticated user who knew the
- * raw object path to access the media regardless of their current relationship
- * with the owner. This function finds all such objects and marks them private
- * so that access is exclusively controlled by the API-level proxy routes
- * (/api/media/voice-intro, /api/media/intro-video, /api/media/voice-note).
+ * Voice intros, intro videos, chat voice notes, and profile photos were
+ * previously stored with visibility: "public", which allowed any authenticated
+ * user who knew the raw object path to access the media regardless of their
+ * current relationship with the owner. This function finds all such objects
+ * and marks them private so that access is exclusively controlled by the
+ * API-level proxy routes (/api/media/photo, /api/media/voice-intro,
+ * /api/media/intro-video, /api/media/voice-note).
  *
  * This is a best-effort idempotent job: failures on individual objects are
  * logged and skipped so that one bad object cannot block the rest.
@@ -43,6 +44,18 @@ export async function backfillMediaAcls(): Promise<void> {
     } catch (err: any) {
       log(`Skipped ${objectPath} (owner=${ownerId}): ${err?.message ?? err}`);
       skipped++;
+    }
+  }
+
+  // Re-ACL profile photos
+  const profilesWithPhoto = await db
+    .select({ userId: profiles.userId, photoUrl: profiles.photoUrl })
+    .from(profiles)
+    .where(isNotNull(profiles.photoUrl));
+
+  for (const p of profilesWithPhoto) {
+    if (p.photoUrl && p.photoUrl.startsWith("/objects/")) {
+      await makePrivate(p.photoUrl, p.userId);
     }
   }
 
