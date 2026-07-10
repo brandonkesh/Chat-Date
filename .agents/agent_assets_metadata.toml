@@ -18,3 +18,9 @@ id = "ol1KydvgXfaUSY4-PYlqq"
 uri = "file://exports/Crush-Dating-App.pdf"
 type = "pdf"
 title = "Crush Dating App — Pitch Deck (PDF version)"
+
+[[outputs]]
+id = "e0g3hDHAeHVGRaA5OoSjS"
+uri = "file://exports/Crush-Dating-App-Complete.pptx"
+type = "slides"
+title = "Crush — Complete Product Deck (with What's New)"
