@@ -95,11 +95,27 @@ export class PaypalWebhookHandler {
         const subscriberId: string | undefined = resource.subscriber?.payer_id;
         const customId: string | undefined = resource.custom_id;
 
-        const userId =
-          customId ||
-          (await storage.getProfileByPaypalSubscriptionId(subscriptionId))?.userId;
+        // SECURITY: ownership is derived ONLY from a server-issued subscription
+        // record (created via /api/checkout, which stores the subscription id on
+        // the owning profile before approval). We never trust the webhook's
+        // attacker-controllable `custom_id` to decide which account this affects.
+        const ownerProfile =
+          await storage.getProfileByPaypalSubscriptionId(subscriptionId);
+        const userId = ownerProfile?.userId;
         if (!userId) {
-          log(`No user found for subscription ${subscriptionId}`, 'paypal');
+          log(
+            `No server-issued subscription record for ${subscriptionId} — ignoring event (not created through checkout)`,
+            'paypal',
+          );
+          break;
+        }
+        // Defense-in-depth: a legitimate subscription always has custom_id equal
+        // to the owning userId. A mismatch means the metadata was tampered with.
+        if (customId && customId !== userId) {
+          log(
+            `custom_id mismatch for subscription ${subscriptionId} (event custom_id != owner) — refusing to apply`,
+            'paypal',
+          );
           break;
         }
 
@@ -141,11 +157,23 @@ export class PaypalWebhookHandler {
         const subscriptionId: string = resource.id;
         const customId: string | undefined = resource.custom_id;
 
-        const userId =
-          customId ||
-          (await storage.getProfileByPaypalSubscriptionId(subscriptionId))?.userId;
+        // SECURITY: same as the activation branch — resolve the owner strictly
+        // from the server-issued subscription record, never from `custom_id`.
+        const ownerProfile =
+          await storage.getProfileByPaypalSubscriptionId(subscriptionId);
+        const userId = ownerProfile?.userId;
         if (!userId) {
-          log(`No user found for subscription ${subscriptionId}`, 'paypal');
+          log(
+            `No server-issued subscription record for ${subscriptionId} — ignoring cancel/expire event`,
+            'paypal',
+          );
+          break;
+        }
+        if (customId && customId !== userId) {
+          log(
+            `custom_id mismatch on cancel/expire for subscription ${subscriptionId} — refusing to apply`,
+            'paypal',
+          );
           break;
         }
 

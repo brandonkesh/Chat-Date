@@ -2,5 +2,6 @@
 - [Resend transactional email](resend-email.md) — onboarding@resend.dev only delivers to the Resend account owner until a domain is verified (silent for other recipients).
 - [auth/user bootstrap](auth-user-bootstrap.md) — never 403/423-gate GET /api/auth/user for 2FA/app-lock; it bootstraps the SPA and the challenge UI won't render (useAuth only treats 401 as logged-out).
 - [SMS 2FA removed](sms-2fa-removed.md) — owner dropped text codes (Twilio too burdensome); only email + authenticator 2FA. Don't re-suggest SMS.
+- [PayPal webhook ownership](paypal-webhook-ownership.md) — resolve owner ONLY from server-issued subscriptionId mapping; never trust webhook custom_id.
 - [e2e harness flakiness](e2e-harness-flakiness.md) — Playwright subagent can false-fail with EADDRINUSE/502/blank under concurrent load; verify via curl+screenshot before retrying.
 - [Profile update contract](profile-update-contract.md) — PUT /api/profiles/me validates the FULL insert schema; toggles omitting interestedIn silently 400. No partial PATCH exists.
