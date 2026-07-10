@@ -10,6 +10,7 @@ import { currentWeekKey, currentWeeklyQuestion, PERSONALITY_BADGES } from "@/lib
 interface ProfileCardProps {
   profile: Profile;
   onSwipe: (direction: "left" | "right") => void;
+  voiceFirst?: boolean;
 }
 
 // Helper to format lifestyle values for display
@@ -62,7 +63,7 @@ const formatLifestyle = (key: string, value: string | null | undefined): string 
   return labels[key]?.[value] || value;
 };
 
-export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
+export function ProfileCard({ profile, onSwipe, voiceFirst }: ProfileCardProps) {
   const [exitX, setExitX] = useState<number | null>(null);
   
   const x = useMotionValue(0);
@@ -116,13 +117,20 @@ export function ProfileCard({ profile, onSwipe }: ProfileCardProps) {
       </motion.div>
 
       {/* Image */}
-      <div className="h-[75%] w-full bg-muted relative">
+      <div className="h-[75%] w-full bg-muted relative overflow-hidden">
         <img 
           src={imageUrl} 
           alt={profile.displayName}
-          className="w-full h-full object-cover pointer-events-none"
+          className={`w-full h-full object-cover pointer-events-none ${voiceFirst ? "blur-2xl scale-110" : ""}`}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60" />
+        {voiceFirst && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white text-center p-6 pointer-events-none" data-testid="overlay-voice-first">
+            <span className="text-4xl">🎙️</span>
+            <p className="font-display font-bold text-lg drop-shadow">Voice-First Mode</p>
+            <p className="text-sm text-white/80 drop-shadow">Photos are hidden — listen to their voice intro and read their vibe instead</p>
+          </div>
+        )}
       </div>
 
       {/* Content */}

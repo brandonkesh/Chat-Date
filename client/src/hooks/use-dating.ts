@@ -159,7 +159,13 @@ export function useSwipe() {
         credentials: "include",
       });
       
-      if (!res.ok) throw new Error("Swipe failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        if (res.status === 429 && body?.slowModeLimit) {
+          throw new Error("SLOW_MODE_LIMIT");
+        }
+        throw new Error("Swipe failed");
+      }
       return api.swipes.create.responses[201].parse(await res.json());
     },
     onSuccess: (data) => {

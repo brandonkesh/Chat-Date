@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown, Dices, Gamepad2, Drama, Clapperboard, CalendarHeart, PartyPopper } from "lucide-react";
+import { Loader2, Send, ChevronLeft, Clock, Lock, Video, Flag, Zap, Sparkles, X, Lightbulb, Copy, Mic, UserX, Phone, PhoneOff, AlertTriangle, Crown, Dices, Gamepad2, Drama, Clapperboard, CalendarHeart, PartyPopper, BadgeCheck, HeartHandshake, Trophy } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -117,6 +117,69 @@ function IcebreakerBanner({
         Ask it
       </Button>
       <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" data-testid="button-dismiss-icebreaker">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+// Celebrates conversation milestones (message counts). Tracked per match in
+// localStorage so each milestone only pops up once.
+const MESSAGE_MILESTONES = [10, 25, 50, 100, 250, 500];
+
+function MilestoneBanner({
+  matchId,
+  messageCount,
+  onCelebrate,
+  disabled,
+}: {
+  matchId: number;
+  messageCount: number;
+  onCelebrate: (text: string) => void;
+  disabled: boolean;
+}) {
+  const reached = [...MESSAGE_MILESTONES].reverse().find((m) => messageCount >= m);
+  const storageKey = `crush-msg-milestone-${matchId}-${reached}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return !!localStorage.getItem(storageKey);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!reached || dismissed) return null;
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="flex-none px-4 py-2.5 bg-gradient-to-r from-amber-500/10 to-primary/10 border-b border-border flex items-center gap-2.5" data-testid="banner-milestone">
+      <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Milestone unlocked</p>
+        <p className="text-xs font-medium truncate" data-testid="text-milestone">
+          {reached}+ messages together! You two are on a roll 🎉
+        </p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs shrink-0"
+        disabled={disabled}
+        onClick={() => {
+          onCelebrate(`🏆 We just hit ${reached} messages together! 🎉`);
+          dismiss();
+        }}
+        data-testid="button-celebrate-milestone"
+      >
+        Celebrate
+      </Button>
+      <button onClick={dismiss} className="text-muted-foreground hover:text-foreground shrink-0" data-testid="button-dismiss-milestone">
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -602,6 +665,21 @@ export default function Chat() {
     setEmojiOpen(false);
   };
 
+  // Kudos ("Great Vibes") — one per match partner; 3+ received earns the badge.
+  const { data: kudosStatus } = useQuery<{ alreadyGiven: boolean; partnerKudos: number; partnerHasBadge: boolean }>({
+    queryKey: ["/api/kudos/status", matchId],
+    enabled: !!matchData,
+  });
+  const { mutate: sendKudos, isPending: sendingKudos } = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/kudos", { matchId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/kudos/status", matchId] });
+    },
+  });
+
   return (
     <div className="flex flex-col h-screen bg-background max-w-3xl mx-auto border-x border-border shadow-2xl">
       <header className="flex-none p-4 border-b border-border bg-card/80 dark:bg-black/80 backdrop-blur-md flex items-center gap-3 sticky top-0 z-10">
@@ -618,14 +696,34 @@ export default function Chat() {
         />
         
         <div className="flex-1">
-          <h2 className="font-bold text-sm md:text-base leading-none mb-1">
+          <h2 className="font-bold text-sm md:text-base leading-none mb-1 flex items-center gap-1.5 flex-wrap">
             {partnerProfile.displayName}
+            {(partnerProfile as any).isVerified && (
+              <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" data-testid="badge-verified-chat" />
+            )}
+            {kudosStatus?.partnerHasBadge && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-full px-1.5 py-0.5" data-testid="badge-great-vibes">
+                <Sparkles className="w-3 h-3" />
+                Great Vibes
+              </span>
+            )}
           </h2>
           <p className="text-xs text-muted-foreground">
             Matched {matchData.match.createdAt ? formatDistanceToNow(new Date(matchData.match.createdAt), { addSuffix: true }) : 'recently'}
           </p>
         </div>
-        
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => sendKudos()}
+          disabled={sendingKudos || kudosStatus?.alreadyGiven}
+          title={kudosStatus?.alreadyGiven ? "You already sent Great Vibes 💖" : "Send Great Vibes"}
+          data-testid="button-give-kudos"
+        >
+          <HeartHandshake className={`w-5 h-5 ${kudosStatus?.alreadyGiven ? "text-pink-500 fill-current" : ""}`} />
+        </Button>
+
         {existingMicroDate?.id ? (
           <Link href={`/micro-date/${existingMicroDate.id}`}>
             <Button variant="ghost" size="icon" data-testid="button-resume-micro-date">
@@ -795,6 +893,15 @@ export default function Chat() {
         <AnniversaryBanner
           matchId={matchId}
           createdAt={matchData.match.createdAt}
+          onCelebrate={sendQuickMessage}
+          disabled={sending}
+        />
+      )}
+
+      {!isTrialExpired && (
+        <MilestoneBanner
+          matchId={matchId}
+          messageCount={messages?.length || 0}
           onCelebrate={sendQuickMessage}
           disabled={sending}
         />

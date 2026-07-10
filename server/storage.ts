@@ -42,8 +42,21 @@ import {
   type InsertSuccessStory,
   datingTips,
   type DatingTip,
+  kudosTable,
+  type Kudos,
+  horoscopes,
+  type Horoscope,
+  blindDates,
+  type BlindDate,
+  blindDateMessages,
+  type BlindDateMessage,
+  invites,
+  type Invite,
+  inviteRedemptions,
+  type InviteRedemption,
 } from "@shared/schema";
-import { eq, and, ne, notInArray, inArray, like, desc, or, sql } from "drizzle-orm";
+import { eq, and, ne, notInArray, inArray, like, desc, or, sql, gte, isNull, isNotNull, asc } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { authStorage } from "./replit_integrations/auth";
 
 export interface MatchmakingResult {
@@ -180,6 +193,49 @@ export interface IStorage {
   // Deletes all pending upload records older than `maxAgeMs` and returns their
   // object paths so the caller can delete the corresponding GCS objects.
   deleteExpiredPendingUploads(maxAgeMs: number): Promise<string[]>;
+
+  // Kudos ("Great Vibes" badge)
+  giveKudos(matchId: number, fromUserId: string, toUserId: string): Promise<boolean>;
+  hasGivenKudos(fromUserId: string, toUserId: string): Promise<boolean>;
+  getKudosCount(userId: string): Promise<number>;
+
+  // Question of the Week club
+  getWeeklyAnswers(userId: string, weekKey: string): Promise<Profile[]>;
+
+  // Slow dating mode
+  countLikesToday(userId: string): Promise<number>;
+
+  // Blind date roulette
+  joinBlindRoulette(userId: string, durationMs: number): Promise<BlindDate>;
+  getCurrentBlindDate(userId: string): Promise<BlindDate | undefined>;
+  getBlindDate(id: number): Promise<BlindDate | undefined>;
+  markBlindDateRevealed(id: number): Promise<void>;
+  cancelBlindDate(id: number, userId: string): Promise<void>;
+  getBlindDateMessages(blindDateId: number): Promise<BlindDateMessage[]>;
+  createBlindDateMessage(blindDateId: number, senderId: string, content: string): Promise<BlindDateMessage>;
+
+  // Love horoscopes (daily cache)
+  getHoroscope(sign: string, dayKey: string): Promise<Horoscope | undefined>;
+  saveHoroscope(sign: string, dayKey: string, content: string): Promise<Horoscope>;
+
+  // Couple leaderboard: most chatty matches since a date
+  getChattyMatches(since: Date, limit: number): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]>;
+
+  // Owner dashboard stats
+  getAdminStats(): Promise<{
+    totalMembers: number;
+    newMembersThisWeek: number;
+    totalMatches: number;
+    matchesThisWeek: number;
+    totalMessages: number;
+    messagesThisWeek: number;
+  }>;
+
+  // Invite links
+  getOrCreateInvite(userId: string): Promise<Invite>;
+  getInviteByCode(code: string): Promise<Invite | undefined>;
+  redeemInvite(code: string, redeemedByUserId: string): Promise<boolean>;
+  getInviteRedemptions(inviterUserId: string): Promise<{ redemption: InviteRedemption; displayName: string | null }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1471,6 +1527,311 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${pendingUploads.issuedAt} < ${cutoff}`)
       .returning({ objectPath: pendingUploads.objectPath });
     return rows.map((r) => r.objectPath);
+  }
+
+  // === KUDOS ===
+
+  async giveKudos(matchId: number, fromUserId: string, toUserId: string): Promise<boolean> {
+    // The unique (from,to) constraint makes this idempotent: a second attempt
+    // inserts nothing and we report that kudos was already given.
+    const rows = await db
+      .insert(kudosTable)
+      .values({ matchId, fromUserId, toUserId })
+      .onConflictDoNothing()
+      .returning({ id: kudosTable.id });
+    return rows.length > 0;
+  }
+
+  async hasGivenKudos(fromUserId: string, toUserId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: kudosTable.id })
+      .from(kudosTable)
+      .where(and(eq(kudosTable.fromUserId, fromUserId), eq(kudosTable.toUserId, toUserId)));
+    return !!row;
+  }
+
+  async getKudosCount(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(kudosTable)
+      .where(eq(kudosTable.toUserId, userId));
+    return row?.count ?? 0;
+  }
+
+  // === QUESTION OF THE WEEK CLUB ===
+
+  async getWeeklyAnswers(userId: string, weekKey: string): Promise<Profile[]> {
+    // Exclude anyone with a block in either direction — the club must not
+    // become a side-channel around profile hiding.
+    const blockRows = await db
+      .select()
+      .from(blocks)
+      .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedUserId, userId)));
+    const excluded = new Set<string>();
+    for (const b of blockRows) {
+      excluded.add(b.blockerId === userId ? b.blockedUserId : b.blockerId);
+    }
+
+    const rows = await db
+      .select()
+      .from(profiles)
+      .where(and(
+        eq(profiles.weeklyQuestionKey, weekKey),
+        isNotNull(profiles.weeklyAnswer),
+        ne(profiles.weeklyAnswer, ""),
+      ))
+      .orderBy(desc(profiles.id));
+
+    return rows.filter((p) => !excluded.has(p.userId));
+  }
+
+  // === SLOW DATING MODE ===
+
+  async countLikesToday(userId: string): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(swipes)
+      .where(and(
+        eq(swipes.swiperId, userId),
+        eq(swipes.liked, true),
+        gte(swipes.createdAt, startOfDay),
+      ));
+    return row?.count ?? 0;
+  }
+
+  // === BLIND DATE ROULETTE ===
+
+  async joinBlindRoulette(userId: string, durationMs: number): Promise<BlindDate> {
+    // Already in a session? Return it instead of double-joining.
+    const existing = await this.getCurrentBlindDate(userId);
+    if (existing) return existing;
+
+    // Users blocked in either direction must never be paired.
+    const blockRows = await db
+      .select()
+      .from(blocks)
+      .where(or(eq(blocks.blockerId, userId), eq(blocks.blockedUserId, userId)));
+    const excluded = new Set<string>();
+    for (const b of blockRows) {
+      excluded.add(b.blockerId === userId ? b.blockedUserId : b.blockerId);
+    }
+
+    // Find the oldest compatible waiting session from someone else.
+    const waiting = await db
+      .select()
+      .from(blindDates)
+      .where(and(
+        eq(blindDates.status, "waiting"),
+        ne(blindDates.user1Id, userId),
+        isNull(blindDates.user2Id),
+      ))
+      .orderBy(asc(blindDates.createdAt));
+
+    const candidate = waiting.find((w) => !excluded.has(w.user1Id));
+    if (candidate) {
+      const now = new Date();
+      const endsAt = new Date(now.getTime() + durationMs);
+      // Guard the update on status still being 'waiting' so two joiners can't
+      // both claim the same session.
+      const [claimed] = await db
+        .update(blindDates)
+        .set({ user2Id: userId, status: "active", startedAt: now, endsAt })
+        .where(and(eq(blindDates.id, candidate.id), eq(blindDates.status, "waiting")))
+        .returning();
+      if (claimed) return claimed;
+    }
+
+    const [created] = await db
+      .insert(blindDates)
+      .values({ user1Id: userId, status: "waiting" })
+      .returning();
+    return created;
+  }
+
+  async getCurrentBlindDate(userId: string): Promise<BlindDate | undefined> {
+    const [row] = await db
+      .select()
+      .from(blindDates)
+      .where(and(
+        or(eq(blindDates.user1Id, userId), eq(blindDates.user2Id, userId)),
+        inArray(blindDates.status, ["waiting", "active", "revealed"]),
+      ))
+      .orderBy(desc(blindDates.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  async getBlindDate(id: number): Promise<BlindDate | undefined> {
+    const [row] = await db.select().from(blindDates).where(eq(blindDates.id, id));
+    return row;
+  }
+
+  async markBlindDateRevealed(id: number): Promise<void> {
+    await db.update(blindDates).set({ status: "revealed" }).where(eq(blindDates.id, id));
+  }
+
+  async cancelBlindDate(id: number, userId: string): Promise<void> {
+    // Only a participant can end the session.
+    await db
+      .update(blindDates)
+      .set({ status: "cancelled" })
+      .where(and(
+        eq(blindDates.id, id),
+        or(eq(blindDates.user1Id, userId), eq(blindDates.user2Id, userId)),
+      ));
+  }
+
+  async getBlindDateMessages(blindDateId: number): Promise<BlindDateMessage[]> {
+    return db
+      .select()
+      .from(blindDateMessages)
+      .where(eq(blindDateMessages.blindDateId, blindDateId))
+      .orderBy(asc(blindDateMessages.createdAt));
+  }
+
+  async createBlindDateMessage(blindDateId: number, senderId: string, content: string): Promise<BlindDateMessage> {
+    const [row] = await db
+      .insert(blindDateMessages)
+      .values({ blindDateId, senderId, content })
+      .returning();
+    return row;
+  }
+
+  // === LOVE HOROSCOPES ===
+
+  async getHoroscope(sign: string, dayKey: string): Promise<Horoscope | undefined> {
+    const [row] = await db
+      .select()
+      .from(horoscopes)
+      .where(and(eq(horoscopes.sign, sign), eq(horoscopes.dayKey, dayKey)));
+    return row;
+  }
+
+  async saveHoroscope(sign: string, dayKey: string, content: string): Promise<Horoscope> {
+    const [row] = await db
+      .insert(horoscopes)
+      .values({ sign, dayKey, content })
+      .onConflictDoUpdate({
+        target: [horoscopes.sign, horoscopes.dayKey],
+        set: { content },
+      })
+      .returning();
+    return row;
+  }
+
+  // === COUPLE LEADERBOARD ===
+
+  async getChattyMatches(since: Date, limit: number): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]> {
+    const counts = await db
+      .select({ matchId: messages.matchId, messageCount: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(gte(messages.createdAt, since))
+      .groupBy(messages.matchId)
+      .orderBy(desc(sql`count(*)`))
+      .limit(limit);
+
+    const results: { matchId: number; name1: string; name2: string; messageCount: number }[] = [];
+    for (const c of counts) {
+      const [match] = await db.select().from(matches).where(eq(matches.id, c.matchId));
+      if (!match) continue;
+      const [p1] = await db.select().from(profiles).where(eq(profiles.userId, match.user1Id));
+      const [p2] = await db.select().from(profiles).where(eq(profiles.userId, match.user2Id));
+      if (!p1 || !p2) continue;
+      // First names only — this is a public-ish, playful board.
+      const firstName = (name: string) => name.trim().split(/\s+/)[0] || "Someone";
+      results.push({
+        matchId: c.matchId,
+        name1: firstName(p1.displayName),
+        name2: firstName(p2.displayName),
+        messageCount: c.messageCount,
+      });
+    }
+    return results;
+  }
+
+  // === OWNER DASHBOARD STATS ===
+
+  async getAdminStats() {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [members] = await db.select({ count: sql<number>`count(*)::int` }).from(profiles);
+    const [newMembers] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(profiles)
+      .innerJoin(users, eq(users.id, profiles.userId))
+      .where(gte(users.createdAt, weekAgo));
+    const [totalMatches] = await db.select({ count: sql<number>`count(*)::int` }).from(matches);
+    const [weekMatches] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(matches)
+      .where(gte(matches.createdAt, weekAgo));
+    const [totalMessages] = await db.select({ count: sql<number>`count(*)::int` }).from(messages);
+    const [weekMessages] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(gte(messages.createdAt, weekAgo));
+    return {
+      totalMembers: members?.count ?? 0,
+      newMembersThisWeek: newMembers?.count ?? 0,
+      totalMatches: totalMatches?.count ?? 0,
+      matchesThisWeek: weekMatches?.count ?? 0,
+      totalMessages: totalMessages?.count ?? 0,
+      messagesThisWeek: weekMessages?.count ?? 0,
+    };
+  }
+
+  // === INVITE LINKS ===
+
+  async getOrCreateInvite(userId: string): Promise<Invite> {
+    const [existing] = await db.select().from(invites).where(eq(invites.userId, userId));
+    if (existing) return existing;
+
+    // Short, unambiguous code (no 0/O/1/I confusion).
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let code = "";
+      const bytes = randomBytes(8);
+      for (let i = 0; i < 8; i++) code += alphabet[bytes[i] % alphabet.length];
+      const rows = await db
+        .insert(invites)
+        .values({ userId, code })
+        .onConflictDoNothing()
+        .returning();
+      if (rows.length > 0) return rows[0];
+      // Conflict: either the code collided (retry) or another request created
+      // this user's invite concurrently (return it).
+      const [race] = await db.select().from(invites).where(eq(invites.userId, userId));
+      if (race) return race;
+    }
+    throw new Error("Could not generate a unique invite code");
+  }
+
+  async getInviteByCode(code: string): Promise<Invite | undefined> {
+    const [row] = await db.select().from(invites).where(eq(invites.code, code));
+    return row;
+  }
+
+  async redeemInvite(code: string, redeemedByUserId: string): Promise<boolean> {
+    const invite = await this.getInviteByCode(code);
+    if (!invite) return false;
+    if (invite.userId === redeemedByUserId) return false; // can't invite yourself
+    const rows = await db
+      .insert(inviteRedemptions)
+      .values({ inviteCode: invite.code, inviterUserId: invite.userId, redeemedByUserId })
+      .onConflictDoNothing() // each user can only be invited once
+      .returning({ id: inviteRedemptions.id });
+    return rows.length > 0;
+  }
+
+  async getInviteRedemptions(inviterUserId: string): Promise<{ redemption: InviteRedemption; displayName: string | null }[]> {
+    const rows = await db
+      .select({ redemption: inviteRedemptions, displayName: profiles.displayName })
+      .from(inviteRedemptions)
+      .leftJoin(profiles, eq(profiles.userId, inviteRedemptions.redeemedByUserId))
+      .where(eq(inviteRedemptions.inviterUserId, inviterUserId))
+      .orderBy(desc(inviteRedemptions.createdAt));
+    return rows.map((r) => ({ redemption: r.redemption, displayName: r.displayName ?? null }));
   }
 }
 

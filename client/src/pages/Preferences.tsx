@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX, Lock, Eye, EyeOff, KeyRound, Copy, Trash2 } from "lucide-react";
+import { Loader2, SlidersHorizontal, Users, MapPin, ArrowLeft, Check, Navigation, Sparkles, Dumbbell, Ruler, ChevronRight, ShieldCheck, BadgeCheck, Globe, Compass, Palette, Vote, Star, Languages, Church, GraduationCap, Briefcase, Wine, Cigarette, Leaf, Utensils, Baby, PawPrint, Home, Shield, Mail, Ban, UserX, Lock, Eye, EyeOff, KeyRound, Copy, Trash2, Mic, Turtle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -225,6 +226,32 @@ export default function Preferences() {
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const toggleMode = (field: "voiceFirstMode" | "slowDatingMode", value: boolean) => {
+    if (!profile) return;
+    updateProfile({
+      displayName: profile.displayName,
+      age: profile.age,
+      gender: profile.gender,
+      bio: profile.bio,
+      photoUrl: profile.photoUrl,
+      interests: profile.interests,
+      [field]: value,
+    } as any, {
+      onSuccess: () => {
+        const messages: Record<string, [string, string]> = {
+          voiceFirstMode: value
+            ? ["Voice-first mode on 🎙️", "Photos in your feed are now blurred — personality first!"]
+            : ["Voice-first mode off", "Photos are back in your feed."],
+          slowDatingMode: value
+            ? ["Slow dating mode on 🐢", "You now get 5 likes per day. Make each one count!"]
+            : ["Slow dating mode off", "Unlimited likes are back."],
+        };
+        const [title, description] = messages[field];
+        toast({ title, description });
+      },
+    });
   };
 
   const handleSave = () => {
@@ -1034,6 +1061,52 @@ export default function Preferences() {
               <ChevronRight className="w-4 h-4" />
             </Button>
           </Link>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-dating-modes">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Dating Modes</CardTitle>
+              <CardDescription>Change how you experience Crush</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+            <div className="flex items-center gap-3">
+              <Mic className="w-5 h-5 text-primary" />
+              <div>
+                <p className="font-medium text-sm">Voice-First Mode</p>
+                <p className="text-xs text-muted-foreground">Blur photos in your feed — connect through voices and vibes first</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!profile?.voiceFirstMode}
+              onCheckedChange={(checked) => toggleMode("voiceFirstMode", checked)}
+              disabled={isPending}
+              data-testid="switch-voice-first"
+            />
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+            <div className="flex items-center gap-3">
+              <Turtle className="w-5 h-5 text-primary" />
+              <div>
+                <p className="font-medium text-sm">Slow Dating Mode</p>
+                <p className="text-xs text-muted-foreground">Limit yourself to 5 likes a day for more intentional matching</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!profile?.slowDatingMode}
+              onCheckedChange={(checked) => toggleMode("slowDatingMode", checked)}
+              disabled={isPending}
+              data-testid="switch-slow-dating"
+            />
+          </div>
         </CardContent>
       </Card>
 

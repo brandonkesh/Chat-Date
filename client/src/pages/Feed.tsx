@@ -121,7 +121,19 @@ export default function Feed() {
             duration: 5000,
           });
         }
-      }
+      },
+      onError: (err: Error) => {
+        // Put the profile back so the swipe isn't lost
+        setStack(prev => [currentProfile, ...prev]);
+        if (err.message === "SLOW_MODE_LIMIT") {
+          toast({
+            title: "Slow dating mode 🐢",
+            description: "You've used your 5 likes for today. Quality over quantity — come back tomorrow!",
+          });
+        } else {
+          toast({ title: "Swipe didn't save", description: "Please try again.", variant: "destructive" });
+        }
+      },
     });
   };
 
@@ -304,6 +316,7 @@ export default function Feed() {
               key={stack[0].id} 
               profile={stack[0]} 
               onSwipe={handleSwipe} 
+              voiceFirst={!!myProfile?.voiceFirstMode}
             />
           ) : (
             <motion.div 

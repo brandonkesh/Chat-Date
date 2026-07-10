@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, bigint, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -109,6 +109,12 @@ export const profiles = pgTable("profiles", {
   lastRewardAt: timestamp("last_reward_at"),
   // IANA timezone auto-detected from the user's device (e.g. "America/Chicago")
   timezone: text("timezone"),
+  // Voice-first mode: browse with photos blurred until revealed (personality first)
+  voiceFirstMode: boolean("voice_first_mode").default(false),
+  // Slow dating mode: limit likes to 5 per day for quality over quantity
+  slowDatingMode: boolean("slow_dating_mode").default(false),
+  // Dream date builder: chosen ideal-date elements (e.g. "dinner", "hike")
+  dreamDateElements: text("dream_date_elements").array(),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).omit({ 
@@ -395,6 +401,82 @@ export const microDateResponses = pgTable("micro_date_responses", {
 });
 
 export type MicroDateResponse = typeof microDateResponses.$inferSelect;
+
+// === KUDOS ("Great Vibes" badge) ===
+// After chatting, a user can award kudos to their match partner once per pair.
+// A partner with 3+ kudos earns the "Great Vibes" badge shown in chat.
+export const kudosTable = pgTable("kudos", {
+  id: serial("id").primaryKey(),
+  matchId: integer("match_id").notNull().references(() => matches.id),
+  fromUserId: varchar("from_user_id").notNull().references(() => users.id),
+  toUserId: varchar("to_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  unique("kudos_from_to_unique").on(t.fromUserId, t.toUserId),
+]);
+
+export type Kudos = typeof kudosTable.$inferSelect;
+
+// === LOVE HOROSCOPES (daily AI-generated, cached per sign+day) ===
+export const horoscopes = pgTable("horoscopes", {
+  id: serial("id").primaryKey(),
+  sign: text("sign").notNull(), // 'aries', 'taurus', ...
+  dayKey: text("day_key").notNull(), // e.g. "2026-07-10"
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [
+  unique("horoscopes_sign_day_unique").on(t.sign, t.dayKey),
+]);
+
+export type Horoscope = typeof horoscopes.$inferSelect;
+
+// === BLIND DATE ROULETTE ===
+// Opt-in surprise 5-minute chats with photos hidden until the reveal.
+export type BlindDateStatus = 'waiting' | 'active' | 'revealed' | 'cancelled';
+
+export const blindDates = pgTable("blind_dates", {
+  id: serial("id").primaryKey(),
+  user1Id: varchar("user1_id").notNull().references(() => users.id),
+  user2Id: varchar("user2_id").references(() => users.id), // null while waiting for a partner
+  status: text("status").notNull().default("waiting"), // 'waiting', 'active', 'revealed', 'cancelled'
+  startedAt: timestamp("started_at"),
+  endsAt: timestamp("ends_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type BlindDate = typeof blindDates.$inferSelect;
+
+export const blindDateMessages = pgTable("blind_date_messages", {
+  id: serial("id").primaryKey(),
+  blindDateId: integer("blind_date_id").notNull().references(() => blindDates.id),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type BlindDateMessage = typeof blindDateMessages.$inferSelect;
+
+// === INVITE LINKS ===
+// Each member gets one personal invite code; redemptions record who joined
+// through whose link (a user can only be invited once).
+export const invites = pgTable("invites", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  code: text("code").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Invite = typeof invites.$inferSelect;
+
+export const inviteRedemptions = pgTable("invite_redemptions", {
+  id: serial("id").primaryKey(),
+  inviteCode: text("invite_code").notNull(),
+  inviterUserId: varchar("inviter_user_id").notNull().references(() => users.id),
+  redeemedByUserId: varchar("redeemed_by_user_id").notNull().references(() => users.id).unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type InviteRedemption = typeof inviteRedemptions.$inferSelect;
 
 export interface MicroDateActivity {
   type: 'icebreaker' | 'would_you_rather' | 'this_or_that' | 'rapid_fire' | 'word_association' | 'hot_take';

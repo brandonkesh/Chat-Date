@@ -1146,6 +1146,275 @@ export async function registerRoutes(
     }
   });
 
+  // === KUDOS ("Great Vibes" badge) ===
+  // Award kudos to a match partner (once per pair). 3+ kudos earns the badge.
+  app.post("/api/kudos", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = z.object({ matchId: z.number().int() }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+    const match = await storage.getMatch(parsed.data.matchId);
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+    const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    if (await storage.isBlockedEither(userId, partnerId)) {
+      return res.status(403).json({ message: "Action not allowed" });
+    }
+    const given = await storage.giveKudos(match.id, userId, partnerId);
+    const partnerKudos = await storage.getKudosCount(partnerId);
+    res.status(201).json({ given, alreadyGiven: !given, partnerKudos, partnerHasBadge: partnerKudos >= 3 });
+  });
+
+  // Kudos status for a match: did I already send, and does my partner have the badge?
+  app.get("/api/kudos/status/:matchId", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const matchId = Number(req.params.matchId);
+    if (!Number.isInteger(matchId)) {
+      return res.status(400).json({ message: "Invalid match" });
+    }
+    const match = await storage.getMatch(matchId);
+    if (!match || (match.user1Id !== userId && match.user2Id !== userId)) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+    const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+    const [alreadyGiven, partnerKudos] = await Promise.all([
+      storage.hasGivenKudos(userId, partnerId),
+      storage.getKudosCount(partnerId),
+    ]);
+    res.json({ alreadyGiven, partnerKudos, partnerHasBadge: partnerKudos >= 3 });
+  });
+
+  // === QUESTION OF THE WEEK CLUB ===
+  // Everyone's answer to this week's question (block-aware, minimal fields).
+  app.get("/api/weekly-answers", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const weekKey = currentWeekKey();
+    const answers = await storage.getWeeklyAnswers(userId, weekKey);
+    res.json({
+      weekKey,
+      answers: answers.map((p) => ({
+        profileId: p.id,
+        isMe: p.userId === userId,
+        displayName: p.displayName,
+        photoUrl: p.photoUrl,
+        answer: p.weeklyAnswer,
+      })),
+    });
+  });
+
+  // === LOVE HOROSCOPES (daily, AI-generated, cached per sign+day) ===
+  app.get("/api/horoscope", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getProfile(userId);
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    const validSigns = ["aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"];
+    const sign = (profile.astrologicalSign || "").toLowerCase();
+    if (!validSigns.includes(sign)) {
+      return res.json({ needsSign: true });
+    }
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const cached = await storage.getHoroscope(sign, dayKey);
+    if (cached) {
+      return res.json({ sign, dayKey, content: cached.content });
+    }
+    if (!(await checkAiRateLimit(userId, "horoscope-gen", 5, 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "Your horoscope is being written in the stars. Check back in a bit!" });
+    }
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a playful astrologer writing short daily DATING horoscopes for a dating app. Reply ONLY with JSON: {\"horoscope\": \"...\"} — 2-3 warm, fun sentences about love/dating energy today. Encouraging, lighthearted, no doom.",
+          },
+          { role: "user", content: `Write today's dating horoscope for ${sign}. Date: ${dayKey}.` },
+        ],
+        response_format: { type: "json_object" },
+      });
+      const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+      const content = typeof parsed.horoscope === "string" ? parsed.horoscope.trim() : "";
+      if (!content) {
+        return res.status(500).json({ message: "The stars are cloudy right now. Please try again." });
+      }
+      const saved = await storage.saveHoroscope(sign, dayKey, content);
+      res.json({ sign, dayKey, content: saved.content });
+    } catch (err) {
+      console.error("horoscope generation failed:", err);
+      res.status(500).json({ message: "The stars are cloudy right now. Please try again." });
+    }
+  });
+
+  // === COUPLE LEADERBOARD (most chatty matches this week, first names only) ===
+  app.get("/api/leaderboard", isAuthenticated, async (_req: any, res) => {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const top = await storage.getChattyMatches(weekAgo, 5);
+    res.json(top.map(({ name1, name2, messageCount }, i) => ({ rank: i + 1, name1, name2, messageCount })));
+  });
+
+  // === OWNER DASHBOARD ===
+  app.get("/api/admin/stats", isAuthenticated, async (req: any, res) => {
+    if (!isOwner(req.user.claims)) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+    const stats = await storage.getAdminStats();
+    res.json(stats);
+  });
+
+  // === INVITE LINKS ===
+  app.get("/api/invites/mine", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const invite = await storage.getOrCreateInvite(userId);
+    const redemptions = await storage.getInviteRedemptions(userId);
+    res.json({
+      code: invite.code,
+      joined: redemptions.map((r) => ({
+        displayName: r.displayName || "A new member",
+        joinedAt: r.redemption.createdAt,
+      })),
+    });
+  });
+
+  app.post("/api/invites/redeem", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const parsed = z.object({ code: z.string().trim().min(4).max(20) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid code" });
+    }
+    if (!(await checkAiRateLimit(userId, "invite-redeem", 10, 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "Too many attempts. Please try later." });
+    }
+    const redeemed = await storage.redeemInvite(parsed.data.code.toUpperCase(), userId);
+    res.json({ redeemed });
+  });
+
+  // === BLIND DATE ROULETTE ===
+  const BLIND_DATE_DURATION_MS = 5 * 60 * 1000; // 5-minute surprise chat
+
+  // Shape a blind date for the requesting participant. Photos and full
+  // profiles stay hidden until the reveal.
+  async function blindDateView(bd: any, userId: string) {
+    const partnerId = bd.user1Id === userId ? bd.user2Id : bd.user1Id;
+    let status = bd.status;
+    // Timer expired? Flip active → revealed (persisted lazily on read).
+    if (status === "active" && bd.endsAt && new Date() > new Date(bd.endsAt)) {
+      await storage.markBlindDateRevealed(bd.id);
+      status = "revealed";
+    }
+    let partner: any = null;
+    if (partnerId && status === "active") {
+      const p = await storage.getProfile(partnerId);
+      partner = p ? { firstName: p.displayName.trim().split(/\s+/)[0] } : null;
+    } else if (partnerId && status === "revealed") {
+      const p = await storage.getProfile(partnerId);
+      partner = p ? sanitizeProfile(p) : null;
+    }
+    return {
+      id: bd.id,
+      status,
+      startedAt: bd.startedAt,
+      endsAt: bd.endsAt,
+      partner,
+    };
+  }
+
+  // Join the roulette pool (pairs instantly if someone is waiting).
+  app.post("/api/blind-roulette/join", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    if (!(await checkAiRateLimit(userId, "blind-roulette-join", 30, 60 * 60 * 1000))) {
+      return res.status(429).json({ message: "Too many attempts. Please try again later." });
+    }
+    const bd = await storage.joinBlindRoulette(userId, BLIND_DATE_DURATION_MS);
+    res.status(201).json(await blindDateView(bd, userId));
+  });
+
+  // Poll the current session state.
+  app.get("/api/blind-roulette/current", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const bd = await storage.getCurrentBlindDate(userId);
+    if (!bd) return res.json(null);
+    res.json(await blindDateView(bd, userId));
+  });
+
+  // Leave / end the session (waiting, active, or after the reveal).
+  app.post("/api/blind-roulette/leave", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const bd = await storage.getCurrentBlindDate(userId);
+    if (bd) {
+      await storage.cancelBlindDate(bd.id, userId);
+    }
+    res.json({ left: true });
+  });
+
+  // Chat messages within the blind date (participants only, while active or revealed).
+  app.get("/api/blind-roulette/:id/messages", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid session" });
+    const bd = await storage.getBlindDate(id);
+    if (!bd || (bd.user1Id !== userId && bd.user2Id !== userId)) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+    const msgs = await storage.getBlindDateMessages(id);
+    res.json(msgs.map((m) => ({
+      id: m.id,
+      fromMe: m.senderId === userId,
+      content: m.content,
+      createdAt: m.createdAt,
+    })));
+  });
+
+  app.post("/api/blind-roulette/:id/messages", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid session" });
+    const parsed = z.object({ content: z.string().trim().min(1).max(500) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Message must be 1-500 characters" });
+    }
+    const bd = await storage.getBlindDate(id);
+    if (!bd || (bd.user1Id !== userId && bd.user2Id !== userId)) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+    if (bd.status !== "active" || (bd.endsAt && new Date() > new Date(bd.endsAt))) {
+      return res.status(400).json({ message: "This blind date chat has ended" });
+    }
+    if (!(await checkAiRateLimit(userId, "blind-roulette-msg", 60, 5 * 60 * 1000))) {
+      return res.status(429).json({ message: "Slow down a little!" });
+    }
+    const msg = await storage.createBlindDateMessage(id, userId, parsed.data.content);
+    res.status(201).json({ id: msg.id, fromMe: true, content: msg.content, createdAt: msg.createdAt });
+  });
+
+  // After the reveal: like your blind date partner (mutual like = real match!).
+  app.post("/api/blind-roulette/:id/like", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid session" });
+    const bd = await storage.getBlindDate(id);
+    if (!bd || (bd.user1Id !== userId && bd.user2Id !== userId)) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+    if (bd.status !== "revealed") {
+      return res.status(400).json({ message: "Wait for the reveal first!" });
+    }
+    const partnerId = bd.user1Id === userId ? bd.user2Id : bd.user1Id;
+    if (!partnerId) return res.status(400).json({ message: "No partner in this session" });
+    if (await storage.isBlockedEither(userId, partnerId)) {
+      return res.status(403).json({ message: "Action not allowed" });
+    }
+    await storage.createSwipe({ swiperId: userId, swipedId: partnerId, liked: true });
+    let isMatch = await storage.checkMatch(userId, partnerId);
+    let matchId: number | undefined;
+    if (isMatch) {
+      matchId = await storage.createMatch(userId, partnerId);
+      void sendMatchEmail(userId, partnerId);
+    }
+    res.status(201).json({ match: isMatch, matchId });
+  });
+
   // === AI DATE IDEA GENERATOR ===
   app.post("/api/date-ideas", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
@@ -2375,6 +2644,20 @@ Guidelines:
       const swipeBlocked = await storage.isBlockedEither(userId, input.swipedId);
       if (swipeBlocked) {
         return res.status(403).json({ message: "Action not allowed" });
+      }
+
+      // Slow dating mode: cap likes at 5 per day (server-enforced)
+      if (input.liked) {
+        const myProfile = await storage.getProfile(userId);
+        if (myProfile?.slowDatingMode) {
+          const likesToday = await storage.countLikesToday(userId);
+          if (likesToday >= 5) {
+            return res.status(429).json({
+              message: "Slow dating mode: you've used all 5 likes for today. Come back tomorrow!",
+              slowModeLimit: true,
+            });
+          }
+        }
       }
 
       await storage.createSwipe({ ...input, swiperId: userId });
