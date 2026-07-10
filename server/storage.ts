@@ -219,7 +219,7 @@ export interface IStorage {
   saveHoroscope(sign: string, dayKey: string, content: string): Promise<Horoscope>;
 
   // Couple leaderboard: most chatty matches since a date
-  getChattyMatches(since: Date, limit: number): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]>;
+  getChattyMatches(since: Date, limit: number, excludeUserIds?: string[]): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]>;
 
   // Owner dashboard stats
   getAdminStats(): Promise<{
@@ -1723,19 +1723,24 @@ export class DatabaseStorage implements IStorage {
 
   // === COUPLE LEADERBOARD ===
 
-  async getChattyMatches(since: Date, limit: number): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]> {
+  async getChattyMatches(since: Date, limit: number, excludeUserIds: string[] = []): Promise<{ matchId: number; name1: string; name2: string; messageCount: number }[]> {
+    const excluded = new Set(excludeUserIds);
+    // Fetch extra rows so block-filtered entries don't shrink the board.
     const counts = await db
       .select({ matchId: messages.matchId, messageCount: sql<number>`count(*)::int` })
       .from(messages)
       .where(gte(messages.createdAt, since))
       .groupBy(messages.matchId)
       .orderBy(desc(sql`count(*)`))
-      .limit(limit);
+      .limit(limit + excluded.size + 20);
 
     const results: { matchId: number; name1: string; name2: string; messageCount: number }[] = [];
     for (const c of counts) {
+      if (results.length >= limit) break;
       const [match] = await db.select().from(matches).where(eq(matches.id, c.matchId));
       if (!match) continue;
+      // Blocked users must stay hidden from each other on every surface.
+      if (excluded.has(match.user1Id) || excluded.has(match.user2Id)) continue;
       const [p1] = await db.select().from(profiles).where(eq(profiles.userId, match.user1Id));
       const [p2] = await db.select().from(profiles).where(eq(profiles.userId, match.user2Id));
       if (!p1 || !p2) continue;

@@ -41,6 +41,13 @@ import PersonalityQuiz from "@/pages/PersonalityQuiz";
 import DateBingo from "@/pages/DateBingo";
 import SuccessStories from "@/pages/SuccessStories";
 import DatingTips from "@/pages/DatingTips";
+import WeeklyClub from "@/pages/WeeklyClub";
+import DreamDate from "@/pages/DreamDate";
+import BlindRoulette from "@/pages/BlindRoulette";
+import Horoscope from "@/pages/Horoscope";
+import Leaderboard from "@/pages/Leaderboard";
+import OwnerDashboard from "@/pages/OwnerDashboard";
+import Invite from "@/pages/Invite";
 import NotFound from "@/pages/not-found";
 import { Navbar } from "@/components/Navbar";
 
@@ -170,6 +177,51 @@ function TimezoneSync() {
   return null;
 }
 
+// Invite links: capture ?invite=CODE from the URL (survives the login
+// redirect via localStorage) and redeem it once the user has a profile.
+let inviteRedeemInFlight = false;
+function InviteRedeemer() {
+  const { user } = useAuth();
+  const { data: profile } = useMyProfile();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("invite");
+    if (code) {
+      try {
+        localStorage.setItem("crush-invite-code", code.toUpperCase());
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || !profile || inviteRedeemInFlight) return;
+    let code: string | null = null;
+    try {
+      code = localStorage.getItem("crush-invite-code");
+    } catch {}
+    if (!code) return;
+    inviteRedeemInFlight = true;
+    apiRequest("POST", "/api/invites/redeem", { code })
+      .then(() => {
+        try {
+          localStorage.removeItem("crush-invite-code");
+        } catch {}
+      })
+      .catch(() => {
+        // Invalid/self codes shouldn't retry forever — drop them too.
+        try {
+          localStorage.removeItem("crush-invite-code");
+        } catch {}
+      })
+      .finally(() => {
+        inviteRedeemInFlight = false;
+      });
+  }, [user, profile]);
+
+  return null;
+}
+
 function Router() {
   const { user, isLoading } = useAuth();
 
@@ -178,6 +230,7 @@ function Router() {
   return (
     <>
       <TimezoneSync />
+      <InviteRedeemer />
       <Switch>
         <Route path="/">
           {user ? <ProtectedRoute component={Feed} /> : <Landing />}
@@ -298,6 +351,34 @@ function Router() {
 
         <Route path="/tips">
           <ProtectedRoute component={DatingTips} />
+        </Route>
+
+        <Route path="/weekly-club">
+          <ProtectedRoute component={WeeklyClub} />
+        </Route>
+
+        <Route path="/dream-date">
+          <ProtectedRoute component={DreamDate} />
+        </Route>
+
+        <Route path="/blind-roulette">
+          <ProtectedRoute component={BlindRoulette} />
+        </Route>
+
+        <Route path="/horoscope">
+          <ProtectedRoute component={Horoscope} />
+        </Route>
+
+        <Route path="/leaderboard">
+          <ProtectedRoute component={Leaderboard} />
+        </Route>
+
+        <Route path="/admin/dashboard">
+          <ProtectedRoute component={OwnerDashboard} />
+        </Route>
+
+        <Route path="/invite">
+          <ProtectedRoute component={Invite} />
         </Route>
         
         <Route component={NotFound} />

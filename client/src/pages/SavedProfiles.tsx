@@ -1,5 +1,5 @@
 import { useSavedProfiles, useSaveProfile } from "@/hooks/use-dating";
-import { Loader2, Bookmark, ArrowLeft, Heart } from "lucide-react";
+import { Loader2, Bookmark, ArrowLeft, Heart, X } from "lucide-react";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ export default function SavedProfiles() {
                     {profile.displayName}, {profile.age}
                   </h3>
                   <Link href="/feed">
-                    <Button variant="link" className="p-0 h-auto text-xs" data-testid={`link-view-${profile.id}`}>
+                    <Button variant="ghost" size="sm" className="p-0 h-auto text-xs underline" data-testid={`link-view-${profile.id}`}>
                       View Profile
                     </Button>
                   </Link>

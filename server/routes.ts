@@ -1248,9 +1248,12 @@ export async function registerRoutes(
   });
 
   // === COUPLE LEADERBOARD (most chatty matches this week, first names only) ===
-  app.get("/api/leaderboard", isAuthenticated, async (_req: any, res) => {
+  app.get("/api/leaderboard", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const top = await storage.getChattyMatches(weekAgo, 5);
+    // Blocked users (either direction) never appear on the requester's board.
+    const blockedIds = await storage.getBlockedUserIds(userId);
+    const top = await storage.getChattyMatches(weekAgo, 5, blockedIds);
     res.json(top.map(({ name1, name2, messageCount }, i) => ({ rank: i + 1, name1, name2, messageCount })));
   });
 
@@ -1335,6 +1338,12 @@ export async function registerRoutes(
     const userId = req.user.claims.sub;
     const bd = await storage.getCurrentBlindDate(userId);
     if (!bd) return res.json(null);
+    // A block placed mid-session ends the date immediately — no reveal.
+    const partnerId = bd.user1Id === userId ? bd.user2Id : bd.user1Id;
+    if (partnerId && (await storage.isBlockedEither(userId, partnerId))) {
+      await storage.cancelBlindDate(bd.id, userId);
+      return res.json(null);
+    }
     res.json(await blindDateView(bd, userId));
   });
 
@@ -1357,6 +1366,10 @@ export async function registerRoutes(
     if (!bd || (bd.user1Id !== userId && bd.user2Id !== userId)) {
       return res.status(404).json({ message: "Session not found" });
     }
+    const msgPartnerId = bd.user1Id === userId ? bd.user2Id : bd.user1Id;
+    if (msgPartnerId && (await storage.isBlockedEither(userId, msgPartnerId))) {
+      return res.status(404).json({ message: "Session not found" });
+    }
     const msgs = await storage.getBlindDateMessages(id);
     res.json(msgs.map((m) => ({
       id: m.id,
@@ -1376,6 +1389,10 @@ export async function registerRoutes(
     }
     const bd = await storage.getBlindDate(id);
     if (!bd || (bd.user1Id !== userId && bd.user2Id !== userId)) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+    const sendPartnerId = bd.user1Id === userId ? bd.user2Id : bd.user1Id;
+    if (sendPartnerId && (await storage.isBlockedEither(userId, sendPartnerId))) {
       return res.status(404).json({ message: "Session not found" });
     }
     if (bd.status !== "active" || (bd.endsAt && new Date() > new Date(bd.endsAt))) {

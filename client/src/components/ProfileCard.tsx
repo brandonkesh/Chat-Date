@@ -142,7 +142,9 @@ export function ProfileCard({ profile, onSwipe, voiceFirst }: ProfileCardProps) 
           <span className="text-xl text-muted-foreground font-medium flex items-center gap-1">
             {profile.age}
             {profile.ageVerified && (
-              <ShieldCheck className="w-4 h-4 text-green-500" title="Age verified" data-testid="badge-age-verified" />
+              <span title="Age verified" data-testid="badge-age-verified">
+                <ShieldCheck className="w-4 h-4 text-green-500" />
+              </span>
             )}
           </span>
           {profile.isVerified && (

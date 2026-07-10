@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox, RotateCcw, Shield, Award, LayoutGrid, HeartHandshake, Lightbulb } from "lucide-react";
+import { Flame, Heart, MessageCircle, Mail, CreditCard, LogOut, User, Pencil, Sparkles, SlidersHorizontal, Wand2, HelpCircle, Users, Bookmark, Mic, MessageSquarePlus, Inbox, RotateCcw, Shield, Award, LayoutGrid, HeartHandshake, Lightbulb, CalendarHeart, Palette, Dices, MoonStar, Trophy, Gift, BarChart3 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useMyProfile } from "@/hooks/use-dating";
@@ -148,6 +148,42 @@ export function Navbar() {
                     Dating Tips
                   </DropdownMenuItem>
                 </Link>
+                <Link href="/weekly-club">
+                  <DropdownMenuItem data-testid="button-weekly-club">
+                    <CalendarHeart className="w-4 h-4 mr-2" />
+                    Weekly Club
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/dream-date">
+                  <DropdownMenuItem data-testid="button-dream-date">
+                    <Palette className="w-4 h-4 mr-2" />
+                    Dream Date
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/blind-roulette">
+                  <DropdownMenuItem data-testid="button-blind-roulette">
+                    <Dices className="w-4 h-4 mr-2" />
+                    Blind Date Roulette
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/horoscope">
+                  <DropdownMenuItem data-testid="button-horoscope">
+                    <MoonStar className="w-4 h-4 mr-2" />
+                    Love Horoscope
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/leaderboard">
+                  <DropdownMenuItem data-testid="button-leaderboard">
+                    <Trophy className="w-4 h-4 mr-2" />
+                    Leaderboard
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/invite">
+                  <DropdownMenuItem data-testid="button-invite">
+                    <Gift className="w-4 h-4 mr-2" />
+                    Invite Friends
+                  </DropdownMenuItem>
+                </Link>
                 <Link href="/help">
                   <DropdownMenuItem data-testid="button-help">
                     <HelpCircle className="w-4 h-4 mr-2" />
@@ -161,12 +197,20 @@ export function Navbar() {
                   </DropdownMenuItem>
                 </Link>
                 {isOwner && (
-                  <Link href="/admin/feedback">
-                    <DropdownMenuItem data-testid="button-admin-feedback">
-                      <Inbox className="w-4 h-4 mr-2" />
-                      View Feedback
-                    </DropdownMenuItem>
-                  </Link>
+                  <>
+                    <Link href="/admin/dashboard">
+                      <DropdownMenuItem data-testid="button-owner-dashboard">
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                        Owner Dashboard
+                      </DropdownMenuItem>
+                    </Link>
+                    <Link href="/admin/feedback">
+                      <DropdownMenuItem data-testid="button-admin-feedback">
+                        <Inbox className="w-4 h-4 mr-2" />
+                        View Feedback
+                      </DropdownMenuItem>
+                    </Link>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout">
@@ -266,6 +310,42 @@ export function Navbar() {
                   Dating Tips
                 </DropdownMenuItem>
               </Link>
+              <Link href="/weekly-club">
+                <DropdownMenuItem data-testid="button-weekly-club-mobile">
+                  <CalendarHeart className="w-4 h-4 mr-2" />
+                  Weekly Club
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/dream-date">
+                <DropdownMenuItem data-testid="button-dream-date-mobile">
+                  <Palette className="w-4 h-4 mr-2" />
+                  Dream Date
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/blind-roulette">
+                <DropdownMenuItem data-testid="button-blind-roulette-mobile">
+                  <Dices className="w-4 h-4 mr-2" />
+                  Blind Date Roulette
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/horoscope">
+                <DropdownMenuItem data-testid="button-horoscope-mobile">
+                  <MoonStar className="w-4 h-4 mr-2" />
+                  Love Horoscope
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/leaderboard">
+                <DropdownMenuItem data-testid="button-leaderboard-mobile">
+                  <Trophy className="w-4 h-4 mr-2" />
+                  Leaderboard
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/invite">
+                <DropdownMenuItem data-testid="button-invite-mobile">
+                  <Gift className="w-4 h-4 mr-2" />
+                  Invite Friends
+                </DropdownMenuItem>
+              </Link>
               <Link href="/help">
                 <DropdownMenuItem data-testid="button-help-mobile">
                   <HelpCircle className="w-4 h-4 mr-2" />
@@ -279,12 +359,20 @@ export function Navbar() {
                 </DropdownMenuItem>
               </Link>
               {isOwner && (
-                <Link href="/admin/feedback">
-                  <DropdownMenuItem data-testid="button-admin-feedback-mobile">
-                    <Inbox className="w-4 h-4 mr-2" />
-                    View Feedback
-                  </DropdownMenuItem>
-                </Link>
+                <>
+                  <Link href="/admin/dashboard">
+                    <DropdownMenuItem data-testid="button-owner-dashboard-mobile">
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Owner Dashboard
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/admin/feedback">
+                    <DropdownMenuItem data-testid="button-admin-feedback-mobile">
+                      <Inbox className="w-4 h-4 mr-2" />
+                      View Feedback
+                    </DropdownMenuItem>
+                  </Link>
+                </>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive" data-testid="button-logout-mobile">

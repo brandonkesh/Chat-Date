@@ -234,6 +234,7 @@ export default function Preferences() {
       displayName: profile.displayName,
       age: profile.age,
       gender: profile.gender,
+      interestedIn: profile.interestedIn,
       bio: profile.bio,
       photoUrl: profile.photoUrl,
       interests: profile.interests,
@@ -285,7 +286,7 @@ export default function Preferences() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || !profile) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
