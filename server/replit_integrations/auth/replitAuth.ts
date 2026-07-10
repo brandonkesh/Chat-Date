@@ -8,6 +8,7 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
 import { applyTestPremiumIfNeeded } from "../../testPremiumUsers";
+import { revokeRealtimeForSession } from "../../realtimeRevocation";
 
 const getOidcConfig = memoize(
   async () => {
@@ -142,11 +143,18 @@ export async function setupAuth(app: Express) {
       client_id: process.env.REPL_ID!,
       post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
     }).href;
+    // Capture the session id before it is destroyed so we can revoke any
+    // real-time (WebSocket) access that was granted under this session.
+    const loggedOutSessionId = req.sessionID;
     // Destroy the session entirely on logout so that secondary-auth flags
     // (twoFactorVerified, appLockVerified, pendingTwoFactorSecret) cannot
     // survive into a subsequent login on the same browser.
     req.logout(() => {
       req.session.destroy(() => {
+        // Immediately close notification/call sockets and drop unconsumed
+        // call/notify bearer tokens tied to this session, so logout ends live
+        // real-time access instead of letting an already-open socket linger.
+        revokeRealtimeForSession(loggedOutSessionId);
         res.redirect(endSessionUrl);
       });
     });

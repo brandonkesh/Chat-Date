@@ -6,3 +6,5 @@
 - [Profile serializers](profile-serializers.md) — other-user responses MUST use default-deny sanitizePublicProfile; sanitizeProfile is self-only.
 - [e2e harness flakiness](e2e-harness-flakiness.md) — Playwright subagent can false-fail with EADDRINUSE/502/blank under concurrent load; verify via curl+screenshot before retrying.
 - [Profile update contract](profile-update-contract.md) — PUT /api/profiles/me validates the FULL insert schema; toggles omitting interestedIn silently 400. No partial PATCH exists.
+- [Real-time session revocation](realtime-session-revocation.md) — logout revokes WS access via sessionId bridge; any new WS bearer token MUST carry req.sessionID.
+- [Deployment type mismatch](deployment-autoscale-vs-vm.md) — app has WebSockets + in-memory state but runs on Autoscale; cold starts/multi-instance cause intermittent real-time outages.

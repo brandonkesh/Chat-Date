@@ -30,6 +30,7 @@ import {
 } from "./paypalService";
 import { getPaypalClientId, getPaypalEnvironment, getPaypalBase } from "./paypalClient";
 import { WebSocketServer, WebSocket } from "ws";
+import { setRealtimeSessionRevoker } from "./realtimeRevocation";
 import { ensureCompatibleFormat, speechToText, textToSpeech } from "./replit_integrations/audio/client";
 import crypto from "crypto";
 import { openai } from "./replit_integrations/image/client";
@@ -3910,7 +3911,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
   });
 
   // === VIDEO CALL TOKEN (for WebSocket auth) ===
-  const videoCallTokens = new Map<string, { userId: string; matchId: number; expiresAt: Date }>();
+  const videoCallTokens = new Map<string, { userId: string; matchId: number; sessionId: string; expiresAt: Date }>();
   
   app.post("/api/video-call/token", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
@@ -3944,6 +3945,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
     videoCallTokens.set(token, {
       userId,
       matchId,
+      sessionId: req.sessionID,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
     });
     
@@ -3959,7 +3961,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
   });
 
   // === CALL NOTIFICATION WebSocket ===
-  const notifyTokens = new Map<string, { userId: string; expiresAt: Date }>();
+  const notifyTokens = new Map<string, { userId: string; sessionId: string; expiresAt: Date }>();
   const notifyConnections = new Map<string, Set<WebSocket>>();
 
   app.post("/api/video-call/notify-token", isAuthenticated, async (req: any, res) => {
@@ -3985,7 +3987,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
     });
 
     const token = crypto.randomUUID();
-    notifyTokens.set(token, { userId, expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
+    notifyTokens.set(token, { userId, sessionId: req.sessionID, expiresAt: new Date(Date.now() + 10 * 60 * 1000) });
     res.json({ token });
   });
 
@@ -4001,6 +4003,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
           const td = notifyTokens.get(msg.token);
           if (td && td.expiresAt > new Date()) {
             userId = td.userId;
+            (ws as any).__sessionId = td.sessionId;
             notifyTokens.delete(msg.token);
             if (!notifyConnections.has(userId)) {
               notifyConnections.set(userId, new Set());
@@ -4118,6 +4121,7 @@ Return ONLY valid JSON — no markdown, no code blocks.`
             // Use userId from token, not from client
             currentRoom = message.matchId as string;
             currentUserId = tokenData.userId;
+            (ws as any).__sessionId = tokenData.sessionId;
             authenticated = true;
             
             const roomId = currentRoom;
@@ -4220,6 +4224,39 @@ Return ONLY valid JSON — no markdown, no code blocks.`
         }
       }
     });
+  });
+
+  // === LOGOUT-DRIVEN REAL-TIME REVOCATION ===
+  // When an HTTP session is destroyed on logout, immediately tear down any
+  // real-time access established under that same session: drop its unconsumed
+  // bearer tokens and close its live notification/call sockets. Scoping by
+  // sessionId (not userId) means a user's other logged-in devices keep working.
+  // Closing a socket triggers its existing 'close' handler, which removes it
+  // from notifyConnections/callRooms and notifies the call peer with 'user-left'.
+  setRealtimeSessionRevoker((sessionId: string) => {
+    videoCallTokens.forEach((data, t) => {
+      if (data.sessionId === sessionId) videoCallTokens.delete(t);
+    });
+    notifyTokens.forEach((data, t) => {
+      if (data.sessionId === sessionId) notifyTokens.delete(t);
+    });
+
+    const closeMatching = (server: WebSocketServer) => {
+      server.clients.forEach((client) => {
+        if ((client as any).__sessionId === sessionId) {
+          try {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({ type: 'session-revoked' }));
+            }
+          } catch {}
+          try {
+            client.close(4001, 'session ended');
+          } catch {}
+        }
+      });
+    };
+    closeMatching(notifyWss);
+    closeMatching(wss);
   });
 
   return httpServer;
