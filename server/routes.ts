@@ -3247,13 +3247,13 @@ Guidelines:
   });
 
   // ALL PLANS ARE FREE: members can pick any plan (Basic/Pro/Elite) at no
-  // cost. No PayPal checkout is required — the chosen tier is applied
-  // directly and isPremium is always kept true.
+  // cost, or cancel back to "free" (no plan). No PayPal checkout is required —
+  // the chosen tier is applied directly and isPremium is always kept true.
   app.post("/api/select-plan", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     try {
       const { tier } = z
-        .object({ tier: z.enum(["basic", "pro", "elite"]) })
+        .object({ tier: z.enum(["free", "basic", "pro", "elite"]) })
         .parse(req.body);
 
       const profile = await storage.getProfile(userId);

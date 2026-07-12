@@ -135,12 +135,19 @@ export default function Premium() {
   const currentTier = profile?.membershipTier ?? "elite";
 
   const selectPlanMutation = useMutation({
-    mutationFn: async (tier: TierInfo["id"]) => {
+    mutationFn: async (tier: MembershipTier) => {
       const res = await apiRequest("POST", "/api/select-plan", { tier });
       return res.json();
     },
     onSuccess: (_data, tier) => {
       queryClient.invalidateQueries({ queryKey: ["/api/profiles/me"] });
+      if (tier === "free") {
+        toast({
+          title: "Plan canceled",
+          description: "You can pick a new plan anytime — they're all free.",
+        });
+        return;
+      }
       const name = tiers.find((t) => t.id === tier)?.name ?? tier;
       toast({
         title: `You're on the ${name} plan!`,
@@ -216,22 +223,45 @@ export default function Premium() {
                 <p className="text-xs text-muted-foreground mt-1">{tier.bestFor}</p>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-                <Button
-                  className="w-full"
-                  variant={isCurrent ? "secondary" : tier.popular ? "default" : "outline"}
-                  disabled={isCurrent || selectPlanMutation.isPending}
-                  onClick={() => selectPlanMutation.mutate(tier.id)}
-                  data-testid={`button-select-${tier.id}`}
-                >
-                  {selectPlanMutation.isPending &&
-                  selectPlanMutation.variables === tier.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isCurrent ? (
-                    "Current plan"
-                  ) : (
-                    `Choose ${tier.name} — Free`
-                  )}
-                </Button>
+                {isCurrent ? (
+                  <div className="space-y-2">
+                    <Badge
+                      className="w-full justify-center bg-blue-600 text-white border-0 py-1.5"
+                      data-testid={`badge-current-${tier.id}`}
+                    >
+                      Current plan
+                    </Badge>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={selectPlanMutation.isPending}
+                      onClick={() => selectPlanMutation.mutate("free")}
+                      data-testid={`button-cancel-${tier.id}`}
+                    >
+                      {selectPlanMutation.isPending &&
+                      selectPlanMutation.variables === "free" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Cancel plan"
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full"
+                    variant={tier.popular ? "default" : "outline"}
+                    disabled={selectPlanMutation.isPending}
+                    onClick={() => selectPlanMutation.mutate(tier.id)}
+                    data-testid={`button-select-${tier.id}`}
+                  >
+                    {selectPlanMutation.isPending &&
+                    selectPlanMutation.variables === tier.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      `Choose ${tier.name} — Free`
+                    )}
+                  </Button>
+                )}
 
                 <ul className="space-y-2">
                   {tier.features.map((feature, i) => (

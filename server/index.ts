@@ -8,7 +8,7 @@ import { backfillMediaAcls } from './mediaAclBackfill';
 import { sweepOrphanedUploads } from './uploadSweep';
 import { pool, db } from './db';
 import { profiles } from '@shared/schema';
-import { or, ne, eq } from 'drizzle-orm';
+import { ne } from 'drizzle-orm';
 
 const app = express();
 const httpServer = createServer(app);
@@ -162,16 +162,16 @@ async function initPaypal() {
       // safe to run as a best-effort background job. initPaypal() catches its own
       // errors, so failures never affect server availability.
       initPaypal();
-      // All plans are free: members may pick Basic/Pro/Elite at no cost.
-      // This startup normalization upgrades legacy/non-premium rows (tier
-      // 'free' or isPremium=false) to elite so the production database gets
-      // unlocked on deploy. Rows where a member already picked a plan
-      // (basic/pro/elite with isPremium=true) are left untouched. Best-effort:
-      // failures never affect server availability.
+      // All plans are free: members may pick Basic/Pro/Elite at no cost or
+      // cancel back to no plan. This startup normalization only re-asserts
+      // isPremium for any row where it was dropped (legacy/billing quirks) so
+      // nobody is ever locked behind a paywall. Members' chosen tiers —
+      // including a deliberate cancel (tier 'free') — are left untouched.
+      // Best-effort: failures never affect server availability.
       db.update(profiles)
-        .set({ isPremium: true, membershipTier: "elite" })
-        .where(or(ne(profiles.isPremium, true), eq(profiles.membershipTier, "free")))
-        .then(() => log("Free-for-everyone: legacy profiles upgraded to elite", "entitlements"))
+        .set({ isPremium: true })
+        .where(ne(profiles.isPremium, true))
+        .then(() => log("Free-for-everyone: premium re-asserted on legacy profiles", "entitlements"))
         .catch((err: any) => log(`Free-for-everyone upgrade error: ${err?.message}`, "entitlements"));
       // Run ACL backfill after startup to make previously public media objects
       // private. This is a background, best-effort job so failures do not affect
