@@ -204,19 +204,14 @@ export default function Premium() {
                   {tier.name}
                 </h2>
                 <p className="text-sm text-muted-foreground">{tier.tagline}</p>
-                <div className="mt-3 flex items-baseline justify-center gap-2">
+                <div className="mt-3 flex items-baseline justify-center gap-1">
                   <span
-                    className="text-lg text-muted-foreground line-through"
-                    data-testid={`text-tier-old-price-${tier.id}`}
-                  >
-                    ${tier.price.toFixed(2)}/mo
-                  </span>
-                  <span
-                    className="text-3xl font-extrabold text-green-600 dark:text-green-400"
+                    className="text-3xl font-extrabold"
                     data-testid={`text-tier-price-${tier.id}`}
                   >
-                    FREE
+                    ${tier.price.toFixed(2)}
                   </span>
+                  <span className="text-sm text-muted-foreground">/mo</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{tier.bestFor}</p>
               </CardHeader>
