@@ -1,13 +1,12 @@
 ---
-name: Free-for-everyone entitlements
-description: Owner made all premium features free; downgrades are disabled by design.
+name: Free selectable plans
+description: Owner removed all payments; members freely pick Basic/Pro/Elite at $0, downgrades below premium are disabled.
 ---
-The owner decided (July 2026) that Crush has NO paid plans: every profile is permanently `isPremium=true`, `membershipTier='elite'`.
+Owner's product decision (July 2026): Crush has NO paid checkout. The plan page shows Basic/Pro/Elite with original prices struck through and "FREE"; members self-select any tier via the authenticated select-plan endpoint at $0 (this self-serve tier escalation is intentional, not a vulnerability).
 
-**Why:** Owner chose "make everything free for everyone — no paying, no plan selection" over keeping the PayPal tier system.
+**Why:** Owner first wanted "everything free for everyone", then refined it to "show the plans with pricing so people can pick — but all free."
 
 **How to apply:**
-- Enforcement lives at the storage layer: the subscription-update and premium-clear methods always re-assert elite and never write `isPremium=false` / tier `'free'` — even for PayPal cancel/expire/suspend webhooks (bookkeeping fields still update).
-- Schema defaults are premium/elite; a best-effort startup normalization in the server bootstrap upgrades any non-elite rows (this is how the separate production DB gets unlocked on publish — dev SQL updates don't reach prod).
-- The Premium page is a static "everything's included" page with no checkout. PayPal routes/webhook remain wired but grant nothing extra.
-- Do NOT re-add downgrade logic or plan selection unless the owner explicitly reverses this decision.
+- Tier differentiation is real: picking Basic means Basic features. But `isPremium` must never drop to false — billing webhooks/cancellation paths only clear PayPal bookkeeping, never entitlements.
+- A best-effort startup normalization upgrades only legacy rows (non-premium or tier 'free') to elite — it must never overwrite a member's picked tier. This is also how the separate production DB gets unlocked on publish.
+- PayPal routes/webhook remain wired but grant nothing; do NOT re-add paid checkout or downgrade logic unless the owner explicitly reverses this decision.

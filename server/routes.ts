@@ -3246,36 +3246,22 @@ Guidelines:
     }
   });
 
-  // Downgrade to the free plan. Paid tiers are only granted through trusted
-  // PayPal billing events (webhook / subscription activation) — never by
-  // client choice alone.
+  // ALL PLANS ARE FREE: members can pick any plan (Basic/Pro/Elite) at no
+  // cost. No PayPal checkout is required — the chosen tier is applied
+  // directly and isPremium is always kept true.
   app.post("/api/select-plan", isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     try {
       const { tier } = z
-        .object({ tier: z.enum(["free", "basic", "pro", "elite"]) })
+        .object({ tier: z.enum(["basic", "pro", "elite"]) })
         .parse(req.body);
-
-      if (tier !== "free") {
-        return res.status(403).json({
-          message:
-            "Paid plans must be activated through PayPal checkout. Use POST /api/checkout to start a subscription.",
-        });
-      }
 
       const profile = await storage.getProfile(userId);
       if (!profile) {
         return res.status(400).json({ message: "Profile required" });
       }
 
-      if (profile.paypalSubscriptionId && profile.isPremium) {
-        return res.status(400).json({
-          message:
-            "You have an active PayPal subscription. Cancel it from the subscription page before switching to free.",
-        });
-      }
-
-      await storage.clearTestPremium(userId);
+      await storage.setTestPremium(userId, tier);
 
       const updated = (await storage.getProfile(userId)) ?? profile;
       res.json(sanitizeProfile(updated));

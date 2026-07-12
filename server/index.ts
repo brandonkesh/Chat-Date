@@ -8,7 +8,7 @@ import { backfillMediaAcls } from './mediaAclBackfill';
 import { sweepOrphanedUploads } from './uploadSweep';
 import { pool, db } from './db';
 import { profiles } from '@shared/schema';
-import { or, ne } from 'drizzle-orm';
+import { or, ne, eq } from 'drizzle-orm';
 
 const app = express();
 const httpServer = createServer(app);
@@ -162,15 +162,16 @@ async function initPaypal() {
       // safe to run as a best-effort background job. initPaypal() catches its own
       // errors, so failures never affect server availability.
       initPaypal();
-      // All plans are free: every member gets full (elite) access, no payment
-      // required. This startup normalization upgrades any profile that is not
-      // yet elite (including all rows in the production database on deploy and
-      // any row a stray subscription webhook may have downgraded). Best-effort:
+      // All plans are free: members may pick Basic/Pro/Elite at no cost.
+      // This startup normalization upgrades legacy/non-premium rows (tier
+      // 'free' or isPremium=false) to elite so the production database gets
+      // unlocked on deploy. Rows where a member already picked a plan
+      // (basic/pro/elite with isPremium=true) are left untouched. Best-effort:
       // failures never affect server availability.
       db.update(profiles)
         .set({ isPremium: true, membershipTier: "elite" })
-        .where(or(ne(profiles.isPremium, true), ne(profiles.membershipTier, "elite")))
-        .then(() => log("Free-for-everyone: all profiles set to elite", "entitlements"))
+        .where(or(ne(profiles.isPremium, true), eq(profiles.membershipTier, "free")))
+        .then(() => log("Free-for-everyone: legacy profiles upgraded to elite", "entitlements"))
         .catch((err: any) => log(`Free-for-everyone upgrade error: ${err?.message}`, "entitlements"));
       // Run ACL backfill after startup to make previously public media objects
       // private. This is a background, best-effort job so failures do not affect
