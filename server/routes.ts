@@ -2647,6 +2647,18 @@ Guidelines:
       if (!profile?.photoUrl) {
         return res.status(404).json({ error: "Not found" });
       }
+      // Externally-hosted fallback avatars (seeded demo profiles use Dicebear).
+      // Only redirect to the known trusted avatar host; anything else external
+      // is rejected so this proxy can't be used to bounce users to arbitrary URLs.
+      if (/^https?:\/\//i.test(profile.photoUrl)) {
+        try {
+          const u = new URL(profile.photoUrl);
+          if (u.protocol === "https:" && u.hostname === "api.dicebear.com") {
+            return res.redirect(profile.photoUrl);
+          }
+        } catch {}
+        return res.status(404).json({ error: "Not found" });
+      }
       const { ObjectStorageService } = await import("./replit_integrations/object_storage");
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(profile.photoUrl);
