@@ -29,8 +29,8 @@ export const profiles = pgTable("profiles", {
   paypalSubscriberId: text("paypal_subscriber_id"), // PayPal payer/subscriber id
   paypalSubscriptionId: text("paypal_subscription_id"),
   paypalPlanId: text("paypal_plan_id"), // Track which PayPal plan they subscribed to
-  isPremium: boolean("is_premium").default(false),
-  membershipTier: text("membership_tier").default("free"), // 'free', 'basic', 'pro', 'elite'
+  isPremium: boolean("is_premium").default(true),
+  membershipTier: text("membership_tier").default("elite"), // 'free', 'basic', 'pro', 'elite'
   // Verification fields
   isVerified: boolean("is_verified").default(false),
   verificationPhotoUrl: text("verification_photo_url"),

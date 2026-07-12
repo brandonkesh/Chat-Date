@@ -298,9 +298,13 @@ export class DatabaseStorage implements IStorage {
       updates.paypalSubscriberId = subscriberId;
     }
     if (!isPremium) {
-      updates.membershipTier = 'free';
       updates.paypalPlanId = null;
     }
+    // ALL PLANS ARE FREE: billing events may update PayPal bookkeeping fields,
+    // but entitlements never drop. Every member keeps full elite access
+    // regardless of subscription cancellations, expirations, or suspensions.
+    updates.isPremium = true;
+    updates.membershipTier = 'elite';
     await db
       .update(profiles)
       .set(updates)
@@ -325,11 +329,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async clearTestPremium(userId: string): Promise<void> {
-    // Revokes a test-granted premium WITHOUT touching any PayPal fields. Only
-    // ever called for accounts that never had a PayPal subscription.
+    // ALL PLANS ARE FREE: downgrades are disabled. Every member keeps full
+    // elite access, so this is intentionally a no-op that re-asserts the
+    // free-for-everyone entitlement instead of revoking it.
     await db
       .update(profiles)
-      .set({ isPremium: false, membershipTier: "free" })
+      .set({ isPremium: true, membershipTier: "elite" })
       .where(eq(profiles.userId, userId));
   }
 
